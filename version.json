@@ -1,17 +1,24 @@
 {
   "latest": {
-    "version": "1.1.1",
-    "build": 11,
-    "name": "Mfuns Flutter v1.1.1",
+    "version": "1.1.2",
+    "build": 12,
+    "name": "Mfuns Flutter v1.1.2",
     "date": "2026-08-14",
-    "notes": "新增：最新页帖子「不友好标记」——长按帖子可选择标记为不友好内容，同一用户对同一帖子只计一次；达到 5 人标记后帖子自动屏蔽并从列表移除；已标记帖子显示「已有 X/5 位喵友标记此帖子」。需同步更新 latest-mfuns 服务端。",
+    "notes": "最新页「不友好标记」需登录后使用：标记时仅上传登录用户的 UID，不包含任何其他信息（不会上传设备信息、位置、通讯录等敏感数据）；服务端按 UID 记录并去重，同一用户每帖只计一次，达到 5 人标记后帖子自动屏蔽。需同步更新 latest-mfuns 服务端。",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.1/mfuns-flutter-1.1.1.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.1/mfuns-flutter-windows-1.1.1.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.2/mfuns-flutter-1.1.2.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.2/mfuns-flutter-windows-1.1.2.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.1"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.2"
   },
   "history": [
+    {
+      "version": "1.1.1",
+      "build": 11,
+      "name": "Mfuns Flutter v1.1.1",
+      "date": "2026-08-14",
+      "notes": "新增：最新页帖子「不友好标记」——长按帖子可选择标记为不友好内容，同一用户对同一帖子只计一次；达到 5 人标记后帖子自动屏蔽并从列表移除；已标记帖子显示「已有 X/5 位喵友标记此帖子」。需同步更新 latest-mfuns 服务端。"
+    },
     {
       "version": "1.1.0",
       "build": 10,
