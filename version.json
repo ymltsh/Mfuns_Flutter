@@ -1,17 +1,24 @@
 {
   "latest": {
-    "version": "1.1.0",
-    "build": 10,
-    "name": "Mfuns Flutter v1.1.0",
+    "version": "1.1.1",
+    "build": 11,
+    "name": "Mfuns Flutter v1.1.1",
     "date": "2026-08-14",
-    "notes": "合并 1.0.5 ~ 1.0.9 的全部更新：\n新增：每日签到（本月日历/补签/累计奖励/今日排行）、自动签到（应用打开时每天 00:00）、文章与视频投币、评论长按菜单与链接识别、我的页面等级段位与经验进度条、个人主页等级显示、设置页检查更新与下载加速配置（自定义 GitHub 加速地址，默认 https://hub.wgen.top/）。\n优化：首页刷新累计追加并自动清理最旧内容、顶部刷新支持当前标签页、首页卡片高度自适应、个人主页头部紧凑化、竖屏播放器固定顶部不随页面滚动、左右拖动调整进度（竖屏与横屏全屏）、修复手机横屏全屏播放异常与签到日历显示错误、Windows 全屏改为真全屏。",
+    "notes": "新增：最新页帖子「不友好标记」——长按帖子可选择标记为不友好内容，同一用户对同一帖子只计一次；达到 5 人标记后帖子自动屏蔽并从列表移除；已标记帖子显示「已有 X/5 位喵友标记此帖子」。需同步更新 latest-mfuns 服务端。",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.0/mfuns-flutter-1.1.0.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.0/mfuns-flutter-windows-1.1.0.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.1/mfuns-flutter-1.1.1.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.1/mfuns-flutter-windows-1.1.1.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.0"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.1"
   },
   "history": [
+    {
+      "version": "1.1.0",
+      "build": 10,
+      "name": "Mfuns Flutter v1.1.0",
+      "date": "2026-08-14",
+      "notes": "合并 1.0.5 ~ 1.0.9 的全部更新：每日签到（本月日历/补签/累计奖励/今日排行）、自动签到（00:00）、投币、评论长按菜单与链接识别、等级段位与经验进度条、检查更新与下载加速配置、首页累计刷新、播放器固定顶部与拖动调进度、全屏播放修复、Windows 真全屏。"
+    },
     {
       "version": "1.0.5 - 1.0.9",
       "build": null,
