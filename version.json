@@ -1,15 +1,15 @@
 {
   "latest": {
-    "version": "1.0.5",
-    "build": 5,
-    "name": "Mfuns Flutter v1.0.5",
+    "version": "1.0.6",
+    "build": 6,
+    "name": "Mfuns Flutter v1.0.6",
     "date": "2026-08-14",
-    "notes": "新增：每日签到（本月日历/补签/累计奖励/今日签到排行）、文章与视频投币、评论长按菜单（复制/删除）与链接识别、我的页面等级段位与经验进度条、个人主页等级显示。\n优化：首页刷新累计追加并自动清理最旧内容、顶部刷新支持当前标签页、首页卡片高度自适应、个人主页头部紧凑化、修复手机横屏全屏播放异常与签到日历显示错误、Windows 全屏改为真全屏。",
+    "notes": "新增：设置页「检查更新」功能，通过加速站读取更新清单，展示最新版本、更新内容与各平台下载入口；更新清单支持最新版本与历史版本双字段（详见 update.md）。",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.5/mfuns-flutter-1.0.5.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.5/mfuns-flutter-windows-1.0.5.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.6/mfuns-flutter-1.0.6.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.6/mfuns-flutter-windows-1.0.6.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.0.5"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.0.6"
   },
   "history": [
     {
