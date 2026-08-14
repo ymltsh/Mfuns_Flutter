@@ -1,0 +1,3980 @@
+import 'dart:async';
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:screen_brightness/screen_brightness.dart';
+import 'package:video_player/video_player.dart';
+import 'package:window_manager/window_manager.dart';
+
+import '../../app/app_controller.dart';
+import '../../core/config/user_preferences.dart';
+import '../../core/widgets/content_spans.dart';
+import '../../core/widgets/image_preview_page.dart';
+import '../../core/widgets/inline_emoji_input.dart';
+import '../content/rich_content_card.dart';
+import '../home/home_repository.dart';
+import '../user/user_profile_page.dart';
+
+/// Routes content to a type-specific detail page. Article pages never create a
+/// video player or request video qualities.
+class ContentDetailPage extends StatelessWidget {
+  const ContentDetailPage({
+    super.key,
+    required this.controller,
+    required this.preview,
+  });
+
+  final AppController controller;
+  final ContentPreview preview;
+
+  @override
+  Widget build(BuildContext context) => preview.isVideo
+      ? VideoDetailPage(controller: controller, preview: preview)
+      : ArticleDetailPage(controller: controller, preview: preview);
+}
+
+class VideoDetailPage extends StatefulWidget {
+  const VideoDetailPage({
+    super.key,
+    required this.controller,
+    required this.preview,
+  });
+
+  final AppController controller;
+  final ContentPreview preview;
+
+  @override
+  State<VideoDetailPage> createState() => _VideoDetailPageState();
+}
+
+class _VideoDetailPageState extends State<VideoDetailPage> {
+  final _playerKey = GlobalKey<_MfunsVideoPlayerState>();
+  late final Future<ContentDetail> _detail;
+  late final Future<List<VideoQuality>>? _qualities;
+  late final Future<List<ContentPreview>> _related;
+  var _activeTab = 0;
+  var _danmakuOn = true;
+  VideoQuality? _selectedQuality;
+  List<VideoQuality> _availableQualities = const [];
+  var _qualitiesLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _detail = widget.controller.contentDetail(widget.preview);
+    _qualities = widget.preview.isVideo
+        ? widget.controller.videoQualities(widget.preview.id)
+        : null;
+    _qualities?.then((items) {
+      if (!mounted) return;
+      setState(() {
+        _qualitiesLoading = false;
+        _availableQualities = items;
+      });
+    }).catchError((Object _) {
+      if (!mounted) return;
+      setState(() => _qualitiesLoading = false);
+    });
+    _related = widget.controller.relatedContent(widget.preview);
+  }
+
+  void _showDanmakuSheet(BuildContext context) {
+    final player = _playerKey.currentState;
+    if (player == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('播放器尚未准备完成')));
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      builder: (_) => _DanmakuComposeSheet(onSend: player.sendDanmakuText),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: FutureBuilder<ContentDetail>(
+          future: _detail,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text('加载失败：${snapshot.error}'),
+                ),
+              );
+            }
+            final detail = snapshot.requireData;
+            // 播放器直接挂在布局树中：避免 FutureBuilder 在横竖屏布局切换的
+            // 首帧里渲染加载占位，导致带 GlobalKey 的播放器元素无法在同一帧
+            // 内被接管而销毁（全屏时横屏切换会杀掉共享的播放器）。
+            final available = _availableQualities;
+            final player = _qualitiesLoading
+                ? const _InlineLoading(label: '正在获取播放地址')
+                : available.isEmpty
+                    ? const Text('当前没有可用播放地址')
+                    : MfunsVideoPlayer(
+                        key: _playerKey,
+                        controller: widget.controller,
+                        videoId: detail.preview.id,
+                        title: detail.preview.title,
+                        coverUrl: detail.preview.cover,
+                        qualities: available,
+                        onQualityChanged: (quality) =>
+                            setState(() => _selectedQuality = quality),
+                        onDanmakuChanged: (enabled) =>
+                            setState(() => _danmakuOn = enabled),
+                      );
+            final tabs = _DetailTabs(
+              activeTab: _activeTab,
+              commentCount: detail.preview.comments,
+              onChanged: (value) => setState(() => _activeTab = value),
+              onSendDanmaku: detail.preview.isVideo
+                  ? () => _showDanmakuSheet(context)
+                  : null,
+              danmakuOn: _danmakuOn,
+              onToggleDanmaku: detail.preview.isVideo
+                  ? () => _playerKey.currentState?.toggleDanmaku()
+                  : null,
+            );
+            final content = _activeTab == 0
+                ? _VideoDetailPane(
+                    controller: widget.controller,
+                    detail: detail,
+                    related: _related,
+                    qualities: _availableQualities,
+                    selectedQuality: _selectedQuality,
+                    playerKey: _playerKey,
+                  )
+                : detail.commentAreaId != null
+                    ? Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                        child: _CommentSection(
+                          controller: widget.controller,
+                          areaId: detail.commentAreaId!,
+                        ),
+                      )
+                    : const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text('当前内容暂不支持评论'),
+                      );
+            // 横屏自动分栏：左侧播放器（黑底），右侧信息与评论独立滚动。
+            final isLandscape =
+                MediaQuery.orientationOf(context) == Orientation.landscape;
+            if (isLandscape) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: MediaQuery.sizeOf(context).width * 0.42,
+                    child: ColoredBox(
+                      color: Colors.black,
+                      child: player,
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        tabs,
+                        Expanded(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.only(bottom: 24),
+                            child: content,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+            return ListView(
+              key: PageStorageKey<String>(
+                  'content-detail-${widget.preview.id}'),
+              padding: const EdgeInsets.only(bottom: 36),
+              children: [
+                player,
+                tabs,
+                content,
+              ],
+            );
+          },
+        ),
+      );
+}
+
+class FeedDetailPage extends StatefulWidget {
+  const FeedDetailPage({
+    super.key,
+    required this.controller,
+    required this.feedId,
+  });
+
+  final AppController controller;
+  final int feedId;
+
+  @override
+  State<FeedDetailPage> createState() => _FeedDetailPageState();
+}
+
+class _FeedDetailPageState extends State<FeedDetailPage> {
+  late Future<FeedDetail> _detail;
+
+  @override
+  void initState() {
+    super.initState();
+    _detail = widget.controller.feedDetail(widget.feedId);
+  }
+
+  void _reload() =>
+      setState(() => _detail = widget.controller.feedDetail(widget.feedId));
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('动态详情'),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              tooltip: '刷新动态',
+              onPressed: _reload,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+        body: FutureBuilder<FeedDetail>(
+          future: _detail,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('动态加载失败：${snapshot.error}'),
+                      const SizedBox(height: 12),
+                      FilledButton(onPressed: _reload, child: const Text('重试')),
+                    ],
+                  ),
+                ),
+              );
+            }
+            final detail = snapshot.requireData;
+            final feed = detail.feed;
+            final preview = ContentPreview(
+              id: feed.id,
+              title: '动态',
+              summary: feed.content,
+              cover: feed.images.isEmpty ? '' : feed.images.first,
+              author: feed.author,
+              category: '动态',
+              type: 0,
+              likes: feed.likes,
+              comments: feed.comments,
+              views: feed.views,
+            );
+            return _landscapeCentered(
+              context,
+              ListView(
+                key: PageStorageKey<String>('feed-detail-${feed.id}'),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+                children: [
+                _FeedAuthorCard(
+                  feed: feed,
+                  controller: widget.controller,
+                ),
+                const SizedBox(height: 12),
+                RichContentCard(
+                    source: detail.rawContent.isEmpty
+                        ? feed.content
+                        : detail.rawContent),
+                if (feed.images.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _FeedImageGrid(images: feed.images, feedId: feed.id),
+                ],
+                if (feed.resource != null) ...[
+                  const SizedBox(height: 12),
+                  _FeedResourceCard(
+                    item: feed.resource!,
+                    controller: widget.controller,
+                  ),
+                ],
+                const SizedBox(height: 12),
+                _VideoActions(
+                  controller: widget.controller,
+                  preview: preview,
+                  resourceType: 3,
+                  linkPath: 'feed',
+                ),
+                if (detail.tags.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: detail.tags
+                        .map((tag) => Chip(label: Text('#$tag')))
+                        .toList(growable: false),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                if (detail.commentAreaId != null)
+                  _CommentSection(
+                    controller: widget.controller,
+                    areaId: detail.commentAreaId!,
+                  )
+                else
+                  const _ArticleCommentUnavailable(),
+              ],
+              ),
+            );
+          },
+        ),
+      );
+}
+
+class _FeedAuthorCard extends StatelessWidget {
+  const _FeedAuthorCard({required this.feed, required this.controller});
+
+  final TimelineFeed feed;
+  final AppController controller;
+
+  void _openProfile(BuildContext context) {
+    final userId = feed.authorId;
+    if (userId == null) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) =>
+            UserProfilePage(controller: controller, userId: userId)));
+  }
+
+  @override
+  Widget build(BuildContext context) => Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              InkWell(
+                customBorder: const CircleBorder(),
+                onTap: feed.authorId == null ? null : () => _openProfile(context),
+                child: CircleAvatar(
+                  radius: 22,
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  foregroundImage:
+                      feed.avatar.isEmpty ? null : NetworkImage(feed.avatar),
+                  child: Text(feed.author.isEmpty ? 'M' : feed.author[0]),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: InkWell(
+                  onTap: feed.authorId == null
+                      ? null
+                      : () => _openProfile(context),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                            feed.author.isEmpty ? 'Mfuns 用户' : feed.author,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 3),
+                        Text(_formatDateTime(feed.createdAt),
+                            style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Text('${feed.views} 浏览',
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+      );
+}
+
+class _FeedImageGrid extends StatelessWidget {
+  const _FeedImageGrid({required this.images, required this.feedId});
+
+  final List<String> images;
+  final int feedId;
+
+  @override
+  Widget build(BuildContext context) => GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: images.length,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: images.length == 1
+              ? 1
+              : images.length <= 4
+                  ? 2
+                  : 3,
+          crossAxisSpacing: 6,
+          mainAxisSpacing: 6,
+          childAspectRatio: 1,
+        ),
+        itemBuilder: (_, index) {
+          final uri = Uri.tryParse(images[index]);
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: GestureDetector(
+              onTap: uri == null
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => ImagePreviewPage(
+                          uri: uri,
+                          alt: '动态图片',
+                          heroTag: 'feed-image-$feedId-$index-$uri',
+                        ),
+                      )),
+              child: Hero(
+                tag: 'feed-image-$feedId-$index-$uri',
+                child: Image.network(
+                  images[index],
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const ColoredBox(
+                    color: Color(0xffefeff7),
+                    child: Icon(Icons.broken_image_outlined),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+}
+
+class _FeedResourceCard extends StatelessWidget {
+  const _FeedResourceCard({required this.item, required this.controller});
+
+  final ContentPreview item;
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        elevation: 0,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: ListTile(
+          leading: SizedBox(
+            width: 54,
+            height: 54,
+            child: item.cover.isEmpty
+                ? const Icon(Icons.article_outlined)
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(7),
+                    child: Image.network(item.cover, fit: BoxFit.cover),
+                  ),
+          ),
+          title: Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+          subtitle: Text('${item.views} 浏览 · ${item.likes} 赞'),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) =>
+                  ContentDetailPage(controller: controller, preview: item))),
+        ),
+      );
+}
+
+class ArticleDetailPage extends StatefulWidget {
+  const ArticleDetailPage({
+    super.key,
+    required this.controller,
+    required this.preview,
+  });
+
+  final AppController controller;
+  final ContentPreview preview;
+
+  @override
+  State<ArticleDetailPage> createState() => _ArticleDetailPageState();
+}
+
+class _ArticleDetailPageState extends State<ArticleDetailPage> {
+  late Future<ContentDetail> _detail;
+
+  @override
+  void initState() {
+    super.initState();
+    _detail = widget.controller.contentDetail(widget.preview);
+  }
+
+  void _reload() =>
+      setState(() => _detail = widget.controller.contentDetail(widget.preview));
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('文章详情'),
+          centerTitle: true,
+          actions: [
+            IconButton(
+              tooltip: '刷新文章',
+              onPressed: _reload,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+        body: FutureBuilder<ContentDetail>(
+          future: _detail,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('文章加载失败：${snapshot.error}'),
+                      const SizedBox(height: 12),
+                      FilledButton(onPressed: _reload, child: const Text('重试')),
+                    ],
+                  ),
+                ),
+              );
+            }
+            final detail = snapshot.requireData;
+            return _landscapeCentered(
+              context,
+              ListView(
+                key: PageStorageKey<String>(
+                    'article-detail-${detail.preview.id}'),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+                children: [
+                  _ArticleInfoCard(
+                    detail: detail,
+                    controller: widget.controller,
+                  ),
+                  const SizedBox(height: 12),
+                  RichContentCard(source: detail.rawContent),
+                  const SizedBox(height: 12),
+                  _VideoActions(
+                    controller: widget.controller,
+                    preview: detail.preview,
+                  ),
+                  if (detail.tags.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: detail.tags
+                          .map((tag) => Chip(label: Text('#$tag')))
+                          .toList(growable: false),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  if (detail.commentAreaId != null)
+                    _CommentSection(
+                      controller: widget.controller,
+                      areaId: detail.commentAreaId!,
+                    )
+                  else
+                    const _ArticleCommentUnavailable(),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+}
+
+/// 横屏时限制内容宽度并居中，避免文章/动态行宽过长。
+Widget _landscapeCentered(BuildContext context, Widget child) {
+  if (MediaQuery.orientationOf(context) != Orientation.landscape) {
+    return child;
+  }
+  return Align(
+    alignment: Alignment.topCenter,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: child,
+    ),
+  );
+}
+
+class _ArticleInfoCard extends StatelessWidget {
+  const _ArticleInfoCard({required this.detail, required this.controller});
+
+  final ContentDetail detail;
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = detail.preview;
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(preview.title, style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 12),
+            _AuthorBar(
+              controller: controller,
+              preview: preview,
+              subtitle:
+                  '${preview.category.isEmpty ? 'Mfuns' : preview.category} · ${preview.views} 阅读 · ${preview.comments} 评论',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ArticleCommentUnavailable extends StatelessWidget {
+  const _ArticleCommentUnavailable();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: Text('当前文章暂不支持评论')),
+      );
+}
+
+class _DanmakuComposeSheet extends StatefulWidget {
+  const _DanmakuComposeSheet({required this.onSend});
+
+  final Future<void> Function(String text) onSend;
+
+  @override
+  State<_DanmakuComposeSheet> createState() => _DanmakuComposeSheetState();
+}
+
+class _DanmakuComposeSheetState extends State<_DanmakuComposeSheet> {
+  final _input = TextEditingController();
+  var _sending = false;
+
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    await widget.onSend(text);
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            18, 18, 18, MediaQuery.viewInsetsOf(context).bottom + 18),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _input,
+                autofocus: true,
+                maxLength: 100,
+                onSubmitted: (_) => _send(),
+                decoration: const InputDecoration(
+                  counterText: '',
+                  hintText: '发个弹幕…',
+                  prefixIcon: Icon(Icons.subtitles_outlined),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _sending ? null : _send,
+              child: _sending
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('发送'),
+            ),
+          ],
+        ),
+      );
+}
+
+class _DetailTabs extends StatelessWidget {
+  const _DetailTabs({
+    required this.activeTab,
+    required this.commentCount,
+    required this.onChanged,
+    this.onSendDanmaku,
+    this.onToggleDanmaku,
+    required this.danmakuOn,
+  });
+
+  final int activeTab;
+  final int commentCount;
+  final ValueChanged<int> onChanged;
+  final VoidCallback? onSendDanmaku;
+  final VoidCallback? onToggleDanmaku;
+  final bool danmakuOn;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Theme.of(context).colorScheme.surface,
+        elevation: 2,
+        child: SizedBox(
+          height: 46,
+          child: Row(
+            children: [
+              _DetailTab(
+                label: '简介',
+                selected: activeTab == 0,
+                onTap: () => onChanged(0),
+              ),
+              _DetailTab(
+                label: '评论 $commentCount',
+                selected: activeTab == 1,
+                onTap: () => onChanged(1),
+              ),
+              const Spacer(),
+              TextButton(onPressed: onSendDanmaku, child: const Text('发弹幕')),
+              IconButton(
+                tooltip: danmakuOn ? '关闭弹幕' : '开启弹幕',
+                onPressed: onToggleDanmaku,
+                icon: Icon(danmakuOn
+                    ? Icons.subtitles_rounded
+                    : Icons.subtitles_off_rounded),
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
+        ),
+      );
+}
+
+class _DetailTab extends StatelessWidget {
+  const _DetailTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: label.startsWith('评论') ? 98 : 70,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                    color: selected
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  )),
+              const SizedBox(height: 6),
+              Container(
+                width: 42,
+                height: 3,
+                color: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.transparent,
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _ExpandableDescription extends StatefulWidget {
+  const _ExpandableDescription({required this.text});
+
+  final String text;
+
+  @override
+  State<_ExpandableDescription> createState() => _ExpandableDescriptionState();
+}
+
+class _ExpandableDescriptionState extends State<_ExpandableDescription> {
+  var _expanded = false;
+
+  bool get _needsToggle => widget.text.length > 60;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = widget.text;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          text,
+          maxLines: _expanded ? null : 3,
+          overflow:
+              _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+        ),
+        if (_needsToggle)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _expanded = !_expanded),
+              icon: Icon(
+                _expanded
+                    ? Icons.keyboard_arrow_up_rounded
+                    : Icons.keyboard_arrow_down_rounded,
+                size: 18,
+              ),
+              label: Text(_expanded ? '收起' : '展开'),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _VideoDetailPane extends StatelessWidget {
+  const _VideoDetailPane({
+    required this.controller,
+    required this.detail,
+    required this.related,
+    required this.qualities,
+    required this.selectedQuality,
+    required this.playerKey,
+  });
+
+  final AppController controller;
+  final ContentDetail detail;
+  final Future<List<ContentPreview>> related;
+  final List<VideoQuality> qualities;
+  final VideoQuality? selectedQuality;
+  final GlobalKey<_MfunsVideoPlayerState> playerKey;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(detail.preview.title,
+                style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: 8),
+            Text(
+              '${detail.preview.category.isEmpty ? 'Mfuns' : detail.preview.category} · ${detail.preview.views} 播放 · ${detail.preview.comments} 弹幕',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            _ExpandableDescription(text: detail.content),
+            _VideoActions(controller: controller, preview: detail.preview),
+            if (detail.preview.isVideo && qualities.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _PortraitPartSelector(
+                qualities: qualities,
+                selectedQuality: selectedQuality,
+                onQualitySelected: (quality) =>
+                    playerKey.currentState?.selectQuality(quality),
+              ),
+            ],
+            const Divider(height: 28),
+            _AuthorBar(
+              controller: controller,
+              preview: detail.preview,
+            ),
+            if (detail.tags.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              const Text('标签相关'),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: detail.tags
+                    .map((tag) => Chip(label: Text('#$tag')))
+                    .toList(),
+              ),
+            ],
+            const SizedBox(height: 24),
+            Text('相关内容', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            FutureBuilder<List<ContentPreview>>(
+              future: related,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const _InlineLoading(label: '正在加载相关推荐');
+                }
+                final items = snapshot.data ?? const <ContentPreview>[];
+                if (items.isEmpty) return const Text('暂时没有相关推荐');
+                return Column(
+                  children: items
+                      .map((item) => _RelatedContentTile(
+                            controller: controller,
+                            item: item,
+                          ))
+                      .toList(),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+}
+
+class _VideoActions extends StatefulWidget {
+  const _VideoActions({
+    required this.controller,
+    required this.preview,
+    this.resourceType,
+    this.linkPath,
+  });
+
+  final AppController controller;
+  final ContentPreview preview;
+  final int? resourceType;
+  final String? linkPath;
+
+  @override
+  State<_VideoActions> createState() => _VideoActionsState();
+}
+
+class _VideoActionsState extends State<_VideoActions> {
+  ResourceReactionStatus? _reaction;
+  var _favorite = false;
+  var _busy = false;
+  var _rewarding = false;
+
+  int get _resourceType =>
+      widget.resourceType ?? (widget.preview.isVideo ? 1 : 0);
+
+  /// 只有文章（0）和视频（1）支持投币，动态等类型不显示投币入口。
+  bool get _canReward => _resourceType == 0 || _resourceType == 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  Future<void> _loadStatus() async {
+    if (widget.controller.session == null) return;
+    try {
+      final values = await Future.wait<Object>([
+        widget.controller.reactionStatus(
+          resourceId: widget.preview.id,
+          resourceType: _resourceType,
+        ),
+        widget.controller.isFavorite(
+          resourceId: widget.preview.id,
+          resourceType: _resourceType,
+        ),
+      ]);
+      if (mounted) {
+        setState(() {
+          _reaction = values[0] as ResourceReactionStatus;
+          _favorite = values[1] as bool;
+        });
+      }
+    } catch (_) {
+      // Interaction state is optional; taps will still surface API errors.
+    }
+  }
+
+  bool _ensureSignedIn() {
+    if (widget.controller.session != null) return true;
+    _notice('请先在“我的”页面登录');
+    return false;
+  }
+
+  void _notice(String text) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+
+  Future<void> _react({required bool dislike}) async {
+    if (!_ensureSignedIn() || _busy) return;
+    final active =
+        dislike ? _reaction?.disliked == true : _reaction?.liked == true;
+    setState(() => _busy = true);
+    try {
+      await widget.controller.setReaction(
+        resourceId: widget.preview.id,
+        resourceType: _resourceType,
+        action: active ? 'cancel' : (dislike ? 'dislike' : 'like'),
+      );
+      await _loadStatus();
+    } catch (error) {
+      _notice('操作失败：$error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _reward() async {
+    if (!_canReward || !_ensureSignedIn() || _rewarding) return;
+    final count = await showModalBottomSheet<int>(
+      context: context,
+      useRootNavigator: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              leading: Icon(Icons.monetization_on_rounded),
+              title: Text('投币支持'),
+              subtitle: Text('为创作者投币，硬币不足或已达上限时会被服务器拒绝'),
+            ),
+            const Divider(height: 1),
+            for (final value in const [1, 2, 5])
+              ListTile(
+                leading: const Icon(Icons.monetization_on_outlined,
+                    color: Color(0xFFE6A23C)),
+                title: Text('投 $value 枚'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.of(sheetContext).pop(value),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (count == null || !mounted) return;
+    setState(() => _rewarding = true);
+    try {
+      final message = await widget.controller.reward(
+        resourceId: widget.preview.id,
+        resourceType: _resourceType,
+        count: count,
+      );
+      if (mounted) _notice(message.isEmpty ? '投币成功' : message);
+    } catch (error) {
+      if (mounted) _notice('投币失败：$error');
+    } finally {
+      if (mounted) setState(() => _rewarding = false);
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (!_ensureSignedIn() || _busy) return;
+    if (_favorite) {
+      _notice('已收藏，可在“我的收藏”中管理');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await widget.controller.loadFavoriteFolders();
+      if (!mounted) return;
+      final folders = widget.controller.favoriteFolders;
+      if (folders.isEmpty) {
+        _notice('请先在“我的收藏”创建收藏夹');
+        return;
+      }
+      final folder = await showModalBottomSheet<FavoriteFolder>(
+        context: context,
+        useRootNavigator: true,
+        builder: (sheetContext) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ListTile(title: Text('选择收藏夹')),
+              for (final item in folders)
+                ListTile(
+                  leading: const Icon(Icons.folder_outlined),
+                  title: Text(item.name),
+                  subtitle: Text('${item.count} 个内容'),
+                  onTap: () => Navigator.of(sheetContext).pop(item),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (folder == null) return;
+      await widget.controller.addFavorite(
+        listId: folder.id,
+        resourceId: widget.preview.id,
+        resourceType: _resourceType,
+      );
+      if (mounted) {
+        setState(() => _favorite = true);
+        _notice('已收藏到 ${folder.name}');
+      }
+    } catch (error) {
+      _notice('收藏失败：$error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _copyLink() async {
+    final path =
+        widget.linkPath ?? (widget.preview.isVideo ? 'video' : 'article');
+    await Clipboard.setData(
+        ClipboardData(text: 'https://m.mfuns.net/$path/${widget.preview.id}'));
+    if (mounted) _notice('链接已复制');
+  }
+
+  Future<void> _showMore() async {
+    final isFeed = widget.resourceType == 3;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      useRootNavigator: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.link_rounded),
+              title: const Text('复制链接'),
+              onTap: () => Navigator.of(sheetContext).pop('copy'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.refresh_rounded),
+              title: const Text('刷新互动状态'),
+              onTap: () => Navigator.of(sheetContext).pop('refresh'),
+            ),
+            if (isFeed)
+              ListTile(
+                leading: Icon(Icons.delete_outline_rounded,
+                    color: Theme.of(context).colorScheme.error),
+                title: Text('删除动态',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.error)),
+                onTap: () => Navigator.of(sheetContext).pop('delete'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'copy') await _copyLink();
+    if (action == 'refresh') await _loadStatus();
+    if (action == 'delete') await _confirmDeleteFeed();
+  }
+
+  Future<void> _confirmDeleteFeed() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) => AlertDialog(
+        title: const Text('删除动态'),
+        content: const Text('删除后无法恢复，确定删除这条动态吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.controller.deleteFeed(widget.preview.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('动态已删除')));
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('删除失败：$error')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reaction = _reaction;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        _ActionIcon(
+          icon: reaction?.liked == true
+              ? Icons.thumb_up_alt_rounded
+              : Icons.thumb_up_alt_outlined,
+          label: '${reaction?.likes ?? widget.preview.likes} 赞',
+          selected: reaction?.liked == true,
+          busy: _busy,
+          onTap: () => _react(dislike: false),
+        ),
+        _ActionIcon(
+          icon: reaction?.disliked == true
+              ? Icons.thumb_down_alt_rounded
+              : Icons.thumb_down_alt_outlined,
+          label: '${reaction?.dislikes ?? 0} 踩',
+          selected: reaction?.disliked == true,
+          busy: _busy,
+          onTap: () => _react(dislike: true),
+        ),
+        _ActionIcon(
+          icon: _favorite ? Icons.star_rounded : Icons.star_border_rounded,
+          label: _favorite ? '已收藏' : '收藏',
+          selected: _favorite,
+          busy: _busy,
+          onTap: _toggleFavorite,
+        ),
+        if (_canReward)
+          _ActionIcon(
+            icon: Icons.monetization_on_outlined,
+            label: '投币',
+            busy: _rewarding,
+            onTap: _reward,
+          ),
+        _ActionIcon(
+          icon: Icons.ios_share_rounded,
+          label: '分享',
+          onTap: _copyLink,
+        ),
+        _ActionIcon(
+          icon: Icons.more_vert_rounded,
+          label: '更多',
+          onTap: _showMore,
+        ),
+      ],
+    );
+  }
+}
+
+class _PortraitPartSelector extends StatelessWidget {
+  const _PortraitPartSelector({
+    required this.qualities,
+    required this.selectedQuality,
+    required this.onQualitySelected,
+  });
+
+  final List<VideoQuality> qualities;
+  final VideoQuality? selectedQuality;
+  final ValueChanged<VideoQuality> onQualitySelected;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+        decoration: BoxDecoration(
+          color: const Color(0xfff5f4f9),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('分 P',
+                style: TextStyle(
+                    color: Colors.blueGrey, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 7),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children:
+                    (qualities.map((quality) => quality.part).toSet().toList()
+                          ..sort())
+                        .map((part) {
+                  final selected = part == selectedQuality?.part;
+                  final target =
+                      _matchingPartQuality(qualities, selectedQuality, part);
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 7),
+                    child: ChoiceChip(
+                      label: Text('P$part'),
+                      selected: selected,
+                      selectedColor: Theme.of(context).colorScheme.primary,
+                      labelStyle: TextStyle(
+                        color: selected ? Colors.white : Colors.blueGrey,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                      side: BorderSide.none,
+                      backgroundColor: Colors.white,
+                      onSelected: selected
+                          ? null
+                          : (_) {
+                              if (target != null) onQualitySelected(target);
+                            },
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _ActionIcon extends StatelessWidget {
+  const _ActionIcon({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool selected;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.onSurfaceVariant;
+    return InkResponse(
+      onTap: busy ? null : onTap,
+      radius: 28,
+      child: SizedBox(
+        width: 56,
+        child: Column(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(height: 3),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: color,
+                    )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthorBar extends StatefulWidget {
+  const _AuthorBar({
+    required this.controller,
+    required this.preview,
+    this.subtitle = '作者',
+  });
+
+  final AppController controller;
+  final ContentPreview preview;
+  final String subtitle;
+
+  @override
+  State<_AuthorBar> createState() => _AuthorBarState();
+}
+
+class _AuthorBarState extends State<_AuthorBar> {
+  bool? _following;
+  var _isUpdating = false;
+
+  int? get _userId => widget.preview.authorId;
+  bool get _isOwnProfile =>
+      _userId != null && _userId == widget.controller.session?.userId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  Future<void> _loadStatus() async {
+    final userId = _userId;
+    if (userId == null || _isOwnProfile || widget.controller.session == null) {
+      return;
+    }
+    try {
+      final following = await widget.controller.followStatus(userId);
+      if (mounted) setState(() => _following = following);
+    } catch (_) {
+      // The action remains available; a follow request will surface its error.
+    }
+  }
+
+  void _openProfile() {
+    final userId = _userId;
+    if (userId == null) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) =>
+            UserProfilePage(controller: widget.controller, userId: userId)));
+  }
+
+  Future<void> _toggleFollow() async {
+    final userId = _userId;
+    if (userId == null || _isUpdating || _isOwnProfile) return;
+    if (widget.controller.session == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('请先在“我的”页面登录后再关注')));
+      return;
+    }
+    final next = !(_following ?? false);
+    setState(() => _isUpdating = true);
+    try {
+      await widget.controller.setFollow(userId: userId, follow: next);
+      if (mounted) setState(() => _following = next);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('操作失败：$error')));
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = widget.preview;
+    final userId = _userId;
+    final canOpen = userId != null;
+    final following = _following == true;
+    return Row(
+      children: [
+        InkResponse(
+          onTap: canOpen ? _openProfile : null,
+          radius: 30,
+          child: CircleAvatar(
+            radius: 22,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundImage: preview.authorAvatar.isEmpty
+                ? null
+                : NetworkImage(preview.authorAvatar),
+            child: Text(preview.author.isEmpty ? '?' : preview.author[0]),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: InkWell(
+            onTap: canOpen ? _openProfile : null,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(preview.author.isEmpty ? 'Mfuns 用户' : preview.author,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  Text(widget.subtitle),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (_isOwnProfile)
+          const Text('我的投稿')
+        else
+          OutlinedButton.icon(
+            onPressed: userId == null || _isUpdating ? null : _toggleFollow,
+            icon: _isUpdating
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(following ? Icons.check_rounded : Icons.add_rounded),
+            label: Text(following ? '已关注' : '关注'),
+          ),
+      ],
+    );
+  }
+}
+
+class _RelatedContentTile extends StatelessWidget {
+  const _RelatedContentTile({required this.controller, required this.item});
+
+  final AppController controller;
+  final ContentPreview item;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                ContentDetailPage(controller: controller, preview: item),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(7),
+                child: SizedBox(
+                  width: 130,
+                  height: 90,
+                  child: item.cover.isEmpty
+                      ? const ColoredBox(color: Color(0xffd9d9d9))
+                      : Image.network(item.cover,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const ColoredBox(color: Color(0xffd9d9d9))),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SizedBox(
+                  height: 90,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(item.title,
+                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const Spacer(),
+                      Text(item.author,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall),
+                      Text(
+                          '${item.likes} 点赞  ${item.comments} 评论  ${item.views} 浏览',
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _InlineLoading extends StatelessWidget {
+  const _InlineLoading({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 12),
+              Text(label),
+            ],
+          ),
+        ),
+      );
+}
+
+class MfunsVideoPlayer extends StatefulWidget {
+  const MfunsVideoPlayer({
+    super.key,
+    required this.controller,
+    required this.videoId,
+    required this.title,
+    required this.coverUrl,
+    required this.qualities,
+    this.onQualityChanged,
+    this.onDanmakuChanged,
+  });
+
+  final AppController controller;
+  final int videoId;
+  final String title;
+  final String coverUrl;
+  final List<VideoQuality> qualities;
+  final ValueChanged<VideoQuality>? onQualityChanged;
+  final ValueChanged<bool>? onDanmakuChanged;
+
+  @override
+  State<MfunsVideoPlayer> createState() => _MfunsVideoPlayerState();
+}
+
+class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
+    with AutomaticKeepAliveClientMixin {
+  VideoPlayerController? _player;
+  VideoQuality? _selected;
+  List<DanmakuItem> _danmaku = const [];
+  String? _error;
+  var _showDanmaku = true;
+  var _playbackSpeed = 1.0;
+  var _volume = .7;
+  var _brightness = .5;
+  var _brightnessAvailable = true;
+  var _controlsVisible = true;
+  var _showPlaybackOptions = false;
+  var _hasStarted = false;
+  var _isLongPressSpeed = false;
+  double _doubleTapX = 0;
+  String? _seekNotice;
+  _SlideFeedback? _slideFeedback;
+  Timer? _ticker;
+  Timer? _controlsTimer;
+  var _selectionRequest = 0;
+  double _danmakuOpacity = 1.0;
+  double _danmakuSize = 20.0;
+  var _autoPlay = true;
+  var _autoPlayed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // The player is drawn edge-to-edge: keep the layout consistent across
+    // devices (Android <15 legacy vs enforced edge-to-edge) and use light
+    // status bar icons over the black player surface.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+    ));
+    _loadPreferences();
+    _ticker = Timer.periodic(const Duration(milliseconds: 350), (_) {
+      if (mounted && _player?.value.isPlaying == true) setState(() {});
+    });
+    _scheduleControlsHide();
+    _loadBrightness();
+  }
+
+  Future<void> _loadPreferences() async {
+    final results = await Future.wait([
+      UserPreferences.loadDanmakuOn(),
+      UserPreferences.loadDanmakuOpacity(),
+      UserPreferences.loadDanmakuSize(),
+      UserPreferences.loadDefaultQuality(),
+      UserPreferences.loadAutoPlay(),
+    ]);
+    if (!mounted) return;
+    final qualityPreference = results[3] as String;
+    setState(() {
+      _showDanmaku = results[0] as bool;
+      _danmakuOpacity = results[1] as double;
+      _danmakuSize = results[2] as double;
+      _qualityPreference = qualityPreference;
+      _autoPlay = results[4] as bool;
+    });
+    widget.onDanmakuChanged?.call(_showDanmaku);
+    // 首次加载完成后按偏好选择清晰度；开启自动播放时直接开始播放。
+    _select(_preferredQuality(), autoPlay: _autoPlay);
+  }
+
+  /// 按设置的默认清晰度选择；"自动"时选择当前视频可用的最高清晰度。
+  VideoQuality _preferredQuality() {
+    final label = _qualityPreference;
+    if (label.isEmpty) {
+      VideoQuality? best;
+      var bestPixels = -1;
+      for (final quality in widget.qualities) {
+        final pixels = _qualityPixels(quality);
+        if (pixels > bestPixels) {
+          bestPixels = pixels;
+          best = quality;
+        }
+      }
+      return best ?? widget.qualities.last;
+    }
+    for (final quality in widget.qualities) {
+      if (_qualityDisplayLabel(quality).toLowerCase() == label) {
+        return quality;
+      }
+    }
+    return widget.qualities.last;
+  }
+
+  /// 解析清晰度的近似像素高度，用于"自动"选择最高清晰度。
+  int _qualityPixels(VideoQuality quality) {
+    final label = _qualityDisplayLabel(quality).toLowerCase();
+    final match = RegExp(r'(\d{3,4})').firstMatch(label);
+    if (match != null) return int.parse(match.group(1)!);
+    if (label.contains('4k')) return 2160;
+    if (label.contains('2k')) return 1440;
+    if (label.contains('hd')) return 720;
+    if (label.contains('sd')) return 480;
+    return 0;
+  }
+
+  String _qualityPreference = '';
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    _controlsTimer?.cancel();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    _player?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _select(
+    VideoQuality quality, {
+    bool retrySameSource = true,
+    bool allowFallback = true,
+    bool autoPlay = false,
+  }) async {
+    final request = ++_selectionRequest;
+    final oldPlayer = _player;
+    final oldValue = oldPlayer?.value;
+    final resumePosition = oldValue?.position ?? Duration.zero;
+    final wasPlaying = oldValue?.isPlaying ?? false;
+    setState(() {
+      _selected = quality;
+      _player = null;
+      _error = null;
+      _danmaku = const [];
+    });
+    widget.onQualityChanged?.call(quality);
+    await oldPlayer?.dispose();
+    if (!mounted || request != _selectionRequest) return;
+    final nextPlayer = VideoPlayerController.networkUrl(Uri.parse(quality.url));
+    try {
+      await nextPlayer.initialize().timeout(const Duration(seconds: 8));
+      await nextPlayer.setVolume(_volume);
+      await nextPlayer.setPlaybackSpeed(_playbackSpeed);
+      if (resumePosition > Duration.zero) {
+        final target = resumePosition > nextPlayer.value.duration
+            ? nextPlayer.value.duration
+            : resumePosition;
+        await nextPlayer.seekTo(target);
+      }
+      if (wasPlaying) await nextPlayer.play();
+      if (!mounted || request != _selectionRequest) {
+        await nextPlayer.dispose();
+        return;
+      }
+      setState(() => _player = nextPlayer);
+      // 打开视频自动播放：仅在首次初始化时生效。
+      if (autoPlay && !_autoPlayed) {
+        _autoPlayed = true;
+        _hasStarted = true;
+        await nextPlayer.play();
+      }
+      await _loadDanmaku(quality.part);
+    } catch (_) {
+      await nextPlayer.dispose();
+      if (!mounted || request != _selectionRequest) return;
+      if (retrySameSource) {
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        if (mounted && request == _selectionRequest) {
+          await _select(quality, retrySameSource: false, allowFallback: true);
+        }
+        return;
+      }
+      if (allowFallback) {
+        final alternatives = widget.qualities
+            .where((candidate) => candidate != quality)
+            .toList(growable: false);
+        if (alternatives.isNotEmpty) {
+          await _select(
+            alternatives.first,
+            retrySameSource: false,
+            allowFallback: false,
+          );
+          return;
+        }
+      }
+      setState(() => _error = '播放地址加载失败，请点击画面重试');
+    }
+  }
+
+  Future<void> _loadDanmaku(int part) async {
+    try {
+      final items = await widget.controller.danmaku(widget.videoId, part);
+      if (mounted && _selected?.part == part) setState(() => _danmaku = items);
+    } catch (_) {
+      // Video playback must remain usable when the optional danmaku endpoint fails.
+    }
+  }
+
+  Future<void> sendDanmakuText(String rawText) async {
+    final text = rawText.trim();
+    final player = _player;
+    final selected = _selected;
+    if (text.isEmpty || player == null || selected == null) return;
+    if (widget.controller.session == null) {
+      _notice('请先在“我的”页面登录后再发送弹幕');
+      return;
+    }
+    try {
+      await widget.controller.sendDanmaku(
+        videoId: widget.videoId,
+        part: selected.part,
+        seconds: player.value.position.inMilliseconds / 1000,
+        content: text,
+      );
+      await _loadDanmaku(selected.part);
+      _notice('弹幕已发送');
+    } catch (error) {
+      _notice('发送失败：$error');
+    }
+  }
+
+  void toggleDanmaku() {
+    setState(() => _showDanmaku = !_showDanmaku);
+    widget.onDanmakuChanged?.call(_showDanmaku);
+  }
+
+  Future<void> selectQuality(VideoQuality quality) => _select(quality);
+
+  Future<_FullscreenPlayerUpdate?> _selectForFullscreen(
+      VideoQuality quality) async {
+    await _select(quality);
+    final player = _player;
+    final selected = _selected;
+    if (!mounted || player == null || selected == null) return null;
+    return _FullscreenPlayerUpdate(
+      player: player,
+      quality: selected,
+      danmaku: _danmaku,
+    );
+  }
+
+  void _notice(String message) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(message)));
+
+  void _scheduleControlsHide() {
+    _controlsTimer?.cancel();
+    _controlsTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _player?.value.isPlaying == true) {
+        setState(() => _controlsVisible = false);
+      }
+    });
+  }
+
+  void _toggleControls() {
+    setState(() => _controlsVisible = !_controlsVisible);
+    if (_controlsVisible) {
+      _scheduleControlsHide();
+    } else {
+      _showPlaybackOptions = false;
+    }
+  }
+
+  Future<void> _loadBrightness() async {
+    try {
+      final value = await ScreenBrightness().application;
+      if (mounted) {
+        setState(() => _brightness = value.clamp(0.0, 1.0).toDouble());
+      }
+    } catch (_) {
+      if (mounted) setState(() => _brightnessAvailable = false);
+    }
+  }
+
+  void _handleVerticalSlide(
+      DragUpdateDetails details, double width, double height) {
+    final delta = -details.delta.dy / height;
+    if (details.localPosition.dx < width / 2 && _brightnessAvailable) {
+      final next = (_brightness + delta).clamp(0.0, 1.0).toDouble();
+      setState(() {
+        _brightness = next;
+        _slideFeedback = _SlideFeedback(brightness: true, value: next);
+        _controlsVisible = true;
+      });
+      _setBrightness(next);
+    } else {
+      final next = (_volume + delta).clamp(0.0, 1.0).toDouble();
+      setState(() {
+        _volume = next;
+        _slideFeedback = _SlideFeedback(brightness: false, value: next);
+        _controlsVisible = true;
+      });
+      _player?.setVolume(next);
+    }
+    _scheduleControlsHide();
+  }
+
+  Future<void> _setBrightness(double value) async {
+    try {
+      await ScreenBrightness().setApplicationScreenBrightness(value);
+    } catch (_) {
+      if (mounted) setState(() => _brightnessAvailable = false);
+    }
+  }
+
+  void _clearSlideFeedback() => setState(() => _slideFeedback = null);
+
+  Future<void> _setLongPressSpeed(bool active) async {
+    if (_isLongPressSpeed == active) return;
+    setState(() => _isLongPressSpeed = active);
+    await _player?.setPlaybackSpeed(active ? 2 : _playbackSpeed);
+  }
+
+  Future<void> _seekBy(int seconds) async {
+    final player = _player;
+    if (player == null) return;
+    var target = player.value.position + Duration(seconds: seconds);
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > player.value.duration) target = player.value.duration;
+    await player.seekTo(target);
+    if (mounted) {
+      setState(() {
+        _seekNotice = '${seconds > 0 ? '+' : ''}$seconds 秒';
+        _controlsVisible = true;
+      });
+      _scheduleControlsHide();
+    }
+  }
+
+  Future<void> _openFullscreen() async {
+    final player = _player;
+    if (player == null) return;
+    final result = await Navigator.of(context, rootNavigator: true)
+        .push<_FullscreenResult>(
+      PageRouteBuilder<_FullscreenResult>(
+        opaque: true,
+        pageBuilder: (_, __, ___) => _FullscreenVideoOverlay(
+          player: player,
+          title: widget.title,
+          danmaku: _danmaku,
+          qualities: widget.qualities,
+          selectedQuality: _selected,
+          showDanmaku: _showDanmaku,
+          danmakuOpacity: _danmakuOpacity,
+          danmakuSize: _danmakuSize,
+          defaultQuality: _qualityPreference,
+          autoPlay: _autoPlay,
+          volume: _volume,
+          playbackSpeed: _playbackSpeed,
+          onSendDanmaku: sendDanmakuText,
+          onSelectQuality: _selectForFullscreen,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (result != null) {
+      setState(() {
+        _controlsVisible = true;
+        _showDanmaku = result.showDanmaku;
+        _volume = result.volume;
+        _playbackSpeed = result.playbackSpeed;
+      });
+      widget.onDanmakuChanged?.call(_showDanmaku);
+      if (result.quality != null && result.quality != _selected) {
+        await _select(result.quality!);
+      }
+    } else {
+      setState(() => _controlsVisible = true);
+    }
+  }
+
+  Widget _buildPlayerSurface() {
+    final player = _player;
+    final selected = _selected;
+    final value = player?.value;
+    final duration = value?.duration ?? Duration.zero;
+    final position = value?.position ?? Duration.zero;
+    final visibleDanmaku = _showDanmaku
+        ? _danmaku
+            .where((item) {
+              final delta = position - item.time;
+              return delta >= Duration.zero &&
+                  delta < const Duration(seconds: 4);
+            })
+            .take(12)
+            .toList(growable: false)
+        : const <DanmakuItem>[];
+    // Keep portrait playback at most two thirds of the screen height so
+    // very tall ("异形") videos do not push the controls out of reach. In
+    // landscape the surface fills the whole player pane and the video is
+    // centered inside it at its original aspect ratio.
+    final aspectRatio = value?.aspectRatio ?? 16 / 9;
+    final screenSize = MediaQuery.sizeOf(context);
+    final maxHeight = screenSize.height * 2 / 3;
+    final topInset = MediaQuery.paddingOf(context).top;
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final naturalVideoHeight = constraints.maxWidth / aspectRatio;
+        final videoHeight =
+            naturalVideoHeight > maxHeight ? maxHeight : naturalVideoHeight;
+        final videoWidth = videoHeight * aspectRatio;
+        final availableHeight = constraints.maxHeight;
+        final surfaceHeight =
+            availableHeight.isFinite ? availableHeight : videoHeight;
+        return ColoredBox(
+          color: Colors.black,
+          child: Padding(
+            padding: EdgeInsets.only(top: topInset),
+            child: SizedBox(
+              width: double.infinity,
+              height: surfaceHeight,
+              child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _toggleControls,
+        onDoubleTapDown: (details) => _doubleTapX = details.localPosition.dx,
+        onDoubleTap: () {
+          final width = MediaQuery.sizeOf(context).width;
+          _seekBy(_doubleTapX < width / 2 ? -10 : 10);
+        },
+        onLongPressStart: (_) => _setLongPressSpeed(true),
+        onLongPressEnd: (_) => _setLongPressSpeed(false),
+        onLongPressCancel: () => _setLongPressSpeed(false),
+        onVerticalDragUpdate: (details) => _handleVerticalSlide(
+            details, MediaQuery.sizeOf(context).width, videoHeight),
+        onVerticalDragEnd: (_) => _clearSlideFeedback(),
+        onVerticalDragCancel: _clearSlideFeedback,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Center(
+              child: SizedBox(
+                width: videoWidth,
+                height: videoHeight,
+                child: player == null
+                      ? Center(
+                          child: _error == null
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white)
+                              : FilledButton.icon(
+                                  style: FilledButton.styleFrom(
+                                      backgroundColor: Colors.white24,
+                                      foregroundColor: Colors.white),
+                                  onPressed: selected == null
+                                      ? null
+                                      : () => _select(selected),
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: Text(_error!),
+                                ),
+                        )
+                      : Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (!_hasStarted && widget.coverUrl.isNotEmpty)
+                              Image.network(widget.coverUrl,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  errorBuilder: (_, __, ___) =>
+                                      VideoPlayer(player))
+                            else
+                              VideoPlayer(player),
+                            _DanmakuCanvas(
+                              items: visibleDanmaku,
+                              opacity: _danmakuOpacity,
+                              size: _danmakuSize,
+                            ),
+                          ],
+                        ),
+              ),
+            ),
+            if (player != null)
+              AnimatedOpacity(
+                      opacity: _controlsVisible ? 1 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: IgnorePointer(
+                        ignoring: !_controlsVisible,
+                        child: DecoratedBox(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Color(0x99000000),
+                                Colors.transparent,
+                                Color(0xaa000000)
+                              ],
+                            ),
+                          ),
+                          child: Stack(
+                            children: [
+                              Positioned(
+                                top: 4,
+                                left: 0,
+                                right: 0,
+                                child: Row(
+                                  children: [
+                                    IconButton(
+                                      color: Colors.white,
+                                      tooltip: '返回',
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(),
+                                      icon: const Icon(
+                                          Icons.arrow_back_rounded),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        selected == null
+                                            ? widget.title
+                                            : '${widget.title} · P${selected.part}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                    PopupMenuButton<VideoQuality>(
+                                      tooltip: '清晰度',
+                                      initialValue: selected,
+                                      onSelected: _select,
+                                      itemBuilder: (context) => widget
+                                          .qualities
+                                          .where((quality) =>
+                                              quality.part == selected?.part)
+                                          .map((quality) => PopupMenuItem(
+                                                value: quality,
+                                                child: Text(
+                                                    _qualityDisplayLabel(
+                                                        quality)),
+                                              ))
+                                          .toList(),
+                                      icon: const Icon(Icons.hd_rounded,
+                                          color: Colors.white),
+                                    ),
+                                    IconButton(
+                                      color: Colors.white,
+                                      tooltip: '播放器设置',
+                                      onPressed: () => setState(() =>
+                                          _showPlaybackOptions =
+                                              !_showPlaybackOptions),
+                                      icon:
+                                          const Icon(Icons.settings_rounded),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Center(
+                                child: IconButton.filledTonal(
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.black54,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  iconSize: 48,
+                                  onPressed: () async {
+                                    if (!_hasStarted) {
+                                      setState(() => _hasStarted = true);
+                                    }
+                                    player.value.isPlaying
+                                        ? await player.pause()
+                                        : await player.play();
+                                    if (mounted) setState(() {});
+                                    _scheduleControlsHide();
+                                  },
+                                  icon: Icon(player.value.isPlaying
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded),
+                                ),
+                              ),
+                              if (_showPlaybackOptions)
+                                Positioned(
+                                  right: 12,
+                                  bottom: 48 + bottomInset,
+                                  child: _FullscreenOptionsPanel(
+                                    volume: _volume,
+                                    speed: _playbackSpeed,
+                                    onVolumeChanged: (next) async {
+                                      setState(() => _volume = next);
+                                      await _player?.setVolume(next);
+                                    },
+                                    onSpeedChanged: (next) async {
+                                      setState(() => _playbackSpeed = next);
+                                      await _player
+                                          ?.setPlaybackSpeed(next);
+                                    },
+                                    defaultQuality: _qualityPreference,
+                                    availableQualities: widget.qualities
+                                        .map(_qualityDisplayLabel)
+                                        .toSet()
+                                        .toList(growable: false),
+                                    onDefaultQualityChanged: (label) {
+                                      setState(
+                                          () => _qualityPreference = label);
+                                      UserPreferences
+                                          .saveDefaultQuality(label);
+                                    },
+                                    autoPlay: _autoPlay,
+                                    onAutoPlayChanged: (value) {
+                                      setState(() => _autoPlay = value);
+                                      UserPreferences.saveAutoPlay(value);
+                                    },
+                                  ),
+                                ),
+                              Positioned(
+                                left: 8,
+                                right: 8,
+                                bottom: 3 + bottomInset,
+                                child: Row(
+                                  children: [
+                                    Text(_formatDuration(position),
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                              fontSize: 11)),
+                                      Expanded(
+                                        child: SliderTheme(
+                                          data:
+                                              SliderTheme.of(context).copyWith(
+                                            trackHeight: 2,
+                                            thumbShape:
+                                                const RoundSliderThumbShape(
+                                                    enabledThumbRadius: 5),
+                                          ),
+                                          child: Slider(
+                                            activeColor: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            inactiveColor: Colors.white38,
+                                            value: duration.inMilliseconds == 0
+                                                ? 0
+                                                : position.inMilliseconds
+                                                    .clamp(0,
+                                                        duration.inMilliseconds)
+                                                    .toDouble(),
+                                            max: duration.inMilliseconds == 0
+                                                ? 1
+                                                : duration.inMilliseconds
+                                                    .toDouble(),
+                                            onChanged: (milliseconds) {
+                                              player.seekTo(Duration(
+                                                  milliseconds:
+                                                      milliseconds.round()));
+                                              _scheduleControlsHide();
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                      Text(_formatDuration(duration),
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11)),
+                                      IconButton(
+                                        color: Colors.white,
+                                        tooltip: '全屏',
+                                        onPressed: _openFullscreen,
+                                        icon: const Icon(
+                                            Icons.fullscreen_rounded),
+                                      ),
+                                    ],
+                                  ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_seekNotice != null && _controlsVisible)
+                      IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            child: Text(_seekNotice!,
+                                style: const TextStyle(color: Colors.white)),
+                          ),
+                        ),
+                      ),
+                    if (_isLongPressSpeed)
+                      IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            child: Text('2.0× 倍速播放',
+                                style: TextStyle(color: Colors.white)),
+                          ),
+                        ),
+                      ),
+                    if (_slideFeedback != null)
+                      IgnorePointer(
+                        child:
+                            _VerticalSlideFeedback(feedback: _slideFeedback!),
+                      ),
+                  ],
+                ),
+              ),
+        ),
+      ),
+      );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return _buildPlayerSurface();
+  }
+
+  @override
+  bool get wantKeepAlive => true;
+}
+
+class _FullscreenVideoOverlay extends StatefulWidget {
+  const _FullscreenVideoOverlay({
+    required this.player,
+    required this.title,
+    required this.danmaku,
+    required this.qualities,
+    required this.selectedQuality,
+    required this.showDanmaku,
+    this.danmakuOpacity = 1,
+    this.danmakuSize = 20,
+    this.defaultQuality = '',
+    this.autoPlay = true,
+    required this.volume,
+    required this.playbackSpeed,
+    required this.onSendDanmaku,
+    required this.onSelectQuality,
+  });
+
+  final VideoPlayerController player;
+  final String title;
+  final List<DanmakuItem> danmaku;
+  final List<VideoQuality> qualities;
+  final VideoQuality? selectedQuality;
+  final bool showDanmaku;
+  final double danmakuOpacity;
+  final double danmakuSize;
+  final String defaultQuality;
+  final bool autoPlay;
+  final double volume;
+  final double playbackSpeed;
+  final Future<void> Function(String text) onSendDanmaku;
+  final Future<_FullscreenPlayerUpdate?> Function(VideoQuality quality)
+      onSelectQuality;
+
+  @override
+  State<_FullscreenVideoOverlay> createState() =>
+      _FullscreenVideoOverlayState();
+}
+
+/// 桌面端支持窗口级全屏（Windows/macOS/Linux），移动端与 Web 不适用。
+final bool _isDesktop = !kIsWeb &&
+    (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+
+class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
+  var _controlsVisible = true;
+  late bool _showDanmaku;
+  late double _volume;
+  var _brightness = .5;
+  var _brightnessAvailable = true;
+  late double _playbackSpeed;
+  late VideoPlayerController _player;
+  late VideoQuality? _selectedQuality;
+  late List<DanmakuItem> _danmaku;
+  var _showOptions = false;
+  var _showDanmakuComposer = false;
+  var _switchingQuality = false;
+  double _doubleTapX = 0;
+  Timer? _hideTimer;
+  final _danmakuInput = TextEditingController();
+  var _sendingDanmaku = false;
+  _SlideFeedback? _slideFeedback;
+
+  @override
+  void initState() {
+    super.initState();
+    _showDanmaku = widget.showDanmaku;
+    _volume = widget.volume;
+    _playbackSpeed = widget.playbackSpeed;
+    _player = widget.player;
+    _selectedQuality = widget.selectedQuality;
+    _danmaku = widget.danmaku;
+    _loadBrightness();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    // 桌面端（Windows/macOS/Linux）把窗口切入真全屏，移动端只旋转方向。
+    if (_isDesktop) {
+      windowManager.setFullScreen(true).catchError((_) {});
+    }
+    _scheduleHide();
+  }
+
+  void _close([VideoQuality? quality]) => Navigator.of(context).pop(
+        _FullscreenResult(
+          quality: quality,
+          showDanmaku: _showDanmaku,
+          volume: _volume,
+          playbackSpeed: _playbackSpeed,
+        ),
+      );
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    _danmakuInput.dispose();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    if (_isDesktop) {
+      windowManager.setFullScreen(false).catchError((_) {});
+    }
+    super.dispose();
+  }
+
+  Future<void> _sendDanmaku() async {
+    final text = _danmakuInput.text.trim();
+    if (text.isEmpty || _sendingDanmaku) return;
+    setState(() => _sendingDanmaku = true);
+    await widget.onSendDanmaku(text);
+    if (mounted) {
+      _danmakuInput.clear();
+      setState(() => _sendingDanmaku = false);
+    }
+  }
+
+  Future<void> _selectQuality(VideoQuality quality) async {
+    if (_switchingQuality || quality == _selectedQuality) return;
+    setState(() => _switchingQuality = true);
+    // Detach the old VideoPlayerController from the fullscreen widget tree
+    // before the portrait player disposes and replaces it.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    final update = await widget.onSelectQuality(quality);
+    if (!mounted) return;
+    if (update == null) {
+      setState(() => _switchingQuality = false);
+      return;
+    }
+    setState(() {
+      _player = update.player;
+      _selectedQuality = update.quality;
+      _danmaku = update.danmaku;
+      _switchingQuality = false;
+      _showOptions = false;
+      _controlsVisible = true;
+    });
+    _scheduleHide();
+  }
+
+  void _queueQualitySelect(VideoQuality quality) {
+    // PopupMenu is still removing its inherited route while onSelected runs.
+    // Deferring avoids changing the fullscreen subtree during that teardown.
+    Future<void>.delayed(Duration.zero, () {
+      if (mounted) _selectQuality(quality);
+    });
+  }
+
+  void _scheduleHide() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _player.value.isPlaying) {
+        setState(() => _controlsVisible = false);
+      }
+    });
+  }
+
+  Future<void> _loadBrightness() async {
+    try {
+      final value = await ScreenBrightness().application;
+      if (mounted) {
+        setState(() => _brightness = value.clamp(0.0, 1.0).toDouble());
+      }
+    } catch (_) {
+      if (mounted) setState(() => _brightnessAvailable = false);
+    }
+  }
+
+  void _handleVerticalSlide(
+      DragUpdateDetails details, double width, double height) {
+    final delta = -details.delta.dy / height;
+    if (details.localPosition.dx < width / 2 && _brightnessAvailable) {
+      final next = (_brightness + delta).clamp(0.0, 1.0).toDouble();
+      setState(() {
+        _brightness = next;
+        _slideFeedback = _SlideFeedback(brightness: true, value: next);
+        _controlsVisible = true;
+      });
+      _setBrightness(next);
+    } else {
+      final next = (_volume + delta).clamp(0.0, 1.0).toDouble();
+      setState(() {
+        _volume = next;
+        _slideFeedback = _SlideFeedback(brightness: false, value: next);
+        _controlsVisible = true;
+      });
+      _player.setVolume(next);
+    }
+    _scheduleHide();
+  }
+
+  Future<void> _setBrightness(double value) async {
+    try {
+      await ScreenBrightness().setApplicationScreenBrightness(value);
+    } catch (_) {
+      if (mounted) setState(() => _brightnessAvailable = false);
+    }
+  }
+
+  void _clearSlideFeedback() => setState(() => _slideFeedback = null);
+
+  Future<void> _seekBy(int seconds) async {
+    var target = _player.value.position + Duration(seconds: seconds);
+    if (target < Duration.zero) target = Duration.zero;
+    if (target > _player.value.duration) {
+      target = _player.value.duration;
+    }
+    await _player.seekTo(target);
+    if (mounted) {
+      setState(() => _controlsVisible = true);
+      _scheduleHide();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: Colors.black,
+        body: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            setState(() => _controlsVisible = !_controlsVisible);
+            if (_controlsVisible) _scheduleHide();
+          },
+          onDoubleTapDown: (details) => _doubleTapX = details.localPosition.dx,
+          onDoubleTap: () {
+            final width = MediaQuery.sizeOf(context).width;
+            _seekBy(_doubleTapX < width / 2 ? -10 : 10);
+          },
+          onVerticalDragUpdate: (details) => _handleVerticalSlide(
+              details,
+              MediaQuery.sizeOf(context).width,
+              MediaQuery.sizeOf(context).height),
+          onVerticalDragEnd: (_) => _clearSlideFeedback(),
+          onVerticalDragCancel: _clearSlideFeedback,
+          child: _switchingQuality
+              ? const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                )
+              : ValueListenableBuilder<VideoPlayerValue>(
+                  valueListenable: _player,
+                  builder: (context, value, _) {
+                    final duration = value.duration;
+                    final position = value.position;
+                    final danmaku = !_showDanmaku
+                        ? const <DanmakuItem>[]
+                        : _danmaku
+                            .where((item) {
+                              final delta = position - item.time;
+                              return delta >= Duration.zero &&
+                                  delta < const Duration(seconds: 4);
+                            })
+                            .take(12)
+                            .toList(growable: false);
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Center(
+                          child: AspectRatio(
+                            aspectRatio: value.aspectRatio == 0
+                                ? 16 / 9
+                                : value.aspectRatio,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                VideoPlayer(_player),
+                                _DanmakuCanvas(
+                                  items: danmaku,
+                                  opacity: widget.danmakuOpacity,
+                                  size: widget.danmakuSize,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_controlsVisible)
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Color(0x99000000),
+                                    Colors.transparent,
+                                    Color(0xaa000000)
+                                  ],
+                                ),
+                              ),
+                              child: Stack(
+                                children: [
+                                  Positioned(
+                                    top: 8,
+                                    left: 8,
+                                    right: 8,
+                                    child: SafeArea(
+                                      bottom: false,
+                                      child: Row(
+                                        children: [
+                                          IconButton(
+                                            color: Colors.white,
+                                            tooltip: '退出全屏',
+                                            icon: const Icon(
+                                                Icons.arrow_back_rounded),
+                                            onPressed: _close,
+                                          ),
+                                          Expanded(
+                                            child: Text(widget.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight:
+                                                        FontWeight.w600)),
+                                          ),
+                                          IconButton(
+                                            color: Colors.white,
+                                            tooltip:
+                                                _showDanmaku ? '关闭弹幕' : '打开弹幕',
+                                            onPressed: () => setState(() =>
+                                                _showDanmaku = !_showDanmaku),
+                                            icon: Icon(_showDanmaku
+                                                ? Icons.subtitles_rounded
+                                                : Icons.subtitles_off_rounded),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => setState(() {
+                                              _showOptions = false;
+                                              _showDanmakuComposer =
+                                                  !_showDanmakuComposer;
+                                            }),
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8),
+                                            ),
+                                            child: Text(_showDanmakuComposer
+                                                ? '收起'
+                                                : '发弹幕'),
+                                          ),
+                                          IconButton(
+                                            color: Colors.white,
+                                            tooltip: '播放器设置',
+                                            onPressed: () => setState(() {
+                                              _showDanmakuComposer = false;
+                                              _showOptions = !_showOptions;
+                                            }),
+                                            icon: const Icon(
+                                                Icons.settings_rounded),
+                                          ),
+                                          PopupMenuButton<int>(
+                                            tooltip: '分 P',
+                                            initialValue:
+                                                _selectedQuality?.part,
+                                            onSelected: (part) {
+                                              final next = _matchingPartQuality(
+                                                  widget.qualities,
+                                                  _selectedQuality,
+                                                  part);
+                                              if (next != null) {
+                                                _queueQualitySelect(next);
+                                              }
+                                            },
+                                            itemBuilder: (context) {
+                                              final parts = widget.qualities
+                                                  .map(
+                                                      (quality) => quality.part)
+                                                  .toSet()
+                                                  .toList()
+                                                ..sort();
+                                              return parts
+                                                  .map((part) => PopupMenuItem(
+                                                        value: part,
+                                                        child: Text('P$part'),
+                                                      ))
+                                                  .toList();
+                                            },
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 9,
+                                                      vertical: 8),
+                                              child: Text(
+                                                'P${_selectedQuality?.part ?? 1}',
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight:
+                                                        FontWeight.w800),
+                                              ),
+                                            ),
+                                          ),
+                                          PopupMenuButton<VideoQuality>(
+                                            tooltip: '清晰度',
+                                            initialValue: _selectedQuality,
+                                            onSelected: _queueQualitySelect,
+                                            itemBuilder: (context) => widget
+                                                .qualities
+                                                .where((quality) =>
+                                                    quality.part ==
+                                                    _selectedQuality?.part)
+                                                .map((quality) => PopupMenuItem(
+                                                      value: quality,
+                                                      child: Text(
+                                                        _qualityDisplayLabel(
+                                                            quality),
+                                                      ),
+                                                    ))
+                                                .toList(),
+                                            icon: const Icon(Icons.hd_rounded,
+                                                color: Colors.white),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  if (_showOptions && !_showDanmakuComposer)
+                                    Positioned(
+                                      top: 58,
+                                      right: 16,
+                                      child: _FullscreenOptionsPanel(
+                                        volume: _volume,
+                                        speed: _playbackSpeed,
+                                        onVolumeChanged: (next) async {
+                                          setState(() => _volume = next);
+                                          await _player.setVolume(next);
+                                        },
+                                        onSpeedChanged: (next) async {
+                                          setState(() => _playbackSpeed = next);
+                                          await _player
+                                              .setPlaybackSpeed(next);
+                                        },
+                                        defaultQuality:
+                                            widget.defaultQuality,
+                                        availableQualities: widget.qualities
+                                            .map(_qualityDisplayLabel)
+                                            .toSet()
+                                            .toList(growable: false),
+                                        onDefaultQualityChanged: (label) =>
+                                            UserPreferences
+                                                .saveDefaultQuality(label),
+                                        autoPlay: widget.autoPlay,
+                                        onAutoPlayChanged: (value) =>
+                                            UserPreferences
+                                                .saveAutoPlay(value),
+                                      ),
+                                    ),
+                                  if (_showDanmakuComposer)
+                                    Positioned(
+                                      top: 58,
+                                      right: 16,
+                                      child: SizedBox(
+                                        width: 320,
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: TextField(
+                                                controller: _danmakuInput,
+                                                maxLength: 100,
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 13),
+                                                onSubmitted: (_) =>
+                                                    _sendDanmaku(),
+                                                decoration:
+                                                    const InputDecoration(
+                                                  isDense: true,
+                                                  counterText: '',
+                                                  hintText: '发个弹幕…',
+                                                  hintStyle: TextStyle(
+                                                      color: Colors.white54),
+                                                  fillColor: Color(0xaa202025),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 7),
+                                            FilledButton(
+                                              onPressed: _sendingDanmaku
+                                                  ? null
+                                                  : _sendDanmaku,
+                                              child: _sendingDanmaku
+                                                  ? const SizedBox(
+                                                      width: 16,
+                                                      height: 16,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color: Colors.white,
+                                                      ),
+                                                    )
+                                                  : const Text('发送'),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  Center(
+                                    child: IconButton.filledTonal(
+                                      style: IconButton.styleFrom(
+                                        backgroundColor: Colors.black54,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      iconSize: 54,
+                                      onPressed: () async {
+                                        value.isPlaying
+                                            ? await _player.pause()
+                                            : await _player.play();
+                                        _scheduleHide();
+                                      },
+                                      icon: Icon(value.isPlaying
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    left: 12,
+                                    right: 12,
+                                    bottom: 4,
+                                    child: SafeArea(
+                                      top: false,
+                                      child: Row(
+                                        children: [
+                                          Text(_formatDuration(position),
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11)),
+                                          Expanded(
+                                            child: Slider(
+                                              activeColor: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                              inactiveColor: Colors.white38,
+                                              value: duration.inMilliseconds ==
+                                                      0
+                                                  ? 0
+                                                  : position.inMilliseconds
+                                                      .clamp(
+                                                          0,
+                                                          duration
+                                                              .inMilliseconds)
+                                                      .toDouble(),
+                                              max: duration.inMilliseconds == 0
+                                                  ? 1
+                                                  : duration.inMilliseconds
+                                                      .toDouble(),
+                                              onChanged: (milliseconds) {
+                                                _player.seekTo(Duration(
+                                                    milliseconds:
+                                                        milliseconds.round()));
+                                                _scheduleHide();
+                                              },
+                                            ),
+                                          ),
+                                          Text(_formatDuration(duration),
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 11)),
+                                          IconButton(
+                                            color: Colors.white,
+                                            icon: const Icon(
+                                                Icons.fullscreen_exit_rounded),
+                                            onPressed: _close,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        if (_slideFeedback != null)
+                          IgnorePointer(
+                            child: _VerticalSlideFeedback(
+                                feedback: _slideFeedback!),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+        ),
+      );
+}
+
+class _FullscreenResult {
+  const _FullscreenResult({
+    required this.quality,
+    required this.showDanmaku,
+    required this.volume,
+    required this.playbackSpeed,
+  });
+
+  final VideoQuality? quality;
+  final bool showDanmaku;
+  final double volume;
+  final double playbackSpeed;
+}
+
+class _SlideFeedback {
+  const _SlideFeedback({required this.brightness, required this.value});
+
+  final bool brightness;
+  final double value;
+}
+
+class _VerticalSlideFeedback extends StatelessWidget {
+  const _VerticalSlideFeedback({required this.feedback});
+
+  final _SlideFeedback feedback;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black87,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  feedback.brightness
+                      ? Icons.brightness_6_rounded
+                      : feedback.value == 0
+                          ? Icons.volume_off_rounded
+                          : Icons.volume_up_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  '${feedback.brightness ? '亮度' : '音量'} ${(feedback.value * 100).round()}%',
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+class _FullscreenPlayerUpdate {
+  const _FullscreenPlayerUpdate({
+    required this.player,
+    required this.quality,
+    required this.danmaku,
+  });
+
+  final VideoPlayerController player;
+  final VideoQuality quality;
+  final List<DanmakuItem> danmaku;
+}
+
+VideoQuality? _matchingPartQuality(
+  List<VideoQuality> qualities,
+  VideoQuality? current,
+  int part,
+) {
+  final choices = qualities.where((quality) => quality.part == part).toList();
+  if (choices.isEmpty) return null;
+  final sameQuality = choices.where((quality) =>
+      quality.name == current?.name && quality.label == current?.label);
+  return sameQuality.isEmpty ? choices.first : sameQuality.first;
+}
+
+String _qualityDisplayLabel(VideoQuality quality) {
+  final source = '${quality.name} ${quality.label}';
+  final match = RegExp(r'(?<!\d)(\d{3,4})\s*[pP]?(?!\d)').firstMatch(source);
+  if (match != null) return '${match.group(1)}p';
+  if (quality.name.isNotEmpty) return quality.name;
+  if (quality.label.isNotEmpty) return quality.label;
+  return '默认';
+}
+
+class _FullscreenOptionsPanel extends StatelessWidget {
+  const _FullscreenOptionsPanel({
+    required this.volume,
+    required this.speed,
+    required this.onVolumeChanged,
+    required this.onSpeedChanged,
+    this.defaultQuality = '',
+    this.availableQualities = const [],
+    this.onDefaultQualityChanged,
+    this.autoPlay = true,
+    this.onAutoPlayChanged,
+  });
+
+  final double volume;
+  final double speed;
+  final ValueChanged<double> onVolumeChanged;
+  final ValueChanged<double> onSpeedChanged;
+  final String defaultQuality;
+  final List<String> availableQualities;
+  final ValueChanged<String>? onDefaultQualityChanged;
+  final bool autoPlay;
+  final ValueChanged<bool>? onAutoPlayChanged;
+
+  String _qualityLabel(String value) => value.isEmpty ? '自动' : value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 248,
+        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+        decoration: BoxDecoration(
+          color: const Color(0xee1d1d23),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.volume_up_rounded,
+                    color: Colors.white, size: 19),
+                Expanded(
+                  child: Slider(
+                    activeColor: Theme.of(context).colorScheme.primary,
+                    inactiveColor: Colors.white38,
+                    value: volume,
+                    onChanged: onVolumeChanged,
+                  ),
+                ),
+                PopupMenuButton<double>(
+                  initialValue: speed,
+                  onSelected: onSpeedChanged,
+                  itemBuilder: (context) => [
+                    for (final option in [.5, .75, 1.0, 1.25, 1.5, 2.0])
+                      PopupMenuItem(value: option, child: Text('${option}x')),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text('${speed}x',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+            if (availableQualities.isNotEmpty) ...[
+              const Divider(color: Colors.white24, height: 1),
+              Row(
+                children: [
+                  const Icon(Icons.high_quality_outlined,
+                      color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('默认清晰度',
+                        style: TextStyle(color: Colors.white, fontSize: 12)),
+                  ),
+                  PopupMenuButton<String>(
+                    initialValue: defaultQuality,
+                    onSelected: onDefaultQualityChanged ?? (_) {},
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(value: '', child: Text('自动')),
+                      for (final label in availableQualities)
+                        PopupMenuItem(value: label, child: Text(label)),
+                    ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(_qualityLabel(defaultQuality),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const Divider(color: Colors.white24, height: 1),
+            Row(
+              children: [
+                const Icon(Icons.play_circle_outline_rounded,
+                    color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('打开视频自动播放',
+                      style: TextStyle(color: Colors.white, fontSize: 12)),
+                ),
+                Switch(
+                  value: autoPlay,
+                  onChanged: onAutoPlayChanged ?? (_) {},
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+}
+
+/// 滚动弹幕画布：每条弹幕用独立 AnimationController 从右向左平滑划过
+/// 全屏宽度，多轨道并行；动画不依赖父级 350ms 的定时重建，避免卡顿。
+class _DanmakuCanvas extends StatefulWidget {
+  const _DanmakuCanvas({
+    required this.items,
+    this.opacity = 1,
+    this.size = 20,
+  });
+
+  final List<DanmakuItem> items;
+  final double opacity;
+  final double size;
+
+  @override
+  State<_DanmakuCanvas> createState() => _DanmakuCanvasState();
+}
+
+class _DanmakuEntry {
+  _DanmakuEntry({
+    required this.item,
+    required this.controller,
+    required this.textWidth,
+    required this.lane,
+  });
+
+  final DanmakuItem item;
+  final AnimationController controller;
+  final double textWidth;
+  final int lane;
+}
+
+class _DanmakuCanvasState extends State<_DanmakuCanvas>
+    with TickerProviderStateMixin {
+  static const _lanes = 6;
+  static const _laneHeight = 30.0;
+  static const _pixelsPerSecond = 140.0;
+
+  final List<_DanmakuEntry> _entries = [];
+
+  String _key(DanmakuItem item) =>
+      '${item.time.inMilliseconds}-${item.type}-${item.content}';
+
+  @override
+  void didUpdateWidget(_DanmakuCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 清除已播完的弹幕。
+    _entries.removeWhere((entry) => !entry.controller.isAnimating);
+    // 新出现的弹幕逐条入轨。
+    final active = _entries.map((entry) => _key(entry.item)).toSet();
+    for (final item in widget.items) {
+      if (!active.contains(_key(item))) {
+        _addEntry(item);
+      }
+    }
+    if (_entries.isEmpty) return;
+    setState(() {});
+  }
+
+  void _addEntry(DanmakuItem item) {
+    final isFixed = item.type == 4 || item.type == 5;
+    final textWidth = item.content.length * widget.size * 1.05;
+    final duration = isFixed
+        ? const Duration(milliseconds: 4000)
+        : Duration(
+            milliseconds:
+                ((textWidth + 400) / _pixelsPerSecond * 1000).round(),
+          );
+    final controller = AnimationController(vsync: this, duration: duration);
+    final entry = _DanmakuEntry(
+      item: item,
+      controller: controller,
+      textWidth: textWidth,
+      lane: _nextLane(),
+    );
+    _entries.add(entry);
+    controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _entries.remove(entry));
+      }
+    });
+    controller.forward();
+  }
+
+  /// 选择当前最空闲的轨道（该轨道上最靠前的弹幕进度最大）。
+  int _nextLane() {
+    var bestLane = 0;
+    var bestProgress = -1.0;
+    for (var lane = 0; lane < _lanes; lane++) {
+      var laneProgress = 1.0;
+      for (final entry in _entries) {
+        if (entry.lane == lane && entry.controller.value < laneProgress) {
+          laneProgress = entry.controller.value;
+        }
+      }
+      if (laneProgress > bestProgress) {
+        bestProgress = laneProgress;
+        bestLane = lane;
+      }
+    }
+    return bestLane;
+  }
+
+  @override
+  void dispose() {
+    for (final entry in _entries) {
+      entry.controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_entries.isEmpty) return const SizedBox.shrink();
+    // 置顶（type 5）与底部（type 4）固定弹幕渲染在滚动弹幕之上，且同一
+    // 时间段的多条固定弹幕纵向并排，互不重叠。
+    final scrollEntries =
+        _entries.where((e) => e.item.type != 4 && e.item.type != 5).toList();
+    final topEntries =
+        _entries.where((e) => e.item.type == 5).toList(growable: false);
+    final bottomEntries =
+        _entries.where((e) => e.item.type == 4).toList(growable: false);
+
+    Widget textOf(_DanmakuEntry entry) {
+      final item = entry.item;
+      final color =
+          Color(0xff000000 | (item.color & 0xffffff)).withOpacity(widget.opacity);
+      return Text(
+        item.content,
+        maxLines: 1,
+        overflow: TextOverflow.clip,
+        style: TextStyle(
+          color: color,
+          fontSize: (item.size.clamp(16, 36)) * (widget.size / 20),
+          shadows: const [Shadow(color: Colors.black, blurRadius: 2)],
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = constraints.maxWidth;
+        return IgnorePointer(
+          child: ClipRect(
+            child: Stack(
+              children: [
+                // 底层：滚动弹幕，从右侧进入，横贯整个播放区。
+                for (final entry in scrollEntries)
+                  AnimatedBuilder(
+                    animation: entry.controller,
+                    builder: (context, _) => Positioned(
+                      top: 8.0 + entry.lane * _laneHeight,
+                      left: screenWidth -
+                          entry.controller.value *
+                              (screenWidth + entry.textWidth),
+                      child: textOf(entry),
+                    ),
+                  ),
+                // 顶层：置顶弹幕，从上往下纵向并排。
+                for (var i = 0; i < topEntries.length; i++)
+                  AnimatedBuilder(
+                    animation: topEntries[i].controller,
+                    builder: (context, _) => Align(
+                      alignment: Alignment.topCenter,
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 8.0 + i * _laneHeight),
+                        child: textOf(topEntries[i]),
+                      ),
+                    ),
+                  ),
+                // 顶层：底部弹幕，从下往上纵向并排。
+                for (var i = 0; i < bottomEntries.length; i++)
+                  AnimatedBuilder(
+                    animation: bottomEntries[i].controller,
+                    builder: (context, _) => Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding:
+                            EdgeInsets.only(bottom: 8.0 + i * _laneHeight),
+                        child: textOf(bottomEntries[i]),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CommentSection extends StatefulWidget {
+  const _CommentSection({required this.controller, required this.areaId});
+
+  final AppController controller;
+  final int areaId;
+
+  @override
+  State<_CommentSection> createState() => _CommentSectionState();
+}
+
+class _CommentSectionState extends State<_CommentSection> {
+  late Future<List<CommunityComment>> _comments;
+  final _inputKey = GlobalKey<InlineEmojiInputState>();
+  var _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _comments = widget.controller.comments(widget.areaId);
+  }
+
+  void _reload() =>
+      setState(() => _comments = widget.controller.comments(widget.areaId));
+
+  Future<void> _submit() async {
+    final input = _inputKey.currentState;
+    if (input == null || input.isEmpty || _isSending) return;
+    if (widget.controller.session == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('请先在“我的”页面登录后再发表评论')));
+      return;
+    }
+    final spans = input.spans;
+    final images = input.images;
+    setState(() => _isSending = true);
+    try {
+      await widget.controller.createComment(
+          areaId: widget.areaId, spans: spans, images: images);
+      input.clear();
+      _reload();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('评论已发布')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('发布失败：$error')));
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('评论区', style: Theme.of(context).textTheme.titleLarge),
+              const Spacer(),
+              IconButton(
+                tooltip: '刷新评论',
+                onPressed: _reload,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: InlineEmojiInput(
+                  key: _inputKey,
+                  hintText: '说点什么…',
+                  onUploadImage: widget.controller.uploadImage,
+                ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: '添加图片',
+                onPressed: () => _inputKey.currentState?.pickImage(),
+                icon: Icon(
+                  Icons.image_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 2),
+              IconButton(
+                tooltip: '表情包',
+                onPressed: () => _inputKey.currentState?.pickEmoji(),
+                icon: Icon(
+                  Icons.emoji_emotions_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 4),
+              FilledButton(
+                onPressed: _isSending ? null : _submit,
+                child: _isSending
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('发布'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          FutureBuilder<List<CommunityComment>>(
+            future: _comments,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const _InlineLoading(label: '正在加载评论');
+              }
+              if (snapshot.hasError) {
+                return Text('评论加载失败：${snapshot.error}');
+              }
+              final comments = snapshot.data ?? const <CommunityComment>[];
+              if (comments.isEmpty) return const Text('暂无评论，来抢沙发吧');
+              return Column(
+                children: comments
+                    .map((comment) => _CommentCard(
+                          controller: widget.controller,
+                          comment: comment,
+                          onDeleted: _reload,
+                        ))
+                    .toList(),
+              );
+            },
+          ),
+        ],
+      );
+}
+
+class _CommentSpans extends StatelessWidget {
+  const _CommentSpans({required this.spans});
+
+  final List<CommentSpan> spans;
+
+  @override
+  Widget build(BuildContext context) => ContentSpans(spans: spans);
+}
+
+class _CommentCard extends StatefulWidget {
+  const _CommentCard({
+    required this.controller,
+    required this.comment,
+    this.onDeleted,
+  });
+
+  final AppController controller;
+  final CommunityComment comment;
+  final VoidCallback? onDeleted;
+
+  @override
+  State<_CommentCard> createState() => _CommentCardState();
+}
+
+class _CommentReplyDialog extends StatefulWidget {
+  const _CommentReplyDialog({required this.onSubmit, required this.onSuccess});
+
+  final Future<void> Function(List<CommentSpan> spans) onSubmit;
+  final VoidCallback onSuccess;
+
+  @override
+  State<_CommentReplyDialog> createState() => _CommentReplyDialogState();
+}
+
+class _CommentReplyDialogState extends State<_CommentReplyDialog> {
+  final _inputKey = GlobalKey<InlineEmojiInputState>();
+  var _isSending = false;
+  String? _error;
+
+  Future<void> _submit() async {
+    final input = _inputKey.currentState;
+    if (input == null || input.isEmpty || _isSending) return;
+    setState(() {
+      _isSending = true;
+      _error = null;
+    });
+    try {
+      await widget.onSubmit(input.spans);
+      if (!mounted) return;
+      widget.onSuccess();
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+          _error = '回复失败：$error';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('回复评论'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: InlineEmojiInput(
+                    key: _inputKey,
+                    hintText: '友善交流，理性发言',
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: '表情包',
+                  onPressed: () => _inputKey.currentState?.pickEmoji(),
+                  icon: Icon(
+                    Icons.emoji_emotions_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12)),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: _isSending ? null : () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: _isSending ? null : _submit,
+            child: _isSending
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('发布'),
+          ),
+        ],
+      );
+}
+
+class _CommentCardState extends State<_CommentCard> {
+  static final Map<int, UserProfile> _userCache = {};
+
+  Future<List<CommunityComment>>? _replies;
+  Future<UserProfile?>? _profile;
+  late int _likes;
+  late bool _liked;
+  var _likeBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final comment = widget.comment;
+    _likes = comment.likes;
+    _liked = comment.liked;
+    if (comment.authorName.isEmpty && comment.userId != 0) {
+      final cached = _userCache[comment.userId];
+      _profile = cached != null
+          ? Future.value(cached)
+          : _loadProfile(comment.userId);
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    if (_likeBusy) return;
+    if (widget.controller.session == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('请先在“我的”页面登录后再点赞')));
+      return;
+    }
+    final target = !_liked;
+    setState(() {
+      _likeBusy = true;
+      _liked = target;
+      _likes += target ? 1 : -1;
+    });
+    try {
+      await widget.controller.setCommentReaction(
+        commentId: widget.comment.id,
+        like: target,
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _liked = !target;
+          _likes += target ? -1 : 1;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _likeBusy = false);
+    }
+  }
+
+  Future<UserProfile?> _loadProfile(int userId) async {
+    try {
+      final profile = await widget.controller.userProfile(userId);
+      _userCache[userId] = profile;
+      return profile;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _openUser(BuildContext context) {
+    final userId = widget.comment.userId;
+    if (userId == 0) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) =>
+            UserProfilePage(controller: widget.controller, userId: userId)));
+  }
+
+  void _showReplyComposer() {
+    if (widget.controller.session == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('请先在“我的”页面登录后再回复')));
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (_) => _CommentReplyDialog(
+        onSubmit: (spans) => widget.controller.createCommentReply(
+          commentId: widget.comment.id,
+          spans: spans,
+        ),
+        onSuccess: () {
+          if (!mounted) return;
+          setState(() {
+            _replies = widget.controller.commentReplies(widget.comment.id);
+          });
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('回复已发布')));
+        },
+      ),
+    );
+  }
+
+  /// 长按菜单：复制评论（所有人可用）、删除评论（仅自己）。
+  Future<void> _showActions() async {
+    final comment = widget.comment;
+    final myId = widget.controller.session?.userId;
+    final isMine = myId != null && comment.userId == myId;
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: const Text('复制评论'),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                await Clipboard.setData(
+                    ClipboardData(text: comment.content));
+                if (mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(const SnackBar(content: Text('评论已复制')));
+                }
+              },
+            ),
+            if (isMine)
+              ListTile(
+                leading: Icon(Icons.delete_outline_rounded,
+                    color: Theme.of(sheetContext).colorScheme.error),
+                title: Text('删除评论',
+                    style: TextStyle(
+                        color: Theme.of(sheetContext).colorScheme.error)),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _confirmDelete();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete() async {
+    final comment = widget.comment;
+    final myId = widget.controller.session?.userId;
+    if (myId == null || comment.userId != myId) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('只能删除自己的评论')));
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) => AlertDialog(
+        title: const Text('删除评论'),
+        content: const Text('删除后无法恢复，确定删除这条评论吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.controller.deleteComment(comment.id);
+      if (!mounted) return;
+      widget.onDeleted?.call();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('评论已删除')));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('删除失败：$error')));
+      }
+    }
+  }
+
+  Widget _userRow(BuildContext context, {
+    required int userId,
+    required String name,
+    required String avatar,
+    bool loading = false,
+  }) {
+    final displayName = name.isNotEmpty
+        ? name
+        : loading
+            ? '加载中…'
+            : '用户 $userId';
+    final letter = name.isNotEmpty ? name.substring(0, 1) : 'U';
+    return Row(
+      children: [
+        InkWell(
+          customBorder: const CircleBorder(),
+          onTap: userId == 0 ? null : () => _openUser(context),
+          child: CircleAvatar(
+            radius: 15,
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundImage: avatar.isEmpty ? null : NetworkImage(avatar),
+            child: Text(letter,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: InkWell(
+            onTap: userId == 0 ? null : () => _openUser(context),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Text(displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUserHeader(BuildContext context) {
+    final comment = widget.comment;
+    if (comment.authorName.isNotEmpty ||
+        comment.avatar.isNotEmpty ||
+        _profile == null) {
+      return _userRow(
+        context,
+        userId: comment.userId,
+        name: comment.authorName,
+        avatar: comment.avatar,
+      );
+    }
+    return FutureBuilder<UserProfile?>(
+      future: _profile,
+      builder: (context, snapshot) => _userRow(
+        context,
+        userId: comment.userId,
+        name: snapshot.data?.name ?? '',
+        avatar: snapshot.data?.avatar ?? '',
+        loading: snapshot.connectionState != ConnectionState.done,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final comment = widget.comment;
+    return GestureDetector(
+      onLongPress: _showActions,
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 10),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildUserHeader(context),
+            const SizedBox(height: 6),
+            comment.spans.isEmpty
+                ? Text(comment.content.isEmpty
+                    ? '（该评论没有文本内容）'
+                    : comment.content)
+                : _CommentSpans(spans: comment.spans),
+            if (comment.images.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 76,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: comment.images.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final uri = Uri.tryParse(comment.images[index]);
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: GestureDetector(
+                        onTap: uri == null
+                            ? null
+                            : () => Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => ImagePreviewPage(
+                                      uri: uri,
+                                      alt: '评论图片',
+                                      heroTag:
+                                          'comment-image-${comment.id}-$index-$uri',
+                                    ),
+                                  ),
+                                ),
+                        child: AspectRatio(
+                          aspectRatio: 1,
+                          child: Hero(
+                            tag:
+                                'comment-image-${comment.id}-$index-$uri',
+                            child: Image.network(
+                              comment.images[index],
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  const ColoredBox(
+                                color: Color(0xffefeff7),
+                                child: Icon(Icons.broken_image_outlined,
+                                    color: Colors.blueGrey),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: _toggleLike,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _liked
+                              ? Icons.thumb_up_alt_rounded
+                              : Icons.thumb_up_alt_outlined,
+                          size: 15,
+                          color: _liked
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.blueGrey,
+                        ),
+                        const SizedBox(width: 4),
+                        Text('$_likes 赞',
+                            style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                if (comment.replyCount > 0)
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _replies ??= widget.controller.commentReplies(comment.id);
+                    }),
+                    child: Text('${comment.replyCount} 条回复'),
+                  ),
+                TextButton(
+                  onPressed: _showReplyComposer,
+                  child: const Text('回复'),
+                ),
+                const Spacer(),
+                if (comment.createdAt != null)
+                  Text(_formatDate(comment.createdAt!),
+                      style: Theme.of(context).textTheme.bodySmall),
+              ],
+            ),
+            if (_replies != null)
+              FutureBuilder<List<CommunityComment>>(
+                future: _replies,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: LinearProgressIndicator(),
+                    );
+                  }
+                  return Container(
+                    padding: const EdgeInsets.only(left: 12),
+                    decoration: const BoxDecoration(
+                      border:
+                          Border(left: BorderSide(color: Color(0xffdddddd))),
+                    ),
+                    child: Column(
+                      children: snapshot.data!
+                          .map((reply) => Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 6),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                          '${reply.authorName.isEmpty ? '用户 ${reply.userId}' : reply.authorName}：'),
+                                      if (reply.spans.isEmpty)
+                                        Text(reply.content.isEmpty
+                                            ? '（该评论没有文本内容）'
+                                            : reply.content)
+                                      else
+                                        _CommentSpans(spans: reply.spans),
+                                    ],
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
+      ),
+    ),
+    );
+  }
+}
+
+String _formatDuration(Duration value) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(value.inMinutes.remainder(60))}:${two(value.inSeconds.remainder(60))}';
+}
+
+String _formatDate(DateTime value) =>
+    '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+
+String _formatDateTime(DateTime? value) =>
+    value == null ? '刚刚' : _formatDate(value);
