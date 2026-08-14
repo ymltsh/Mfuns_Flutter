@@ -1,0 +1,23 @@
+{
+  "latest": {
+    "version": "1.0.5",
+    "build": 5,
+    "name": "Mfuns Flutter v1.0.5",
+    "date": "2026-08-14",
+    "notes": "新增：每日签到（本月日历/补签/累计奖励/今日签到排行）、文章与视频投币、评论长按菜单（复制/删除）与链接识别、我的页面等级段位与经验进度条、个人主页等级显示。\n优化：首页刷新累计追加并自动清理最旧内容、顶部刷新支持当前标签页、首页卡片高度自适应、个人主页头部紧凑化、修复手机横屏全屏播放异常与签到日历显示错误、Windows 全屏改为真全屏。",
+    "urls": {
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.5/mfuns-flutter-1.0.5.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.5/mfuns-flutter-windows-1.0.5.zip"
+    },
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.0.5"
+  },
+  "history": [
+    {
+      "version": "1.0.5",
+      "build": 5,
+      "name": "Mfuns Flutter v1.0.5",
+      "date": "2026-08-14",
+      "notes": "新增：每日签到（本月日历/补签/累计奖励/今日签到排行）、文章与视频投币、评论长按菜单（复制/删除）与链接识别、我的页面等级段位与经验进度条、个人主页等级显示。\n优化：首页刷新累计追加并自动清理最旧内容、顶部刷新支持当前标签页、首页卡片高度自适应、个人主页头部紧凑化、修复手机横屏全屏播放异常与签到日历显示错误、Windows 全屏改为真全屏。"
+    }
+  ]
+}
