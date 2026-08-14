@@ -1,9 +1,14 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_controller.dart';
+import '../../core/config/app_config.dart';
 import '../../core/config/user_preferences.dart';
 import '../../core/emoji/emoji_pack_store.dart';
+import '../../core/network/update_checker.dart';
 import '../../core/theme/app_theme.dart';
 
 const _genderOptions = <int, String>{0: '保密', 1: '男', 2: '女', 3: '其他'};
@@ -34,6 +39,7 @@ class _SettingsPageState extends State<SettingsPage> {
   var _danmakuOpacity = 1.0;
   var _danmakuSize = 20.0;
   var _loaded = false;
+  var _checkingUpdate = false;
 
   @override
   void initState() {
@@ -54,6 +60,134 @@ class _SettingsPageState extends State<SettingsPage> {
       _danmakuSize = results[2] as double;
       _loaded = true;
     });
+  }
+
+  Future<void> _checkUpdate() async {
+    if (_checkingUpdate) return;
+    setState(() => _checkingUpdate = true);
+    try {
+      final manifest = await UpdateChecker.fetch();
+      if (!mounted) return;
+      final latest = manifest.latest;
+      if (latest == null || latest.version.isEmpty) {
+        _showUpdateError('更新清单中没有最新版本信息');
+        return;
+      }
+      final hasUpdate = UpdateChecker.isNewer(
+        latest.version,
+        latest.build,
+        AppConfig.appVersion,
+        AppConfig.appBuild,
+      );
+      if (!hasUpdate) {
+        _showUpToDate(latest);
+        return;
+      }
+      _showUpdateAvailable(latest);
+    } catch (error) {
+      if (!mounted) return;
+      _showUpdateError('检查更新失败：$error');
+    } finally {
+      if (mounted) setState(() => _checkingUpdate = false);
+    }
+  }
+
+  void _showUpToDate(UpdateRelease latest) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('已是最新版本'),
+        content: Text('当前已是最新版本 v${AppConfig.appVersion}。\n'
+            '最新发布：${latest.name}'
+            '${latest.date.isEmpty ? '' : '（${latest.date}）'}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('好的'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUpdateAvailable(UpdateRelease latest) {
+    final downloadUrl = _downloadUrl(latest);
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('发现新版本 v${latest.version}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (latest.date.isNotEmpty)
+                Text(latest.date,
+                    style: const TextStyle(
+                        color: Colors.blueGrey, fontSize: 12)),
+              const SizedBox(height: 8),
+              Text(latest.notes.isEmpty ? '暂无更新说明' : latest.notes,
+                  style: const TextStyle(height: 1.45, fontSize: 13)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.parse(latest.page.isEmpty
+                  ? AppConfig.releasePageUrl
+                  : latest.page),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: const Text('查看发布页'),
+          ),
+          if (downloadUrl != null)
+            FilledButton(
+              onPressed: () => launchUrl(Uri.parse(downloadUrl),
+                  mode: LaunchMode.externalApplication),
+              child: const Text('下载更新'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showUpdateError(String message) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('检查更新'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('关闭'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _checkUpdate();
+            },
+            child: const Text('重试'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 按当前平台返回下载地址；未知平台回退到发布页。
+  String? _downloadUrl(UpdateRelease release) {
+    if (Platform.isAndroid && release.androidUrl.isNotEmpty) {
+      return release.androidUrl;
+    }
+    if (Platform.isWindows && release.windowsUrl.isNotEmpty) {
+      return release.windowsUrl;
+    }
+    return null;
   }
 
   Future<void> _confirmClearCache(BuildContext context) async {
@@ -85,7 +219,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showAboutDialog(
       context: context,
       applicationName: 'Mfuns Flutter',
-      applicationVersion: '1.0.5',
+      applicationVersion: AppConfig.appVersion,
       applicationIcon: const Icon(Icons.pets_rounded, size: 44),
       children: const [
         Text('Mfuns 社区的非官方客户端，Android-first。'),
@@ -158,6 +292,19 @@ class _SettingsPageState extends State<SettingsPage> {
             _SettingsCard(
               children: [
                 _SettingsTile(
+                  icon: Icons.system_update_alt_rounded,
+                  title: '检查更新',
+                  subtitle: _checkingUpdate
+                      ? '正在检查…'
+                      : '当前 v${AppConfig.appVersion}，检查是否有新版本',
+                  onTap: _checkingUpdate ? null : _checkUpdate,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _SettingsCard(
+              children: [
+                _SettingsTile(
                   icon: Icons.cleaning_services_outlined,
                   title: '清除缓存',
                   subtitle: '清理表情包等本地缓存数据',
@@ -167,7 +314,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 _SettingsTile(
                   icon: Icons.info_outline_rounded,
                   title: '关于',
-                  subtitle: 'Mfuns Flutter v1.0.5',
+                  subtitle: 'Mfuns Flutter v${AppConfig.appVersion}',
                   onTap: () => _showAbout(context),
                 ),
               ],
