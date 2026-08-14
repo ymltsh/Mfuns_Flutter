@@ -1,17 +1,24 @@
 {
   "latest": {
-    "version": "1.0.6",
-    "build": 6,
-    "name": "Mfuns Flutter v1.0.6",
+    "version": "1.0.7",
+    "build": 7,
+    "name": "Mfuns Flutter v1.0.7",
     "date": "2026-08-14",
-    "notes": "新增：设置页「检查更新」功能，通过加速站读取更新清单，展示最新版本、更新内容与各平台下载入口；更新清单支持最新版本与历史版本双字段（详见 update.md）。",
+    "notes": "新增：设置页「自动签到」开关——应用打开状态下每天 00:00 自动完成签到（不配置开机自启权限）。",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.6/mfuns-flutter-1.0.6.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.6/mfuns-flutter-windows-1.0.6.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.7/mfuns-flutter-1.0.7.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.7/mfuns-flutter-windows-1.0.7.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.0.6"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.0.7"
   },
   "history": [
+    {
+      "version": "1.0.6",
+      "build": 6,
+      "name": "Mfuns Flutter v1.0.6",
+      "date": "2026-08-14",
+      "notes": "新增：设置页「检查更新」功能，通过加速站读取更新清单，展示最新版本、更新内容与各平台下载入口；更新清单支持最新版本与历史版本双字段（详见 update.md）。"
+    },
     {
       "version": "1.0.5",
       "build": 5,
