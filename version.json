@@ -1,44 +1,23 @@
 {
   "latest": {
-    "version": "1.0.9",
-    "build": 9,
-    "name": "Mfuns Flutter v1.0.9",
+    "version": "1.1.0",
+    "build": 10,
+    "name": "Mfuns Flutter v1.1.0",
     "date": "2026-08-14",
-    "notes": "新增：设置页「下载加速配置」——允许自定义 GitHub 加速地址（默认 https://hub.wgen.top/），用于加速更新清单读取与安装包下载，保存后立即生效。",
+    "notes": "合并 1.0.5 ~ 1.0.9 的全部更新：\n新增：每日签到（本月日历/补签/累计奖励/今日排行）、自动签到（应用打开时每天 00:00）、文章与视频投币、评论长按菜单与链接识别、我的页面等级段位与经验进度条、个人主页等级显示、设置页检查更新与下载加速配置（自定义 GitHub 加速地址，默认 https://hub.wgen.top/）。\n优化：首页刷新累计追加并自动清理最旧内容、顶部刷新支持当前标签页、首页卡片高度自适应、个人主页头部紧凑化、竖屏播放器固定顶部不随页面滚动、左右拖动调整进度（竖屏与横屏全屏）、修复手机横屏全屏播放异常与签到日历显示错误、Windows 全屏改为真全屏。",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.9/mfuns-flutter-1.0.9.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.9/mfuns-flutter-windows-1.0.9.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.0/mfuns-flutter-1.1.0.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.0/mfuns-flutter-windows-1.1.0.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.0.9"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.0"
   },
   "history": [
     {
-      "version": "1.0.8",
-      "build": 8,
-      "name": "Mfuns Flutter v1.0.8",
+      "version": "1.0.5 - 1.0.9",
+      "build": null,
+      "name": "Mfuns Flutter v1.0.5 - v1.0.9",
       "date": "2026-08-14",
-      "notes": "优化：竖屏视频播放页播放器固定在顶部，不再随页面滑动；新增左右拖动调整播放进度（竖屏与横屏全屏均支持，按拖动距离比例式调整并显示当前时间/总时长）。"
-    },
-    {
-      "version": "1.0.7",
-      "build": 7,
-      "name": "Mfuns Flutter v1.0.7",
-      "date": "2026-08-14",
-      "notes": "新增：设置页「自动签到」开关——应用打开状态下每天 00:00 自动完成签到（不配置开机自启权限）。"
-    },
-    {
-      "version": "1.0.6",
-      "build": 6,
-      "name": "Mfuns Flutter v1.0.6",
-      "date": "2026-08-14",
-      "notes": "新增：设置页「检查更新」功能，通过加速站读取更新清单，展示最新版本、更新内容与各平台下载入口；更新清单支持最新版本与历史版本双字段（详见 update.md）。"
-    },
-    {
-      "version": "1.0.5",
-      "build": 5,
-      "name": "Mfuns Flutter v1.0.5",
-      "date": "2026-08-14",
-      "notes": "新增：每日签到（本月日历/补签/累计奖励/今日签到排行）、文章与视频投币、评论长按菜单（复制/删除）与链接识别、我的页面等级段位与经验进度条、个人主页等级显示。\n优化：首页刷新累计追加并自动清理最旧内容、顶部刷新支持当前标签页、首页卡片高度自适应、个人主页头部紧凑化、修复手机横屏全屏播放异常与签到日历显示错误、Windows 全屏改为真全屏。"
+      "notes": "1.0.5：每日签到（本月日历/补签/累计奖励/今日签到排行）、文章与视频投币、评论长按菜单（复制/删除）与链接识别、我的页面等级段位与经验进度条、个人主页等级显示；首页刷新累计追加、卡片高度自适应、全屏播放修复、签到日历修复、Windows 真全屏。\n1.0.6：设置页检查更新（加速站读取更新清单，最新/历史版本双字段）。\n1.0.7：自动签到（应用打开时每天 00:00 自动签到）。\n1.0.8：竖屏播放器固定顶部不随页面滚动；左右拖动调整进度（竖屏与横屏全屏）。\n1.0.9：下载加速配置（自定义 GitHub 加速地址，默认 https://hub.wgen.top/）。"
     }
   ]
 }
