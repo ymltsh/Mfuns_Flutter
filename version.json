@@ -1,17 +1,24 @@
 {
   "latest": {
-    "version": "1.0.7",
-    "build": 7,
-    "name": "Mfuns Flutter v1.0.7",
+    "version": "1.0.8",
+    "build": 8,
+    "name": "Mfuns Flutter v1.0.8",
     "date": "2026-08-14",
-    "notes": "新增：设置页「自动签到」开关——应用打开状态下每天 00:00 自动完成签到（不配置开机自启权限）。",
+    "notes": "优化：竖屏视频播放页播放器固定在顶部，不再随页面滑动；新增左右拖动调整播放进度（竖屏与横屏全屏均支持，按拖动距离比例式调整并显示当前时间/总时长）。",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.7/mfuns-flutter-1.0.7.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.7/mfuns-flutter-windows-1.0.7.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.8/mfuns-flutter-1.0.8.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.0.8/mfuns-flutter-windows-1.0.8.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.0.7"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.0.8"
   },
   "history": [
+    {
+      "version": "1.0.7",
+      "build": 7,
+      "name": "Mfuns Flutter v1.0.7",
+      "date": "2026-08-14",
+      "notes": "新增：设置页「自动签到」开关——应用打开状态下每天 00:00 自动完成签到（不配置开机自启权限）。"
+    },
     {
       "version": "1.0.6",
       "build": 6,
