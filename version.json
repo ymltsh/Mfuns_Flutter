@@ -1,17 +1,24 @@
 {
   "latest": {
     "version": "1.1.4",
-    "build": 15,
-    "name": "Mfuns Flutter v1.1.4 Beta 2",
+    "build": 16,
+    "name": "Mfuns Flutter v1.1.4",
     "date": "2026-08-15",
-    "notes": "修复：签到日历日期偏移一天的 bug（服务端签到列表为 1 索引，list[i] 即第 i 天）。\n新增：用户主页动态/文章/视频分页加载、我的资产（喵币+背包道具）、历史记录分页、自动同步动态识别（点击直达文章/视频）、视频播放保持屏幕唤醒、竖屏视频缩放 16:9 播放框、进度气泡下移。",
+    "notes": "正式版（Beta 测试期结束）：修复签到日历日期偏移；新增用户主页动态/文章/视频分页加载、我的资产（喵币+背包道具）、历史记录分页、自动同步动态识别（类型标识显示在被引用资源卡片上）、视频播放保持屏幕唤醒、竖屏视频缩放 16:9 播放框、各标签页滑动切换；修复个人主页刷新。",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.4-beta2/mfuns-flutter-1.1.4-beta2.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.4-beta2/mfuns-flutter-windows-1.1.4-beta2.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.4/mfuns-flutter-1.1.4.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.4/mfuns-flutter-windows-1.1.4.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.4-beta2"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.4"
   },
   "history": [
+    {
+      "version": "1.1.4-beta",
+      "build": 15,
+      "name": "Mfuns Flutter v1.1.4 Beta 2",
+      "date": "2026-08-15",
+      "notes": "我的资产（喵币+背包道具）、标签页滑动切换（首页/动态/消息/视频详情）、自动同步动态类型标识与点赞浏览同行、个人主页刷新修复。"
+    },
     {
       "version": "1.1.3",
       "build": 13,
