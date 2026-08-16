@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.1.6",
-    "build": 19,
-    "name": "Mfuns Flutter v1.1.6",
-    "date": "2026-08-15",
-    "notes": "正式版（Beta 测试期结束）：应用启动图标（Android 自适应图标 + Windows 图标）；文章封面作为阅读页头图显示在标题上方（点击查看大图）；修复多图文章/动态打开图片查看器后返回的界面闪动。",
+    "version": "1.1.7",
+    "build": 22,
+    "name": "Mfuns Flutter v1.1.7",
+    "date": "2026-08-16",
+    "notes": "修复：表情包列表请求补上 with_vip=1，VIP 专属表情包（simplevip）不再缺失。\n新增：单文件一键发布工具 release.py（引导模式 + CLI 参数，自动完成构建/发布/更新清单/推送）。",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.6/mfuns-flutter-1.1.6.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.6/mfuns-flutter-windows-1.1.6.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.7/mfuns-flutter-1.1.7.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.7/mfuns-flutter-windows-1.1.7.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.6"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.7"
   },
   "history": [
+    {
+      "version": "1.1.6",
+      "build": 19,
+      "name": "Mfuns Flutter v1.1.6",
+      "date": "2026-08-15",
+      "notes": "正式版（Beta 测试期结束）：应用启动图标（Android 自适应图标 + Windows 图标）；文章封面作为阅读页头图显示在标题上方（点击查看大图）；修复多图文章/动态打开图片查看器后返回的界面闪动。",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.6/mfuns-flutter-1.1.6.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.6/mfuns-flutter-windows-1.1.6.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.6"
+    },
     {
       "version": "1.1.6-beta",
       "build": 18,
