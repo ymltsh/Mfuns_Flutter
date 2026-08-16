@@ -1,17 +1,24 @@
 {
   "latest": {
-    "version": "1.1.5",
-    "build": 17,
-    "name": "Mfuns Flutter v1.1.5",
+    "version": "1.1.6",
+    "build": 18,
+    "name": "Mfuns Flutter v1.1.6 Beta 2",
     "date": "2026-08-15",
-    "notes": "新增：站内链接识别（文章/动态/评论/简介中的 mfuns.net 链接与 mv 号点击直达对应页面）、网页唤醒（mfuns:// 深链与 mfuns.wgen.top 域名唤醒 App）、图片查看器左右滑动切换（帖子多图）。优化：首页分区选择条只在分区标签页显示。",
+    "notes": "新增：应用启动图标生成（Android 自适应图标 + Windows 图标）。修复：多图文章/动态打开图片查看器后返回的界面闪动（图集场景禁用 Hero 动画）。",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.5/mfuns-flutter-1.1.5.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.5/mfuns-flutter-windows-1.1.5.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.6-beta2/mfuns-flutter-1.1.6-beta2.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.6-beta2/mfuns-flutter-windows-1.1.6-beta2.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.5"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.6-beta2"
   },
   "history": [
+    {
+      "name": "Mfuns Flutter v1.1.5",
+      "notes": "新增：站内链接识别（文章/动态/评论/简介中的 mfuns.net 链接与 mv 号点击直达对应页面）、网页唤醒（mfuns:// 深链与 mfuns.wgen.top 域名唤醒 App）、图片查看器左右滑动切换（帖子多图）。优化：首页分区选择条只在分区标签页显示。",
+      "version": "1.1.5",
+      "date": "2026-08-15",
+      "build": 17
+    },
     {
       "version": "1.1.4",
       "build": 16,
