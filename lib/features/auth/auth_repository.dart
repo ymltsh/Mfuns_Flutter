@@ -8,6 +8,7 @@ class UserSession {
     required this.avatar,
     this.levelId,
     this.exp,
+    this.nekoCoin,
   });
 
   final String accessToken;
@@ -20,6 +21,9 @@ class UserSession {
 
   /// 当前经验值。
   final int? exp;
+
+  /// 喵币余额（`/v1/user/info` 的 neko_coin）。
+  final double? nekoCoin;
 }
 
 class AuthRepository {
@@ -85,6 +89,7 @@ class AuthRepository {
       avatar: _avatarUrl(user['avatar'] ?? user['user_avatar']),
       levelId: _asInt(user['level_id'] ?? user['level_badge']),
       exp: _asInt(user['exp']),
+      nekoCoin: _asDouble(user['neko_coin']),
     );
   }
 
@@ -102,4 +107,7 @@ class AuthRepository {
 
   int? _asInt(Object? value) =>
       value is num ? value.toInt() : int.tryParse('$value');
+
+  double? _asDouble(Object? value) =>
+      value is num ? value.toDouble() : double.tryParse('$value');
 }

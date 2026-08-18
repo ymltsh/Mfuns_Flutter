@@ -8,13 +8,15 @@ class AppConfig {
   static const latestMfunsHost = 'mfuns.wgen.top';
 
   /// 当前应用版本号与构建号（与 pubspec.yaml 保持一致）。
-  static const appVersion = '1.0.6';
-  static const appBuild = 6;
+  static const appVersion = '1.1.7';
+  static const appBuild = 22;
 
-  /// 更新清单地址：通过加速站读取 GitHub 仓库根目录的 version.json。
-  static const updateManifestUrl =
-      'https://hub.wgen.top/https://raw.githubusercontent.com'
-      '/ymltsh/Mfuns_Flutter/main/version.json';
+  /// 默认 GitHub 加速地址（用户可在设置中自定义）。
+  static const defaultAcceleratorBase = 'https://hub.wgen.top/';
+
+  /// 更新清单源地址（raw.githubusercontent.com），实际请求时拼接加速地址。
+  static const updateManifestRawUrl =
+      'https://raw.githubusercontent.com/ymltsh/Mfuns_Flutter/main/version.json';
 
   /// GitHub 发布页（用于查看最新 release）。
   static const releasePageUrl =

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/content_link_handler.dart';
 import '../../core/widgets/content_spans.dart';
 import '../home/home_repository.dart';
 
@@ -259,6 +260,7 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
                       record: record,
                       isMine: isMine,
                       palette: palette,
+                      controller: widget.controller,
                     );
                   },
                 );
@@ -307,11 +309,13 @@ class _MessageBubble extends StatelessWidget {
     required this.record,
     required this.isMine,
     required this.palette,
+    required this.controller,
   });
 
   final MessageRecord record;
   final bool isMine;
   final AppPalette palette;
+  final AppController controller;
 
   @override
   Widget build(BuildContext context) => Align(
@@ -349,6 +353,8 @@ class _MessageBubble extends StatelessWidget {
                     : ContentSpans(
                         spans: record.spans,
                         stickerSize: 34,
+                        onLinkTap: (url) =>
+                            openContentLink(context, controller, url),
                         textStyle: TextStyle(
                           color: isMine ? Colors.white : Colors.blueGrey,
                           height: 1.35,

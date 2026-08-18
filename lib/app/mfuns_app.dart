@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/theme/app_theme.dart';
+import '../core/widgets/content_link_handler.dart';
 import '../core/widgets/content_spans.dart';
 import '../core/widgets/image_preview_page.dart';
 import '../features/auth/auth_repository.dart';
 import '../features/contribute/submissions_page.dart';
 import '../features/sign/sign_page.dart';
+import '../features/user/assets_page.dart';
 import '../features/feed/feed_compose_page.dart';
 import '../features/home/home_repository.dart';
 import '../features/latest/latest_mfuns_repository.dart';
@@ -23,16 +25,23 @@ const Color _muted = Colors.blueGrey;
 AppPalette _palette(BuildContext context) => AppPalette.of(context);
 
 class MfunsApp extends StatefulWidget {
-  const MfunsApp({super.key, required this.controller});
+  const MfunsApp({
+    super.key,
+    required this.controller,
+    this.navigatorKey,
+  });
 
   final AppController controller;
+
+  /// 全局导航 key：供链接唤醒等外部导航使用。
+  final GlobalKey<NavigatorState>? navigatorKey;
 
   @override
   State<MfunsApp> createState() => _MfunsAppState();
 }
 
 class _MfunsAppState extends State<MfunsApp> {
-  Color _seed = const Color(0xFF66CCFF);
+  Color _seed = const Color(0xFF5094B2);
 
   @override
   void initState() {
@@ -52,6 +61,7 @@ class _MfunsAppState extends State<MfunsApp> {
   Widget build(BuildContext context) => MaterialApp(
         title: 'Mfuns Flutter',
         debugShowCheckedModeBanner: false,
+        navigatorKey: widget.navigatorKey,
         theme: buildAppTheme(_seed),
         home: _HomeShell(
           controller: widget.controller,
@@ -345,6 +355,28 @@ class _BottomNavigation extends StatelessWidget {
       );
 }
 
+/// TabBarView 子页保活容器：保留滚动位置，避免切换标签重建。
+class _KeepAliveTab extends StatefulWidget {
+  const _KeepAliveTab({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAliveTab> createState() => _KeepAliveTabState();
+}
+
+class _KeepAliveTabState extends State<_KeepAliveTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+}
+
 class _MessageCenterPage extends StatefulWidget {
   const _MessageCenterPage({super.key, required this.controller});
 
@@ -354,10 +386,32 @@ class _MessageCenterPage extends StatefulWidget {
   State<_MessageCenterPage> createState() => _MessageCenterPageState();
 }
 
-class _MessageCenterPageState extends State<_MessageCenterPage> {
+class _MessageCenterPageState extends State<_MessageCenterPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   var _tab = 0;
   final _messagesKey = GlobalKey<MessageListPageState>();
   final _notificationsKey = GlobalKey<NotificationsPageState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this)
+      ..addListener(_syncTab);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  /// 滑动切换私信/通知时同步高亮。
+  void _syncTab() {
+    if (_tabController.indexIsChanging) return;
+    if (_tabController.index == _tab) return;
+    setState(() => _tab = _tabController.index);
+  }
 
   /// Entry point for the shared masthead refresh button.
   Future<void> reloadActiveTab() {
@@ -402,22 +456,30 @@ class _MessageCenterPageState extends State<_MessageCenterPage> {
                   child: _TimelineTabs(
                     index: _tab,
                     labels: const ['私信', '通知'],
-                    onChanged: (value) => setState(() => _tab = value),
+                    onChanged: (value) => _tabController.animateTo(value),
                   ),
                 ),
                 const SizedBox(height: 8),
                 Expanded(
-                  child: _tab == 0
-                      ? MessageListPage(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _KeepAliveTab(
+                        child: MessageListPage(
                           controller: widget.controller,
                           embedded: true,
                           key: _messagesKey,
-                        )
-                      : NotificationsPage(
+                        ),
+                      ),
+                      _KeepAliveTab(
+                        child: NotificationsPage(
                           controller: widget.controller,
                           embedded: true,
                           key: _notificationsKey,
                         ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             );
@@ -435,12 +497,34 @@ class _DiscoverPage extends StatefulWidget {
   State<_DiscoverPage> createState() => _DiscoverPageState();
 }
 
-class _DiscoverPageState extends State<_DiscoverPage> {
+class _DiscoverPageState extends State<_DiscoverPage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   var _tab = 0;
   int? _categoryId;
 
-  Future<void> _selectTab(int value) async {
-    setState(() => _tab = value);
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this)
+      ..addListener(_syncTab);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  /// 滑动切换标签时同步高亮并加载对应数据。
+  void _syncTab() {
+    if (_tabController.indexIsChanging) return;
+    if (_tabController.index == _tab) return;
+    setState(() => _tab = _tabController.index);
+    _ensureLoaded(_tab);
+  }
+
+  Future<void> _ensureLoaded(int value) async {
     if (value == 1 && widget.controller.hotRankings.isEmpty) {
       await widget.controller.loadHotRankings();
     }
@@ -483,8 +567,9 @@ class _DiscoverPageState extends State<_DiscoverPage> {
               children: [
                 _SectionTabs(
                   index: _tab,
-                  onChanged: _selectTab,
+                  onChanged: (value) => _tabController.animateTo(value),
                 ),
+                // 分区标签条只在分区标签页显示。
                 if (_tab == 2)
                   _CategoryStrip(
                     categories: widget.controller.categories,
@@ -492,31 +577,51 @@ class _DiscoverPageState extends State<_DiscoverPage> {
                     onSelected: _selectCategory,
                   ),
                 Expanded(
-                  child: RefreshIndicator(
-                    color: _palette(context).accent,
-                    onRefresh: refreshActiveTab,
-                    child: _tab == 1
-                        ? _RankingList(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _KeepAliveTab(
+                        child: RefreshIndicator(
+                          color: _palette(context).accent,
+                          onRefresh: widget.controller.refreshHome,
+                          child: _ContentGrid(
+                            controller: widget.controller,
+                            items: items,
+                            isLoading: widget.controller.isLoadingHome,
+                            error: widget.controller.homeError,
+                            emptyText: '暂时没有推荐内容',
+                          ),
+                        ),
+                      ),
+                      _KeepAliveTab(
+                        child: RefreshIndicator(
+                          color: _palette(context).accent,
+                          onRefresh: widget.controller.loadHotRankings,
+                          child: _RankingList(
                             controller: widget.controller,
                             items: widget.controller.hotRankings,
                             loading: widget.controller.isLoadingHotRankings,
                             error: widget.controller.hotRankingsError,
-                          )
-                        : _ContentGrid(
-                            controller: widget.controller,
-                            items: _tab == 2
-                                ? widget.controller.categoryContents
-                                : items,
-                            isLoading: _tab == 2
-                                ? widget.controller.isLoadingCategoryContents ||
-                                    widget.controller.isLoadingCategories
-                                : widget.controller.isLoadingHome,
-                            error: _tab == 2
-                                ? widget.controller.categoryContentsError ??
-                                    widget.controller.categoriesError
-                                : widget.controller.homeError,
-                            emptyText: _tab == 2 ? '请选择分区查看内容' : '暂时没有推荐内容',
                           ),
+                        ),
+                      ),
+                      _KeepAliveTab(
+                        child: RefreshIndicator(
+                          color: _palette(context).accent,
+                          onRefresh: refreshActiveTab,
+                          child: _ContentGrid(
+                            controller: widget.controller,
+                            items: widget.controller.categoryContents,
+                            isLoading:
+                                widget.controller.isLoadingCategoryContents ||
+                                    widget.controller.isLoadingCategories,
+                            error: widget.controller.categoryContentsError ??
+                                widget.controller.categoriesError,
+                            emptyText: '请选择分区查看内容',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -640,34 +745,45 @@ class _TimelinePage extends StatefulWidget {
   State<_TimelinePage> createState() => _TimelinePageState();
 }
 
-class _TimelinePageState extends State<_TimelinePage> {
+class _TimelinePageState extends State<_TimelinePage>
+    with SingleTickerProviderStateMixin {
+  /// 视觉位置 → 逻辑标签值：时间线(2) / 最新(1) / 关注(0)。
+  static const _visualToTab = [2, 1, 0];
+  late final TabController _tabController;
   var _tab = 2;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this)
+      ..addListener(_syncTab);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) widget.controller.loadFeeds();
     });
   }
 
-  Future<void> _selectTab(int value) async {
-    if (_tab == value) return;
-    setState(() => _tab = value);
-    if (value == 0) {
-      await widget.controller.loadFollowingFeeds();
-    } else if (value == 1) {
-      await widget.controller.loadLatestItems();
-    } else {
-      await widget.controller.loadFeeds();
-    }
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
-  Future<void> _refreshActiveTab() {
-    if (_tab == 0) return widget.controller.loadFollowingFeeds();
-    if (_tab == 1) return widget.controller.loadLatestItems();
+  /// 滑动切换标签时同步高亮并加载对应数据。
+  void _syncTab() {
+    if (_tabController.indexIsChanging) return;
+    final value = _visualToTab[_tabController.index];
+    if (value == _tab) return;
+    setState(() => _tab = value);
+    _loadForTab(value);
+  }
+
+  Future<void> _loadForTab(int value) {
+    if (value == 0) return widget.controller.loadFollowingFeeds();
+    if (value == 1) return widget.controller.loadLatestItems();
     return widget.controller.loadFeeds();
   }
+
+  Future<void> _refreshActiveTab() => _loadForTab(_tab);
 
   /// Entry point for the shared masthead refresh button.
   Future<void> refreshActiveTab() => _refreshActiveTab();
@@ -703,6 +819,56 @@ class _TimelinePageState extends State<_TimelinePage> {
       return;
     }
     _openFeedDetail(item.id);
+  }
+
+  /// 不友好标记 / 取消标记（需登录）：长按最新页帖子 → 菜单选择。
+  /// 标记 5 人后帖子被服务端屏蔽并从列表移除，因此在刷新前仍可取消。
+  Future<void> _markLatestItem(LatestMfunsItem item) async {
+    if (widget.controller.session == null) {
+      await _showLoginSheet(context, widget.controller);
+      return;
+    }
+    final cancel = item.markedByMe;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) => AlertDialog(
+        title: Text(cancel ? '取消不友好标记' : '不友好标记'),
+        content: Text(cancel
+            ? '取消后该帖子的标记数会减少；帖子被 5 人标记屏蔽后将无法取消。确定取消吗？'
+            : '标记该帖子为不友好内容后，其他喵友也可标记；达到 5 人标记后，'
+                '该帖子将被屏蔽处理。确定标记吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(cancel ? '取消标记' : '标记'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final result = cancel
+          ? await widget.controller.unmarkLatestItem(item)
+          : await widget.controller.markLatestItem(item);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(cancel
+            ? '已取消标记'
+            : result.blocked
+                ? '该帖子已被 ${result.markCount} 位喵友标记，已屏蔽处理'
+                : '标记成功，已有 ${result.markCount}/5 位喵友标记此帖子'),
+      ));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('操作失败：$error')));
+      }
+    }
   }
 
   @override
@@ -754,63 +920,87 @@ class _TimelinePageState extends State<_TimelinePage> {
                 child: _TimelineTabs(
                   index: _tab,
                   labels: const ['时间线', '最新', '关注'],
-                  order: const [2, 1, 0],
-                  onChanged: _selectTab,
+                  order: _visualToTab,
+                  onChanged: (value) =>
+                      _tabController.animateTo(_visualToTab.indexOf(value)),
                 ),
               ),
               const SizedBox(height: 8),
               Expanded(
-                child: _tab == 0 && widget.controller.session == null
-                    ? _FollowingFeedState(
-                        onLogin: _loginForFollowing,
-                      )
-                    : _tab == 1
-                        ? RefreshIndicator(
-                            color: _palette(context).accent,
-                            onRefresh: _refreshActiveTab,
-                            child: _LatestItemList(
-                              items: widget.controller.latestItems,
-                              isLoading: widget.controller.isLoadingLatestItems,
-                              isLoadingMore:
-                                  widget.controller.isLoadingMoreLatestItems,
-                              hasMore: widget.controller.hasMoreLatestItems,
-                              error: widget.controller.latestItemsError,
-                              onLoadMore: widget.controller.loadMoreLatestItems,
-                              onOpenUser: _openUserProfile,
-                              onOpenItem: _openLatestItem,
-                            ),
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    // 时间线
+                    _KeepAliveTab(
+                      child: RefreshIndicator(
+                        color: _palette(context).accent,
+                        onRefresh: _refreshActiveTab,
+                        child: _TimelineFeedList(
+                          controller: widget.controller,
+                          items: widget.controller.feeds,
+                          isLoading: widget.controller.isLoadingFeeds,
+                          isLoadingMore:
+                              widget.controller.isLoadingMoreFeeds,
+                          hasMore: widget.controller.hasMoreFeeds,
+                          error: widget.controller.feedsError,
+                          onLoadMore: widget.controller.loadMoreFeeds,
+                          onOpenUser: _openUserProfile,
+                          onOpenResource: _openContentDetail,
+                          onOpenFeed: _openFeedDetail,
+                          emptyText: '时间线暂时没有可展示的动态',
+                        ),
+                      ),
+                    ),
+                    // 最新
+                    _KeepAliveTab(
+                      child: RefreshIndicator(
+                        color: _palette(context).accent,
+                        onRefresh: _refreshActiveTab,
+                        child: _LatestItemList(
+                          items: widget.controller.latestItems,
+                          isLoading: widget.controller.isLoadingLatestItems,
+                          isLoadingMore:
+                              widget.controller.isLoadingMoreLatestItems,
+                          hasMore: widget.controller.hasMoreLatestItems,
+                          error: widget.controller.latestItemsError,
+                          onLoadMore: widget.controller.loadMoreLatestItems,
+                          onOpenUser: _openUserProfile,
+                          onOpenItem: _openLatestItem,
+                          onMarkItem: _markLatestItem,
+                        ),
+                      ),
+                    ),
+                    // 关注
+                    widget.controller.session == null
+                        ? _FollowingFeedState(
+                            onLogin: _loginForFollowing,
                           )
-                        : RefreshIndicator(
-                            color: _palette(context).accent,
-                            onRefresh: _refreshActiveTab,
-                            child: _TimelineFeedList(
-                              items: _tab == 0
-                                  ? widget.controller.followingFeeds
-                                  : widget.controller.feeds,
-                              isLoading: _tab == 0
-                                  ? widget.controller.isLoadingFollowingFeeds
-                                  : widget.controller.isLoadingFeeds,
-                              isLoadingMore: _tab == 0
-                                  ? widget
-                                      .controller.isLoadingMoreFollowingFeeds
-                                  : widget.controller.isLoadingMoreFeeds,
-                              hasMore: _tab == 0
-                                  ? widget.controller.hasMoreFollowingFeeds
-                                  : widget.controller.hasMoreFeeds,
-                              error: _tab == 0
-                                  ? widget.controller.followingFeedsError
-                                  : widget.controller.feedsError,
-                              onLoadMore: _tab == 0
-                                  ? widget.controller.loadMoreFollowingFeeds
-                                  : widget.controller.loadMoreFeeds,
-                              onOpenUser: _openUserProfile,
-                              onOpenResource: _openContentDetail,
-                              onOpenFeed: _openFeedDetail,
-                              emptyText: _tab == 0
-                                  ? '还没有关注动态，先去时间线发现创作者吧'
-                                  : '时间线暂时没有可展示的动态',
+                        : _KeepAliveTab(
+                            child: RefreshIndicator(
+                              color: _palette(context).accent,
+                              onRefresh: _refreshActiveTab,
+                              child: _TimelineFeedList(
+                                controller: widget.controller,
+                                items: widget.controller.followingFeeds,
+                                isLoading:
+                                    widget.controller.isLoadingFollowingFeeds,
+                                isLoadingMore: widget.controller
+                                    .isLoadingMoreFollowingFeeds,
+                                hasMore:
+                                    widget.controller.hasMoreFollowingFeeds,
+                                error: widget.controller.followingFeedsError,
+                                onLoadMore:
+                                    widget.controller.loadMoreFollowingFeeds,
+                                onOpenUser: _openUserProfile,
+                                onOpenResource: _openContentDetail,
+                                onOpenFeed: _openFeedDetail,
+                                emptyText:
+                                    '还没有关注动态，先去时间线发现创作者吧',
+                              ),
                             ),
                           ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -828,6 +1018,7 @@ class _LatestItemList extends StatelessWidget {
     required this.onLoadMore,
     required this.onOpenUser,
     required this.onOpenItem,
+    required this.onMarkItem,
   });
 
   final List<LatestMfunsItem> items;
@@ -838,6 +1029,7 @@ class _LatestItemList extends StatelessWidget {
   final Future<void> Function() onLoadMore;
   final ValueChanged<int> onOpenUser;
   final ValueChanged<LatestMfunsItem> onOpenItem;
+  final ValueChanged<LatestMfunsItem> onMarkItem;
 
   @override
   Widget build(BuildContext context) {
@@ -892,6 +1084,7 @@ class _LatestItemList extends StatelessWidget {
             item: items[index],
             onOpenUser: onOpenUser,
             onOpenItem: onOpenItem,
+            onMarkItem: onMarkItem,
           );
         },
       ),
@@ -899,19 +1092,106 @@ class _LatestItemList extends StatelessWidget {
   }
 }
 
-class _LatestItemCard extends StatelessWidget {
+class _LatestItemCard extends StatefulWidget {
   const _LatestItemCard({
     required this.item,
     required this.onOpenUser,
     required this.onOpenItem,
+    required this.onMarkItem,
   });
 
   final LatestMfunsItem item;
   final ValueChanged<int> onOpenUser;
   final ValueChanged<LatestMfunsItem> onOpenItem;
+  final ValueChanged<LatestMfunsItem> onMarkItem;
+
+  @override
+  State<_LatestItemCard> createState() => _LatestItemCardState();
+}
+
+class _LatestItemCardState extends State<_LatestItemCard> {
+  /// 已标记折叠后是否临时展开查看；刷新后默认回到折叠状态。
+  var _expanded = false;
+
+  @override
+  void didUpdateWidget(_LatestItemCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 列表位置被复用时重置展开状态，避免串帖。
+    if (oldWidget.item.stableId != widget.item.stableId) {
+      _expanded = false;
+    }
+  }
+
+  void _showMarkMenu(BuildContext context) {
+    final item = widget.item;
+    final cancel = item.markedByMe;
+    showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: cancel
+                  ? const Icon(Icons.flag_rounded, color: Color(0xFF4FA36C))
+                  : const Icon(Icons.flag_outlined,
+                      color: Color(0xFFD29062)),
+              title: Text(cancel ? '取消不友好标记' : '不友好标记'),
+              subtitle: Text(cancel
+                  ? '取消后该帖子的标记数会减少'
+                  : '需登录：不友好内容标记，5 人标记后帖子将被屏蔽'),
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                widget.onMarkItem(item);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 折叠状态：自己标记过的帖子默认折叠，刷新后（服务端仍标记）保持折叠。
+  bool get _collapsed => widget.item.markedByMe && !_expanded;
+
+  Widget _collapsedRow(BuildContext context) {
+    final item = widget.item;
+    return GestureDetector(
+      onTap: () => setState(() => _expanded = true),
+      onLongPress: () => _showMarkMenu(context),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            children: [
+              const Icon(Icons.flag_rounded,
+                  color: Color(0xFFD29062), size: 17),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '该帖子已被你折叠（不友好标记，${item.markCount}/5 位喵友已标记）',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _muted, fontSize: 12.5),
+                ),
+              ),
+              Text('展开',
+                  style: TextStyle(
+                      color: _palette(context).primary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_collapsed) return _collapsedRow(context);
+    final item = widget.item;
     final title = item.title.isNotEmpty ? item.title : _latestExcerpt(item);
     final excerpt = _latestExcerpt(item);
     final typeLabel = item.isVideo
@@ -919,10 +1199,12 @@ class _LatestItemCard extends StatelessWidget {
         : item.isArticle
             ? '文章'
             : '动态';
-    return Card(
+    return GestureDetector(
+      onLongPress: () => _showMarkMenu(context),
+      child: Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => onOpenItem(item),
+        onTap: () => widget.onOpenItem(item),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
@@ -931,7 +1213,7 @@ class _LatestItemCard extends StatelessWidget {
               InkResponse(
                 onTap: item.authorId == null || item.authorId == 0
                     ? null
-                    : () => onOpenUser(item.authorId!),
+                    : () => widget.onOpenUser(item.authorId!),
                 radius: 28,
                 child: CircleAvatar(
                   radius: 20,
@@ -1006,12 +1288,30 @@ class _LatestItemCard extends StatelessWidget {
                       '${item.likes} 赞 · ${item.comments} 评论 · ${item.views} 浏览',
                       style: const TextStyle(color: _muted, fontSize: 12),
                     ),
+                    if (item.markCount > 0) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.flag_outlined,
+                              size: 13, color: Color(0xFFD29062)),
+                          const SizedBox(width: 4),
+                          Text(
+                            item.markedByMe
+                                ? '我已标记 · 已有 ${item.markCount}/5 位喵友标记此帖子'
+                                : '已有 ${item.markCount}/5 位喵友标记此帖子',
+                            style: const TextStyle(
+                                color: Color(0xFFD29062), fontSize: 11.5),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -1154,6 +1454,7 @@ class _TimelineFeedList extends StatelessWidget {
     required this.onOpenResource,
     required this.onOpenFeed,
     required this.emptyText,
+    required this.controller,
   });
 
   final List<TimelineFeed> items;
@@ -1166,6 +1467,7 @@ class _TimelineFeedList extends StatelessWidget {
   final ValueChanged<ContentPreview> onOpenResource;
   final ValueChanged<int> onOpenFeed;
   final String emptyText;
+  final AppController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -1215,6 +1517,7 @@ class _TimelineFeedList extends StatelessWidget {
           }
           return _TimelineFeedCard(
             item: items[index],
+            controller: controller,
             onOpenUser: onOpenUser,
             onOpenResource: onOpenResource,
             onOpenFeed: onOpenFeed,
@@ -1228,12 +1531,14 @@ class _TimelineFeedList extends StatelessWidget {
 class _TimelineFeedCard extends StatelessWidget {
   const _TimelineFeedCard({
     required this.item,
+    required this.controller,
     required this.onOpenUser,
     required this.onOpenResource,
     required this.onOpenFeed,
   });
 
   final TimelineFeed item;
+  final AppController controller;
   final ValueChanged<int> onOpenUser;
   final ValueChanged<ContentPreview> onOpenResource;
   final ValueChanged<int> onOpenFeed;
@@ -1242,7 +1547,11 @@ class _TimelineFeedCard extends StatelessWidget {
   Widget build(BuildContext context) => Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => onOpenFeed(item.id),
+          // 自动同步动态（is_auto_sync）等价于 Web 端 302 跳转，
+          // 点击直接打开对应的文章/视频页。
+          onTap: () => item.isAutoSync && item.resource != null
+              ? onOpenResource(item.resource!)
+              : onOpenFeed(item.id),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -1286,6 +1595,8 @@ class _TimelineFeedCard extends StatelessWidget {
                                   const TextStyle(color: _ink, height: 1.45))
                           : ContentSpans(
                               spans: item.spans,
+                              onLinkTap: (url) => openContentLink(
+                                  context, controller, url),
                               textStyle:
                                   const TextStyle(color: _ink, height: 1.45)),
                       if (item.resource != null) ...[
@@ -1320,6 +1631,10 @@ class _TimelineFeedCard extends StatelessWidget {
                                                 alt: '动态图片',
                                                 heroTag:
                                                     'feed-image-${item.id}-$imageIndex-$uri',
+                                                uris: item.images
+                                                    .map(Uri.parse)
+                                                    .toList(growable: false),
+                                                initialIndex: imageIndex,
                                               ),
                                             ),
                                           ),
@@ -1382,6 +1697,27 @@ class _TimelineFeedCard extends StatelessWidget {
       );
 }
 
+/// 自动同步动态的类型标识（文章/视频）。
+class _FeedTypeTag extends StatelessWidget {
+  const _FeedTypeTag({required this.isVideo});
+
+  final bool isVideo;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: _palette(context).primary.withOpacity(.1),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(isVideo ? '视频' : '文章',
+            style: TextStyle(
+                color: _palette(context).primary,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700)),
+      );
+}
+
 class _TimelineResourceCard extends StatelessWidget {
   const _TimelineResourceCard({required this.item, required this.onTap});
 
@@ -1425,9 +1761,15 @@ class _TimelineResourceCard extends StatelessWidget {
                             style: const TextStyle(
                                 color: _ink, fontWeight: FontWeight.w700)),
                         const Spacer(),
-                        Text('${item.views} 浏览 · ${item.likes} 赞',
-                            style:
-                                const TextStyle(color: _muted, fontSize: 11)),
+                        Row(
+                          children: [
+                            _FeedTypeTag(isVideo: item.isVideo),
+                            const SizedBox(width: 6),
+                            Text('${item.views} 浏览 · ${item.likes} 赞',
+                                style: const TextStyle(
+                                    color: _muted, fontSize: 11)),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -1642,7 +1984,10 @@ class _ProfilePageState extends State<_ProfilePage> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: session == null
-                      ? const _ProfileGuestBody()
+                      ? _ProfileGuestBody(
+                          controller: widget.controller,
+                          themeSeed: widget.themeSeed,
+                          onThemeChanged: widget.onThemeChanged)
                       : _ProfileMemberBody(
                           controller: widget.controller,
                           themeSeed: widget.themeSeed,
@@ -1778,7 +2123,7 @@ class _ThemeSheetState extends State<_ThemeSheet> {
   late final TextEditingController _hex;
 
   static const swatches = <Color>[
-    Color(0xFF66CCFF), // 洛天依蓝（默认）
+    Color(0xFF5094B2), // 希露菲青（默认）
     Colors.indigo,
     Colors.blue,
     Colors.cyan,
@@ -1836,101 +2181,146 @@ class _ThemeSheetState extends State<_ThemeSheet> {
   Widget build(BuildContext context) {
     final palette = _palette(context);
     final seed = widget.seed;
-    return SafeArea(
-      // 限制最大高度并允许滚动，保证小屏设备上色板与自定义色号完整可见。
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.7,
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 26),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return _RaisedSheet(
+      dragHandle: true,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Icon(Icons.palette_rounded, color: palette.primary),
-                  const SizedBox(width: 8),
-                  const Text('主题颜色',
-                      style: TextStyle(
-                          color: _ink,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 16,
-                runSpacing: 14,
-                children: swatches.map((color) {
-                  final selected = color.value == seed.value;
-                  return InkWell(
-                    key: ValueKey(color),
-                    customBorder: const CircleBorder(),
-                    onTap: () {
-                      widget.onSelected(color);
-                      Navigator.of(context).pop();
-                    },
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: selected
-                            ? Border.all(color: _ink, width: 2.5)
-                            : null,
-                      ),
-                      child: selected
-                          ? const Icon(Icons.check_rounded,
-                              color: Colors.white, size: 22)
-                          : null,
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 16),
-              const Text('自定义色号',
+              Icon(Icons.palette_rounded, color: palette.primary),
+              const SizedBox(width: 8),
+              const Text('主题颜色',
                   style: TextStyle(
                       color: _ink,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: _parseHex(_hex.text) ?? const Color(0xFFCCCCCC),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0x22000000)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _hex,
-                      textCapitalization: TextCapitalization.characters,
-                      decoration: const InputDecoration(
-                        hintText: '#66CCFF',
-                        isDense: true,
-                      ),
-                      onSubmitted: (_) => _applyCustom(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _applyCustom,
-                    child: const Text('应用'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              const Text('选择后即生效',
-                  style: TextStyle(color: _muted, fontSize: 12)),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800)),
             ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 16,
+            runSpacing: 14,
+            children: swatches.map((color) {
+              final selected = color.value == seed.value;
+              return InkWell(
+                key: ValueKey(color),
+                customBorder: const CircleBorder(),
+                onTap: () {
+                  widget.onSelected(color);
+                  Navigator.of(context).pop();
+                },
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: selected
+                        ? Border.all(color: _ink, width: 2.5)
+                        : null,
+                  ),
+                  child: selected
+                      ? const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 22)
+                      : null,
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
+          const Text('自定义色号',
+              style: TextStyle(
+                  color: _ink,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _parseHex(_hex.text) ?? const Color(0xFFCCCCCC),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0x22000000)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _hex,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    hintText: '#5094B2',
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _applyCustom(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _applyCustom,
+                child: const Text('应用'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Text('选择后即生效',
+              style: TextStyle(color: _muted, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+/// 底部弹层通用外框：默认高度为屏幕高度的 1/2；键盘弹出时整体上移至键盘上方并
+/// 压缩到可用空间内，输入框与登录按钮始终不被遮挡；内容超出高度时允许滚动。
+class _RaisedSheet extends StatelessWidget {
+  const _RaisedSheet({required this.child, this.dragHandle = false});
+
+  final Widget child;
+  final bool dragHandle;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final viewInsets = media.viewInsets.bottom;
+    final availableHeight = media.size.height - viewInsets;
+    final height = (media.size.height / 2).clamp(0.0, availableHeight);
+    return SafeArea(
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(bottom: viewInsets),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          height: height,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 26),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (dragHandle) ...[
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xffdedde7),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                child,
+              ],
+            ),
           ),
         ),
       ),
@@ -1942,27 +2332,50 @@ void _showThemeSheet(
     BuildContext context, Color seed, ValueChanged<Color> onChanged) {
   showModalBottomSheet<void>(
     context: context,
-    showDragHandle: true,
     isScrollControlled: true,
+    backgroundColor: Colors.transparent,
     builder: (_) => _ThemeSheet(seed: seed, onSelected: onChanged),
   );
 }
 
 class _ProfileGuestBody extends StatelessWidget {
-  const _ProfileGuestBody();
+  const _ProfileGuestBody({
+    required this.controller,
+    required this.themeSeed,
+    required this.onThemeChanged,
+  });
+
+  final AppController controller;
+  final Color themeSeed;
+  final ValueChanged<Color> onThemeChanged;
 
   @override
-  Widget build(BuildContext context) => const Column(
+  Widget build(BuildContext context) => Column(
         children: [
-          _ProfileItem(
+          const _ProfileItem(
               icon: Icons.history_rounded,
               title: '历史记录',
               subtitle: '登录后同步浏览记录'),
-          SizedBox(height: 10),
-          _ProfileItem(
+          const SizedBox(height: 10),
+          const _ProfileItem(
               icon: Icons.bookmark_outline_rounded,
               title: '我的收藏',
               subtitle: '把喜欢的内容留在这里'),
+          const SizedBox(height: 10),
+          _ProfileItem(
+            icon: Icons.palette_outlined,
+            title: '主题外观',
+            subtitle: '自定义界面主题颜色',
+            onTap: () => _showThemeSheet(context, themeSeed, onThemeChanged),
+          ),
+          const SizedBox(height: 10),
+          _ProfileItem(
+            icon: Icons.settings_outlined,
+            title: '设置',
+            subtitle: '编辑资料、清除缓存与关于',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => SettingsPage(controller: controller))),
+          ),
         ],
       );
 }
@@ -1977,6 +2390,29 @@ class _ProfileMemberBody extends StatelessWidget {
   final AppController controller;
   final Color themeSeed;
   final ValueChanged<Color> onThemeChanged;
+
+  Future<void> _confirmLogout(BuildContext context, AppController controller) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) => AlertDialog(
+        title: const Text('退出当前会话'),
+        content: const Text('退出后将清除登录 Token，需要重新登录才能继续使用。确定退出吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('退出'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await controller.clearLocalSession();
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -2005,6 +2441,13 @@ class _ProfileMemberBody extends StatelessWidget {
                 builder: (_) => SignPage(controller: controller)))),
           const SizedBox(height: 10),
           _ProfileItem(
+            icon: Icons.account_balance_wallet_outlined,
+            title: '我的资产',
+            subtitle: '喵币余额、改名卡与补签卡',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => AssetsPage(controller: controller)))),
+          const SizedBox(height: 10),
+          _ProfileItem(
             icon: Icons.palette_outlined,
             title: '主题外观',
             subtitle: '自定义界面主题颜色',
@@ -2024,7 +2467,7 @@ class _ProfileMemberBody extends StatelessWidget {
             title: '退出当前会话',
             subtitle: '这将清除登录Token',
             danger: true,
-            onTap: controller.clearLocalSession,
+            onTap: () => _confirmLogout(context, controller),
           ),
         ],
       );
@@ -2298,6 +2741,9 @@ class _HistoryPageState extends State<_HistoryPage> {
                 isLoading: widget.controller.isLoadingHistory,
                 error: widget.controller.historyError,
                 emptyText: '还没有浏览记录',
+                onLoadMore: widget.controller.loadMoreHistory,
+                isLoadingMore: widget.controller.isLoadingMoreHistory,
+                hasMore: widget.controller.hasMoreHistory,
               ),
             ),
           ),
@@ -2861,24 +3307,12 @@ class _LoginSheetState extends State<_LoginSheet> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-        animation: widget.controller,
-        builder: (context, _) => Container(
-          padding: EdgeInsets.fromLTRB(
-              20, 24, 20, MediaQuery.viewInsetsOf(context).bottom + 26),
-          decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(26))),
-          child: Column(
+  Widget build(BuildContext context) => _RaisedSheet(
+        child: AnimatedBuilder(
+          animation: widget.controller,
+          builder: (context, _) => Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: const Color(0xffdedde7),
-                      borderRadius: BorderRadius.circular(4))),
-              const SizedBox(height: 21),
               Row(
                 children: [
                   CircleAvatar(

@@ -52,4 +52,32 @@ void main() {
     expect(item.content, '旧接口简介');
     expect(item.contentPreview.category, '科技');
   });
+
+  test('parses mark fields and copyWith keeps them', () {
+    final item = LatestMfunsItem.fromJson({
+      'id': 14,
+      'type': 'feed',
+      'created_at': 1700000000,
+      'mark_count': 3,
+      'marked_by_me': true,
+    });
+
+    expect(item.markCount, 3);
+    expect(item.markedByMe, isTrue);
+
+    final marked = item.copyWith(markCount: 4);
+    expect(marked.markCount, 4);
+    expect(marked.markedByMe, isTrue);
+    expect(marked.stableId, item.stableId);
+  });
+
+  test('defaults mark fields to zero/unmarked', () {
+    final item = LatestMfunsItem.fromJson({
+      'id': 15,
+      'type': 'video',
+      'created_at': 1700000000,
+    });
+    expect(item.markCount, 0);
+    expect(item.markedByMe, isFalse);
+  });
 }

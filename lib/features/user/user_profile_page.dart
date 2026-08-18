@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/content_link_handler.dart';
 import '../../core/widgets/content_spans.dart';
+import '../../core/widgets/image_preview_page.dart';
 import '../home/home_repository.dart';
+import '../message/messages_page.dart';
 import '../video/content_detail_page.dart';
+import 'follow_list_page.dart';
 
 const _profileInk = Colors.blueGrey;
 const _profileMuted = Colors.blueGrey;
@@ -27,26 +31,26 @@ class UserProfilePage extends StatefulWidget {
 
 class _UserProfilePageState extends State<UserProfilePage> {
   late Future<UserProfile> _profile;
-  late Future<List<TimelineFeed>> _feeds;
-  late Future<List<ContentPreview>> _articles;
-  late Future<List<ContentPreview>> _videos;
+  final _feedTabKey = GlobalKey<_UserFeedTabState>();
+  final _articleTabKey = GlobalKey<_UserContentTabState>();
+  final _videoTabKey = GlobalKey<_UserContentTabState>();
 
   @override
   void initState() {
     super.initState();
-    _load();
-  }
-
-  void _load() {
     _profile = widget.controller.userProfile(widget.userId);
-    _feeds = widget.controller.userFeeds(userId: widget.userId);
-    _articles = widget.controller.userArticles(userId: widget.userId);
-    _videos = widget.controller.userVideos(userId: widget.userId);
   }
 
   Future<void> _refresh() async {
-    setState(_load);
-    await _profile;
+    // 刷新个人信息（资料卡）与三个列表的第一页；列表 reload 自身会
+    // 回调 onRefresh，这里只重载列表避免递归。
+    setState(() => _profile = widget.controller.userProfile(widget.userId));
+    await Future.wait([
+      _feedTabKey.currentState?.reloadFirstPage() ?? Future.value(),
+      _articleTabKey.currentState?.reloadFirstPage() ?? Future.value(),
+      _videoTabKey.currentState?.reloadFirstPage() ?? Future.value(),
+      _profile,
+    ]);
   }
 
   @override
@@ -110,19 +114,24 @@ class _UserProfilePageState extends State<UserProfilePage> {
                 body: TabBarView(
                   children: [
                     _UserFeedTab(
-                      feeds: _feeds,
+                      key: _feedTabKey,
                       controller: widget.controller,
+                      userId: widget.userId,
                       onRefresh: _refresh,
                     ),
                     _UserContentTab(
-                      contents: _articles,
+                      key: _articleTabKey,
                       controller: widget.controller,
+                      loader: (cursor) => widget.controller
+                          .userArticles(userId: widget.userId, cursor: cursor),
                       emptyText: 'TA 还没有发布文章',
                       onRefresh: _refresh,
                     ),
                     _UserContentTab(
-                      contents: _videos,
+                      key: _videoTabKey,
                       controller: widget.controller,
+                      loader: (cursor) => widget.controller
+                          .userVideos(userId: widget.userId, cursor: cursor),
                       emptyText: 'TA 还没有发布视频',
                       onRefresh: _refresh,
                     ),
@@ -191,6 +200,29 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
     } finally {
       if (mounted) setState(() => _isUpdating = false);
     }
+  }
+
+  void _openMessage() {
+    if (widget.controller.session == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('请先在“我的”页面登录后再发起私信')));
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => MessageDetailPage(
+              controller: widget.controller,
+              peerId: widget.profile.id,
+              peerName: widget.profile.name,
+            )));
+  }
+
+  void _openFollowList(String type) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => FollowListPage(
+              controller: widget.controller,
+              userId: widget.profile.id,
+              type: type,
+            )));
   }
 
   @override
@@ -275,9 +307,15 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _ProfileStat(label: '关注', value: profile.follows),
+                        _ProfileStat(
+                            label: '关注',
+                            value: profile.follows,
+                            onTap: () => _openFollowList('follow')),
                         const _ProfileDivider(),
-                        _ProfileStat(label: '粉丝', value: profile.fans),
+                        _ProfileStat(
+                            label: '粉丝',
+                            value: profile.fans,
+                            onTap: () => _openFollowList('fans')),
                         const _ProfileDivider(),
                         _ProfileStat(label: '获赞', value: profile.totalLikes),
                       ],
@@ -286,19 +324,32 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                     if (_isOwnProfile)
                       const Text('我的主页', style: TextStyle(color: _profileMuted))
                     else
-                      OutlinedButton.icon(
-                        onPressed: _isUpdating ? null : _toggleFollow,
-                        icon: _isUpdating
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Icon(following
-                                ? Icons.check_rounded
-                                : Icons.person_add_alt_1_outlined),
-                        label: Text(following ? '已关注' : '关注'),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _isUpdating ? null : _toggleFollow,
+                            icon: _isUpdating
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : Icon(following
+                                    ? Icons.check_rounded
+                                    : Icons.person_add_alt_1_outlined),
+                            label: Text(following ? '已关注' : '关注'),
+                          ),
+                          const SizedBox(width: 10),
+                          FilledButton.tonalIcon(
+                            onPressed: _openMessage,
+                            icon: const Icon(
+                                Icons.chat_bubble_outline_rounded,
+                                size: 18),
+                            label: const Text('私信'),
+                          ),
+                        ],
                       ),
                   ],
                 ),
@@ -347,58 +398,139 @@ class _ProfileAvatar extends StatelessWidget {
       );
 }
 
-class _UserFeedTab extends StatelessWidget {
+class _UserFeedTab extends StatefulWidget {
   const _UserFeedTab({
-    required this.feeds,
+    super.key,
     required this.controller,
+    required this.userId,
     required this.onRefresh,
   });
 
-  final Future<List<TimelineFeed>> feeds;
   final AppController controller;
+  final int userId;
   final Future<void> Function() onRefresh;
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<List<TimelineFeed>>(
-        future: feeds,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return _ProfileMessage(
-                message: '加载动态失败：${snapshot.error}', onRetry: onRefresh);
-          }
-          final items = snapshot.data ?? const <TimelineFeed>[];
-          if (items.isEmpty) {
-            return _ProfileMessage(message: 'TA 还没有发布动态', onRetry: onRefresh);
-          }
-          return RefreshIndicator(
-            color: _palette(context).primary,
-            onRefresh: onRefresh,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverOverlapInjector(
-                  handle:
-                      NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                  sliver: SliverList.separated(
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 9),
-                    itemBuilder: (context, index) => _UserFeedCard(
-                      item: items[index],
-                      controller: controller,
-                    ),
-                  ),
-                ),
-              ],
+  State<_UserFeedTab> createState() => _UserFeedTabState();
+}
+
+class _UserFeedTabState extends State<_UserFeedTab> {
+  List<TimelineFeed>? _items;
+  String? _error;
+  var _loadingMore = false;
+  var _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> reload() async {
+    await _load();
+    await widget.onRefresh();
+  }
+
+  /// 仅重载列表第一页（由页面刷新按钮调用，不再回调 onRefresh）。
+  Future<void> reloadFirstPage() => _load();
+
+  Future<void> _load() async {
+    try {
+      final page = await widget.controller
+          .userFeeds(userId: widget.userId, startId: -1);
+      if (!mounted) return;
+      setState(() {
+        _items = page;
+        _hasMore = page.isNotEmpty;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _items ??= const [];
+        _error = '加载动态失败：$error';
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    final items = _items;
+    if (items == null || items.isEmpty || _loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await widget.controller
+          .userFeeds(userId: widget.userId, startId: items.last.id);
+      if (!mounted) return;
+      setState(() {
+        final seen = _items!.map((item) => item.id).toSet();
+        final additions =
+            page.where((item) => !seen.contains(item.id)).toList(growable: false);
+        _items = [..._items!, ...additions];
+        _hasMore = page.isNotEmpty;
+      });
+    } catch (_) {
+      // 滚动到底可再次触发加载。
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _items;
+    if (items == null && _error == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && (items?.isEmpty ?? true)) {
+      return _ProfileMessage(message: _error!, onRetry: reload);
+    }
+    if (items == null || items.isEmpty) {
+      return _ProfileMessage(message: 'TA 还没有发布动态', onRetry: reload);
+    }
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.extentAfter < 300 &&
+            _hasMore &&
+            !_loadingMore) {
+          _loadMore();
+        }
+        return false;
+      },
+      child: RefreshIndicator(
+        color: _palette(context).primary,
+        onRefresh: reload,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverOverlapInjector(
+              handle:
+                  NestedScrollView.sliverOverlapAbsorberHandleFor(context),
             ),
-          );
-        },
-      );
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              sliver: SliverList.separated(
+                itemCount: items.length + 1,
+                separatorBuilder: (_, __) => const SizedBox(height: 9),
+                itemBuilder: (context, index) {
+                  if (index == items.length) {
+                    return _ProfileListFooter(
+                      loadingMore: _loadingMore,
+                      hasMore: _hasMore,
+                      onLoadMore: _loadMore,
+                    );
+                  }
+                  return _UserFeedCard(
+                    item: items[index],
+                    controller: widget.controller,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _UserFeedCard extends StatelessWidget {
@@ -411,27 +543,53 @@ class _UserFeedCard extends StatelessWidget {
   Widget build(BuildContext context) => Card(
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: item.id <= 0
-              ? null
-              : () => Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => FeedDetailPage(
-                      controller: controller,
-                      feedId: item.id,
-                    ),
-                  )),
+          // 自动同步动态（is_auto_sync）点击直接打开对应的文章/视频页，
+          // 与 Web 端 302 跳转行为一致。
+          onTap: () {
+            final resource = item.resource;
+            if (item.isAutoSync && resource != null) {
+              Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) =>
+                      ContentDetailPage(controller: controller, preview: resource)));
+              return;
+            }
+            if (item.id <= 0) return;
+            Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => FeedDetailPage(
+                controller: controller,
+                feedId: item.id,
+              ),
+            ));
+          },
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                item.spans.isEmpty
-                    ? Text(item.content,
-                        style: const TextStyle(
-                            color: _profileInk, height: 1.4))
-                    : ContentSpans(
-                        spans: item.spans,
-                        textStyle: const TextStyle(
-                            color: _profileInk, height: 1.4)),
+                if (item.spans.isEmpty && item.resource != null)
+                  Text(item.content,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(color: _profileInk, height: 1.4))
+                else
+                  item.spans.isEmpty
+                      ? Text(item.content,
+                          style: const TextStyle(
+                              color: _profileInk, height: 1.4))
+                      : ContentSpans(
+                          spans: item.spans,
+                          onLinkTap: (url) =>
+                              openContentLink(context, controller, url),
+                          textStyle: const TextStyle(
+                              color: _profileInk, height: 1.4)),
+                if (item.resource != null) ...[
+                  const SizedBox(height: 10),
+                  _ProfileResourceCard(
+                    item: item.resource!,
+                    controller: controller,
+                  ),
+                ],
                 if (item.images.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   SizedBox(
@@ -440,21 +598,47 @@ class _UserFeedCard extends StatelessWidget {
                       scrollDirection: Axis.horizontal,
                       itemCount: item.images.length,
                       separatorBuilder: (_, __) => const SizedBox(width: 7),
-                      itemBuilder: (context, index) => ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: AspectRatio(
-                          aspectRatio: 1,
-                          child: Image.network(item.images[index],
-                              fit: BoxFit.cover),
-                        ),
-                      ),
+                      itemBuilder: (context, index) {
+                        final uri = Uri.tryParse(item.images[index]);
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: GestureDetector(
+                            onTap: uri == null
+                                ? null
+                                : () => Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => ImagePreviewPage(
+                                          uri: uri,
+                                          alt: '动态图片',
+                                          uris: item.images
+                                              .map(Uri.parse)
+                                              .toList(growable: false),
+                                          initialIndex: index,
+                                        ),
+                                      ),
+                                    ),
+                            child: AspectRatio(
+                              aspectRatio: 1,
+                              child: Image.network(item.images[index],
+                                  fit: BoxFit.cover),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
                 const SizedBox(height: 10),
-                Text(
-                    '${item.likes} 赞 · ${item.comments} 评论 · ${_userTime(item.createdAt)}',
-                    style: const TextStyle(color: _profileMuted, fontSize: 12)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                          '${item.likes} 赞 · ${item.comments} 评论 · ${_userTime(item.createdAt)}',
+                          style: const TextStyle(
+                              color: _profileMuted, fontSize: 12)),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -462,60 +646,274 @@ class _UserFeedCard extends StatelessWidget {
       );
 }
 
-class _UserContentTab extends StatelessWidget {
+/// 自动同步动态的类型标识（文章/视频）。
+class _FeedTypeTag extends StatelessWidget {
+  const _FeedTypeTag({required this.isVideo});
+
+  final bool isVideo;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: _palette(context).primary.withOpacity(.1),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(isVideo ? '视频' : '文章',
+            style: TextStyle(
+                color: _palette(context).primary,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700)),
+      );
+}
+
+/// 动态引用的文章/视频卡片（自动同步动态等）。
+class _ProfileResourceCard extends StatelessWidget {
+  const _ProfileResourceCard({required this.item, required this.controller});
+
+  final ContentPreview item;
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) =>
+                ContentDetailPage(controller: controller, preview: item))),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: const Color(0xfff3f2f8),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  width: 72,
+                  height: 48,
+                  child: item.cover.isEmpty
+                      ? const ColoredBox(
+                          color: Color(0xffe4e3ee),
+                          child: Icon(Icons.image_outlined,
+                              size: 20, color: _profileMuted),
+                        )
+                      : Image.network(item.cover, fit: BoxFit.cover),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: _profileInk,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        _FeedTypeTag(isVideo: item.isVideo),
+                        const SizedBox(width: 6),
+                        Text('${item.likes} 赞 · ${item.views} 浏览',
+                            style: const TextStyle(
+                                color: _profileMuted, fontSize: 11)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _UserContentTab extends StatefulWidget {
   const _UserContentTab({
-    required this.contents,
+    super.key,
     required this.controller,
+    required this.loader,
     required this.emptyText,
     required this.onRefresh,
   });
 
-  final Future<List<ContentPreview>> contents;
   final AppController controller;
+  final Future<List<ContentPreview>> Function(int cursor) loader;
   final String emptyText;
   final Future<void> Function() onRefresh;
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<List<ContentPreview>>(
-        future: contents,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return _ProfileMessage(
-                message: '加载内容失败：${snapshot.error}', onRetry: onRefresh);
-          }
-          final items = snapshot.data ?? const <ContentPreview>[];
-          if (items.isEmpty) {
-            return _ProfileMessage(message: emptyText, onRetry: onRefresh);
-          }
-          return RefreshIndicator(
-            color: _palette(context).primary,
-            onRefresh: onRefresh,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverOverlapInjector(
-                  handle:
-                      NestedScrollView.sliverOverlapAbsorberHandleFor(context),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
-                  sliver: SliverList.separated(
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 9),
-                    itemBuilder: (context, index) => _UserContentCard(
-                      item: items[index],
-                      controller: controller,
-                    ),
-                  ),
-                ),
-              ],
+  State<_UserContentTab> createState() => _UserContentTabState();
+}
+
+class _UserContentTabState extends State<_UserContentTab> {
+  List<ContentPreview>? _items;
+  String? _error;
+  var _loadingMore = false;
+  var _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> reload() async {
+    await _load();
+    await widget.onRefresh();
+  }
+
+  /// 仅重载列表第一页（由页面刷新按钮调用，不再回调 onRefresh）。
+  Future<void> reloadFirstPage() => _load();
+
+  Future<void> _load() async {
+    try {
+      final page = await widget.loader(0);
+      if (!mounted) return;
+      setState(() {
+        _items = page;
+        _hasMore = page.isNotEmpty;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _items ??= const [];
+        _error = '加载内容失败：$error';
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    final items = _items;
+    if (items == null || items.isEmpty || _loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await widget.loader(items.last.id);
+      if (!mounted) return;
+      setState(() {
+        final seen = _items!.map((item) => item.id).toSet();
+        final additions =
+            page.where((item) => !seen.contains(item.id)).toList(growable: false);
+        _items = [..._items!, ...additions];
+        _hasMore = page.isNotEmpty;
+      });
+    } catch (_) {
+      // 滚动到底可再次触发加载。
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _items;
+    if (items == null && _error == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && (items?.isEmpty ?? true)) {
+      return _ProfileMessage(message: _error!, onRetry: reload);
+    }
+    if (items == null || items.isEmpty) {
+      return _ProfileMessage(message: widget.emptyText, onRetry: reload);
+    }
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification.metrics.extentAfter < 300 &&
+            _hasMore &&
+            !_loadingMore) {
+          _loadMore();
+        }
+        return false;
+      },
+      child: RefreshIndicator(
+        color: _palette(context).primary,
+        onRefresh: reload,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverOverlapInjector(
+              handle:
+                  NestedScrollView.sliverOverlapAbsorberHandleFor(context),
             ),
-          );
-        },
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+              sliver: SliverList.separated(
+                itemCount: items.length + 1,
+                separatorBuilder: (_, __) => const SizedBox(height: 9),
+                itemBuilder: (context, index) {
+                  if (index == items.length) {
+                    return _ProfileListFooter(
+                      loadingMore: _loadingMore,
+                      hasMore: _hasMore,
+                      onLoadMore: _loadMore,
+                    );
+                  }
+                  return _UserContentCard(
+                    item: items[index],
+                    controller: widget.controller,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 列表底部状态：加载中 / 没有更多了 / 点击加载更多。
+class _ProfileListFooter extends StatelessWidget {
+  const _ProfileListFooter({
+    required this.loadingMore,
+    required this.hasMore,
+    required this.onLoadMore,
+  });
+
+  final bool loadingMore;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loadingMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 14),
+        child: Center(
+            child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2.2),
+        )),
       );
+    }
+    if (!hasMore) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 14),
+        child: Center(
+          child: Text('没有更多了',
+              style: TextStyle(color: _profileMuted, fontSize: 12)),
+        ),
+      );
+    }
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: TextButton.icon(
+          onPressed: onLoadMore,
+          icon: const Icon(Icons.expand_more_rounded, size: 18),
+          label: const Text('加载更多'),
+        ),
+      ),
+    );
+  }
 }
 
 class _UserContentCard extends StatelessWidget {
@@ -600,23 +998,29 @@ class _ProfileMessage extends StatelessWidget {
 }
 
 class _ProfileStat extends StatelessWidget {
-  const _ProfileStat({required this.label, required this.value});
+  const _ProfileStat({required this.label, required this.value, this.onTap});
 
   final String label;
   final int? value;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 72,
-        child: Column(
-          children: [
-            Text(value == null ? '—' : '$value',
-                style: const TextStyle(
-                    color: _profileInk, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 2),
-            Text(label,
-                style: const TextStyle(color: _profileMuted, fontSize: 11)),
-          ],
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: 72,
+          child: Column(
+            children: [
+              Text(value == null ? '—' : '$value',
+                  style: const TextStyle(
+                      color: _profileInk, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: const TextStyle(
+                      color: _profileMuted, fontSize: 11)),
+            ],
+          ),
         ),
       );
 }

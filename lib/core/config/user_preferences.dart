@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_config.dart';
+
 /// 用户偏好设置（默认清晰度、弹幕开关/透明度/字号），本地持久化。
 class UserPreferences {
   static const _keyDefaultQuality = 'pref.default_quality';
@@ -7,6 +9,43 @@ class UserPreferences {
   static const _keyDanmakuOpacity = 'pref.danmaku_opacity';
   static const _keyDanmakuSize = 'pref.danmaku_size';
   static const _keyAutoPlay = 'pref.autoplay';
+  static const _keyAutoSignIn = 'pref.auto_sign_in';
+  static const _keyAcceleratorBase = 'pref.accelerator_base';
+
+  /// 自定义 GitHub 加速地址（用于更新清单与下载），默认官方加速站。
+  static Future<String> loadAcceleratorBase() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final value = prefs.getString(_keyAcceleratorBase)?.trim() ?? '';
+      return value.isEmpty ? AppConfig.defaultAcceleratorBase : value;
+    } catch (_) {
+      return AppConfig.defaultAcceleratorBase;
+    }
+  }
+
+  static Future<void> saveAcceleratorBase(String value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyAcceleratorBase, value.trim());
+    } catch (_) {}
+  }
+
+  /// 自动签到开关：开启后应用在打开状态下每天零点尝试签到。
+  static Future<bool> loadAutoSignIn() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyAutoSignIn) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> saveAutoSignIn(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyAutoSignIn, enabled);
+    } catch (_) {}
+  }
 
   /// 默认清晰度标签（如 `720p`）；空字符串表示自动（列表第一个可用清晰度）。
   static Future<String> loadDefaultQuality() async {

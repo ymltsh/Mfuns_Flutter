@@ -6,10 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../app/app_controller.dart';
 import '../../core/config/user_preferences.dart';
+import '../../core/media/media_notification.dart';
+import '../../core/widgets/content_link_handler.dart';
 import '../../core/widgets/content_spans.dart';
 import '../../core/widgets/image_preview_page.dart';
 import '../../core/widgets/inline_emoji_input.dart';
@@ -49,11 +52,13 @@ class VideoDetailPage extends StatefulWidget {
   State<VideoDetailPage> createState() => _VideoDetailPageState();
 }
 
-class _VideoDetailPageState extends State<VideoDetailPage> {
+class _VideoDetailPageState extends State<VideoDetailPage>
+    with SingleTickerProviderStateMixin {
   final _playerKey = GlobalKey<_MfunsVideoPlayerState>();
   late final Future<ContentDetail> _detail;
   late final Future<List<VideoQuality>>? _qualities;
   late final Future<List<ContentPreview>> _related;
+  late final TabController _tabController;
   var _activeTab = 0;
   var _danmakuOn = true;
   VideoQuality? _selectedQuality;
@@ -63,6 +68,8 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this)
+      ..addListener(_syncTab);
     _detail = widget.controller.contentDetail(widget.preview);
     _qualities = widget.preview.isVideo
         ? widget.controller.videoQualities(widget.preview.id)
@@ -78,6 +85,19 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
       setState(() => _qualitiesLoading = false);
     });
     _related = widget.controller.relatedContent(widget.preview);
+  }
+
+  /// 滑动切换简介/评论时同步高亮标签。
+  void _syncTab() {
+    if (_tabController.indexIsChanging) return;
+    if (_tabController.index == _activeTab) return;
+    setState(() => _activeTab = _tabController.index);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   void _showDanmakuSheet(BuildContext context) {
@@ -135,7 +155,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             final tabs = _DetailTabs(
               activeTab: _activeTab,
               commentCount: detail.preview.comments,
-              onChanged: (value) => setState(() => _activeTab = value),
+              onChanged: (value) => _tabController.animateTo(value),
               onSendDanmaku: detail.preview.isVideo
                   ? () => _showDanmakuSheet(context)
                   : null,
@@ -144,27 +164,39 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                   ? () => _playerKey.currentState?.toggleDanmaku()
                   : null,
             );
-            final content = _activeTab == 0
-                ? _VideoDetailPane(
-                    controller: widget.controller,
-                    detail: detail,
-                    related: _related,
-                    qualities: _availableQualities,
-                    selectedQuality: _selectedQuality,
-                    playerKey: _playerKey,
-                  )
-                : detail.commentAreaId != null
-                    ? Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                        child: _CommentSection(
-                          controller: widget.controller,
-                          areaId: detail.commentAreaId!,
-                        ),
+            // 简介/评论两个标签页各自独立滚动，支持左右滑动切换。
+            final introTab = _KeepAliveTab(
+              child: SingleChildScrollView(
+                key: PageStorageKey<String>(
+                    'content-intro-${widget.preview.id}'),
+                padding: const EdgeInsets.only(bottom: 36),
+                child: _VideoDetailPane(
+                  controller: widget.controller,
+                  detail: detail,
+                  related: _related,
+                  qualities: _availableQualities,
+                  selectedQuality: _selectedQuality,
+                  playerKey: _playerKey,
+                ),
+              ),
+            );
+            final commentTab = _KeepAliveTab(
+              child: SingleChildScrollView(
+                key: PageStorageKey<String>(
+                    'content-comment-${widget.preview.id}'),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 36),
+                child: detail.commentAreaId != null
+                    ? _CommentSection(
+                        controller: widget.controller,
+                        areaId: detail.commentAreaId!,
                       )
-                    : const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text('当前内容暂不支持评论'),
-                      );
+                    : const Text('当前内容暂不支持评论'),
+              ),
+            );
+            final tabView = TabBarView(
+              controller: _tabController,
+              children: [introTab, commentTab],
+            );
             // 横屏自动分栏：左侧播放器（黑底），右侧信息与评论独立滚动。
             final isLandscape =
                 MediaQuery.orientationOf(context) == Orientation.landscape;
@@ -184,31 +216,52 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         tabs,
-                        Expanded(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.only(bottom: 24),
-                            child: content,
-                          ),
-                        ),
+                        Expanded(child: tabView),
                       ],
                     ),
                   ),
                 ],
               );
             }
-            return ListView(
-              key: PageStorageKey<String>(
-                  'content-detail-${widget.preview.id}'),
-              padding: const EdgeInsets.only(bottom: 36),
+            // 竖屏：播放器与标签栏（简介/评论）固定在顶部不随页面滚动，
+            // 下方信息与评论独立滚动；播放器高度由自身按视频比例计算
+            // （UnconstrainedBox 解除纵向约束）。
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                player,
+                UnconstrainedBox(
+                  constrainedAxis: Axis.horizontal,
+                  child: player,
+                ),
                 tabs,
-                content,
+                Expanded(child: tabView),
               ],
             );
           },
         ),
       );
+}
+
+/// TabBarView 子页保活容器：保留滚动位置，避免切换标签重建。
+class _KeepAliveTab extends StatefulWidget {
+  const _KeepAliveTab({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_KeepAliveTab> createState() => _KeepAliveTabState();
+}
+
+class _KeepAliveTabState extends State<_KeepAliveTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
 }
 
 class FeedDetailPage extends StatefulWidget {
@@ -299,7 +352,9 @@ class _FeedDetailPageState extends State<FeedDetailPage> {
                 RichContentCard(
                     source: detail.rawContent.isEmpty
                         ? feed.content
-                        : detail.rawContent),
+                        : detail.rawContent,
+                    onLinkTap: (url) =>
+                        openContentLink(context, widget.controller, url)),
                 if (feed.images.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   _FeedImageGrid(images: feed.images, feedId: feed.id),
@@ -442,6 +497,10 @@ class _FeedImageGrid extends StatelessWidget {
                           uri: uri,
                           alt: '动态图片',
                           heroTag: 'feed-image-$feedId-$index-$uri',
+                          uris: images
+                              .map(Uri.parse)
+                              .toList(growable: false),
+                          initialIndex: index,
                         ),
                       )),
               child: Hero(
@@ -564,7 +623,11 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                     controller: widget.controller,
                   ),
                   const SizedBox(height: 12),
-                  RichContentCard(source: detail.rawContent),
+                  RichContentCard(
+                    source: detail.rawContent,
+                    onLinkTap: (url) =>
+                        openContentLink(context, widget.controller, url),
+                  ),
                   const SizedBox(height: 12),
                   _VideoActions(
                     controller: widget.controller,
@@ -620,24 +683,59 @@ class _ArticleInfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final preview = detail.preview;
     final theme = Theme.of(context);
+    final cover = Uri.tryParse(preview.cover);
     return Card(
       elevation: 0,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(preview.title, style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 12),
-            _AuthorBar(
-              controller: controller,
-              preview: preview,
-              subtitle:
-                  '${preview.category.isEmpty ? 'Mfuns' : preview.category} · ${preview.views} 阅读 · ${preview.comments} 评论',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 文章封面作为头图显示在标题上方。
+          if (preview.cover.isNotEmpty)
+            GestureDetector(
+              onTap: cover == null
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => ImagePreviewPage(
+                          uri: cover,
+                          alt: '文章封面',
+                          heroTag: 'article-cover-${preview.id}-$cover',
+                        ),
+                      )),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Hero(
+                  tag: 'article-cover-${preview.id}-$cover',
+                  child: Image.network(
+                    preview.cover,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const ColoredBox(
+                      color: Color(0xffececf5),
+                      child: Icon(Icons.image_outlined,
+                          color: Color(0xff8a8a94)),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ],
-        ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(preview.title, style: theme.textTheme.headlineSmall),
+                const SizedBox(height: 12),
+                _AuthorBar(
+                  controller: controller,
+                  preview: preview,
+                  subtitle:
+                      '${preview.category.isEmpty ? 'Mfuns' : preview.category} · ${preview.views} 阅读 · ${preview.comments} 评论',
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -807,9 +905,10 @@ class _DetailTab extends StatelessWidget {
 }
 
 class _ExpandableDescription extends StatefulWidget {
-  const _ExpandableDescription({required this.text});
+  const _ExpandableDescription({required this.text, required this.onLinkTap});
 
   final String text;
+  final void Function(String url) onLinkTap;
 
   @override
   State<_ExpandableDescription> createState() => _ExpandableDescriptionState();
@@ -826,8 +925,9 @@ class _ExpandableDescriptionState extends State<_ExpandableDescription> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          text,
+        LinkText(
+          text: text,
+          onLinkTap: widget.onLinkTap,
           maxLines: _expanded ? null : 3,
           overflow:
               _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
@@ -886,7 +986,11 @@ class _VideoDetailPane extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
-            _ExpandableDescription(text: detail.content),
+            _ExpandableDescription(
+              text: detail.content,
+              onLinkTap: (url) =>
+                  openContentLink(context, controller, url),
+            ),
             _VideoActions(controller: controller, preview: detail.preview),
             if (detail.preview.isVideo && qualities.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -1039,7 +1143,7 @@ class _VideoActionsState extends State<_VideoActions> {
             const ListTile(
               leading: Icon(Icons.monetization_on_rounded),
               title: Text('投币支持'),
-              subtitle: Text('为创作者投币，硬币不足或已达上限时会被服务器拒绝'),
+              subtitle: Text('为你喜欢的视频投币吧！'),
             ),
             const Divider(height: 1),
             for (final value in const [1, 2, 5])
@@ -1624,6 +1728,10 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
   double _danmakuSize = 20.0;
   var _autoPlay = true;
   var _autoPlayed = false;
+  double _dragSeekStartDx = 0;
+  Duration _dragSeekBase = Duration.zero;
+  var _wakelockHeld = false;
+  var _isFullscreen = false;
 
   @override
   void initState() {
@@ -1640,9 +1748,41 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     _loadPreferences();
     _ticker = Timer.periodic(const Duration(milliseconds: 350), (_) {
       if (mounted && _player?.value.isPlaying == true) setState(() {});
+      _syncWakelock();
+      _checkAutoNextPart();
     });
     _scheduleControlsHide();
     _loadBrightness();
+  }
+
+  /// 播放时保持屏幕唤醒（wakelock_plus），暂停/停止/销毁时释放，
+  /// 避免自动锁屏；全屏共用同一控制器，由本状态统一维护。
+  void _syncWakelock() {
+    final playing = _player?.value.isPlaying == true;
+    if (playing == _wakelockHeld) return;
+    _wakelockHeld = playing;
+    if (playing) {
+      WakelockPlus.enable();
+    } else {
+      WakelockPlus.disable();
+    }
+  }
+
+  /// 当前分P播放结束后自动连播下一分P（竖屏时由本状态检测；
+  /// 全屏时由全屏层自己检测，避免共享控制器被本状态替换）。
+  void _checkAutoNextPart() {
+    if (_isFullscreen) return;
+    final player = _player;
+    final selected = _selected;
+    if (player == null || selected == null) return;
+    final value = player.value;
+    if (value.duration <= Duration.zero) return;
+    if (value.isPlaying) return;
+    if (value.position < value.duration) return;
+    final next =
+        _matchingPartQuality(widget.qualities, selected, selected.part + 1);
+    if (next == null) return;
+    _select(next, forcePlay: true);
   }
 
   Future<void> _loadPreferences() async {
@@ -1711,7 +1851,12 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    if (_wakelockHeld) {
+      _wakelockHeld = false;
+      WakelockPlus.disable();
+    }
     _player?.dispose();
+    MfunsAudioHandler.instance.detach();
     super.dispose();
   }
 
@@ -1720,11 +1865,15 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     bool retrySameSource = true,
     bool allowFallback = true,
     bool autoPlay = false,
+    bool forcePlay = false,
   }) async {
     final request = ++_selectionRequest;
     final oldPlayer = _player;
     final oldValue = oldPlayer?.value;
-    final resumePosition = oldValue?.position ?? Duration.zero;
+    // 同一分P内切换清晰度时保留播放进度；切换分P则从头开始。
+    final samePart = (_selected?.part ?? quality.part) == quality.part;
+    final resumePosition =
+        samePart ? (oldValue?.position ?? Duration.zero) : Duration.zero;
     final wasPlaying = oldValue?.isPlaying ?? false;
     setState(() {
       _selected = quality;
@@ -1746,12 +1895,13 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
             : resumePosition;
         await nextPlayer.seekTo(target);
       }
-      if (wasPlaying) await nextPlayer.play();
+      if (wasPlaying || forcePlay) await nextPlayer.play();
       if (!mounted || request != _selectionRequest) {
         await nextPlayer.dispose();
         return;
       }
       setState(() => _player = nextPlayer);
+      _attachMediaNotification(nextPlayer);
       // 打开视频自动播放：仅在首次初始化时生效。
       if (autoPlay && !_autoPlayed) {
         _autoPlayed = true;
@@ -1793,6 +1943,16 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     } catch (_) {
       // Video playback must remain usable when the optional danmaku endpoint fails.
     }
+  }
+
+  /// 绑定媒体通知：在系统通知栏展示当前视频并同步播放/暂停/进度。
+  void _attachMediaNotification(VideoPlayerController player) {
+    MfunsAudioHandler.instance.attach(
+      player: player,
+      title: widget.title,
+      subtitle: 'Mfuns 视频',
+      artUri: widget.coverUrl,
+    );
   }
 
   Future<void> sendDanmakuText(String rawText) async {
@@ -1925,45 +2085,83 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     }
   }
 
+  /// 左右拖动调整进度：记录按下时的播放位置，随横向位移比例式拖动。
+  void _startDragSeek(DragStartDetails details) {
+    final player = _player;
+    if (player == null) return;
+    _dragSeekStartDx = details.globalPosition.dx;
+    _dragSeekBase = player.value.position;
+  }
+
+  void _updateDragSeek(DragUpdateDetails details) {
+    final player = _player;
+    if (player == null) return;
+    final duration = player.value.duration;
+    if (duration <= Duration.zero) return;
+    final width = MediaQuery.sizeOf(context).width;
+    final deltaDx = details.globalPosition.dx - _dragSeekStartDx;
+    final target = _dragSeekBase +
+        Duration(
+            milliseconds:
+                (deltaDx / width * duration.inMilliseconds).round());
+    var clamped = target;
+    if (clamped < Duration.zero) clamped = Duration.zero;
+    if (clamped > duration) clamped = duration;
+    player.seekTo(clamped);
+    if (mounted) {
+      setState(() {
+        _seekNotice =
+            '${_formatDuration(clamped)} / ${_formatDuration(duration)}';
+        _controlsVisible = true;
+      });
+      _scheduleControlsHide();
+    }
+  }
+
   Future<void> _openFullscreen() async {
     final player = _player;
     if (player == null) return;
-    final result = await Navigator.of(context, rootNavigator: true)
-        .push<_FullscreenResult>(
-      PageRouteBuilder<_FullscreenResult>(
-        opaque: true,
-        pageBuilder: (_, __, ___) => _FullscreenVideoOverlay(
-          player: player,
-          title: widget.title,
-          danmaku: _danmaku,
-          qualities: widget.qualities,
-          selectedQuality: _selected,
-          showDanmaku: _showDanmaku,
-          danmakuOpacity: _danmakuOpacity,
-          danmakuSize: _danmakuSize,
-          defaultQuality: _qualityPreference,
-          autoPlay: _autoPlay,
-          volume: _volume,
-          playbackSpeed: _playbackSpeed,
-          onSendDanmaku: sendDanmakuText,
-          onSelectQuality: _selectForFullscreen,
+    _isFullscreen = true;
+    try {
+      final result = await Navigator.of(context, rootNavigator: true)
+          .push<_FullscreenResult>(
+        PageRouteBuilder<_FullscreenResult>(
+          opaque: true,
+          pageBuilder: (_, __, ___) => _FullscreenVideoOverlay(
+            player: player,
+            title: widget.title,
+            danmaku: _danmaku,
+            qualities: widget.qualities,
+            selectedQuality: _selected,
+            showDanmaku: _showDanmaku,
+            danmakuOpacity: _danmakuOpacity,
+            danmakuSize: _danmakuSize,
+            defaultQuality: _qualityPreference,
+            autoPlay: _autoPlay,
+            volume: _volume,
+            playbackSpeed: _playbackSpeed,
+            onSendDanmaku: sendDanmakuText,
+            onSelectQuality: _selectForFullscreen,
+          ),
         ),
-      ),
-    );
-    if (!mounted) return;
-    if (result != null) {
-      setState(() {
-        _controlsVisible = true;
-        _showDanmaku = result.showDanmaku;
-        _volume = result.volume;
-        _playbackSpeed = result.playbackSpeed;
-      });
-      widget.onDanmakuChanged?.call(_showDanmaku);
-      if (result.quality != null && result.quality != _selected) {
-        await _select(result.quality!);
+      );
+      if (!mounted) return;
+      if (result != null) {
+        setState(() {
+          _controlsVisible = true;
+          _showDanmaku = result.showDanmaku;
+          _volume = result.volume;
+          _playbackSpeed = result.playbackSpeed;
+        });
+        widget.onDanmakuChanged?.call(_showDanmaku);
+        if (result.quality != null && result.quality != _selected) {
+          await _select(result.quality!);
+        }
+      } else {
+        setState(() => _controlsVisible = true);
       }
-    } else {
-      setState(() => _controlsVisible = true);
+    } finally {
+      _isFullscreen = false;
     }
   }
 
@@ -1983,20 +2181,22 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
             .take(12)
             .toList(growable: false)
         : const <DanmakuItem>[];
-    // Keep portrait playback at most two thirds of the screen height so
-    // very tall ("异形") videos do not push the controls out of reach. In
-    // landscape the surface fills the whole player pane and the video is
-    // centered inside it at its original aspect ratio.
+    // 常规（横屏比例）视频最多占屏幕高度 2/3；竖屏比例视频（高大于宽）
+    // 缩放到正常 16:9 比例的播放框（黑边居中），避免固定播放器占用过多
+    // 显示区域、遮挡下方内容。横屏布局中播放器撑满左栏不受影响。
     final aspectRatio = value?.aspectRatio ?? 16 / 9;
     final screenSize = MediaQuery.sizeOf(context);
     final maxHeight = screenSize.height * 2 / 3;
+    final portraitCap = screenSize.width * 9 / 16;
+    final heightCap =
+        aspectRatio < 1 && portraitCap < maxHeight ? portraitCap : maxHeight;
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return LayoutBuilder(
       builder: (context, constraints) {
         final naturalVideoHeight = constraints.maxWidth / aspectRatio;
         final videoHeight =
-            naturalVideoHeight > maxHeight ? maxHeight : naturalVideoHeight;
+            naturalVideoHeight > heightCap ? heightCap : naturalVideoHeight;
         final videoWidth = videoHeight * aspectRatio;
         final availableHeight = constraints.maxHeight;
         final surfaceHeight =
@@ -2019,6 +2219,8 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
         onLongPressStart: (_) => _setLongPressSpeed(true),
         onLongPressEnd: (_) => _setLongPressSpeed(false),
         onLongPressCancel: () => _setLongPressSpeed(false),
+        onHorizontalDragStart: _startDragSeek,
+        onHorizontalDragUpdate: _updateDragSeek,
         onVerticalDragUpdate: (details) => _handleVerticalSlide(
             details, MediaQuery.sizeOf(context).width, videoHeight),
         onVerticalDragEnd: (_) => _clearSlideFeedback(),
@@ -2101,6 +2303,20 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                                       icon: const Icon(
                                           Icons.arrow_back_rounded),
                                     ),
+                                    // 仅竖屏显示：一键回到首页，
+                                    // 避免连续打开多个详情页时需要反复返回。
+                                    if (MediaQuery.orientationOf(context) ==
+                                        Orientation.portrait)
+                                      IconButton(
+                                        color: Colors.white,
+                                        tooltip: '返回首页',
+                                        onPressed: () => Navigator.of(context,
+                                                rootNavigator: true)
+                                            .popUntil(
+                                                (route) => route.isFirst),
+                                        icon: const Icon(
+                                            Icons.home_rounded),
+                                      ),
                                     Expanded(
                                       child: Text(
                                         selected == null
@@ -2262,17 +2478,22 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                       ),
                     ),
                     if (_seekNotice != null && _controlsVisible)
-                      IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
-                            child: Text(_seekNotice!,
-                                style: const TextStyle(color: Colors.white)),
+                      // 位于中央播放/暂停按钮下方，避免重叠。
+                      Align(
+                        alignment: const Alignment(0, 0.38),
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 8),
+                              child: Text(_seekNotice!,
+                                  style:
+                                      const TextStyle(color: Colors.white)),
+                            ),
                           ),
                         ),
                       ),
@@ -2374,9 +2595,13 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
   var _switchingQuality = false;
   double _doubleTapX = 0;
   Timer? _hideTimer;
+  Timer? _ticker;
   final _danmakuInput = TextEditingController();
   var _sendingDanmaku = false;
   _SlideFeedback? _slideFeedback;
+  String? _seekNotice;
+  double _dragSeekStartDx = 0;
+  Duration _dragSeekBase = Duration.zero;
 
   @override
   void initState() {
@@ -2398,6 +2623,10 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
       windowManager.setFullScreen(true).catchError((_) {});
     }
     _scheduleHide();
+    _ticker = Timer.periodic(const Duration(milliseconds: 350), (_) {
+      if (mounted && _player.value.isPlaying) setState(() {});
+      _checkAutoNextPart();
+    });
   }
 
   void _close([VideoQuality? quality]) => Navigator.of(context).pop(
@@ -2412,6 +2641,7 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _ticker?.cancel();
     _danmakuInput.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
@@ -2462,6 +2692,24 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
     Future<void>.delayed(Duration.zero, () {
       if (mounted) _selectQuality(quality);
     });
+  }
+
+  /// 当前分P播放结束后自动连播下一分P（全屏层自己替换共享控制器）。
+  Future<void> _checkAutoNextPart() async {
+    if (_switchingQuality) return;
+    final value = _player.value;
+    if (value.duration <= Duration.zero) return;
+    if (value.isPlaying) return;
+    if (value.position < value.duration) return;
+    final selected = _selectedQuality;
+    if (selected == null) return;
+    final next =
+        _matchingPartQuality(widget.qualities, selected, selected.part + 1);
+    if (next == null) return;
+    await _selectQuality(next);
+    if (mounted && !_player.value.isPlaying) {
+      await _player.play();
+    }
   }
 
   void _scheduleHide() {
@@ -2525,7 +2773,40 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
     }
     await _player.seekTo(target);
     if (mounted) {
-      setState(() => _controlsVisible = true);
+      setState(() {
+        _controlsVisible = true;
+        _seekNotice =
+            '${seconds > 0 ? '+' : ''}$seconds 秒';
+      });
+      _scheduleHide();
+    }
+  }
+
+  /// 左右拖动调整进度：记录按下时的播放位置，随横向位移比例式拖动。
+  void _startDragSeek(DragStartDetails details) {
+    _dragSeekStartDx = details.globalPosition.dx;
+    _dragSeekBase = _player.value.position;
+  }
+
+  void _updateDragSeek(DragUpdateDetails details) {
+    final duration = _player.value.duration;
+    if (duration <= Duration.zero) return;
+    final width = MediaQuery.sizeOf(context).width;
+    final deltaDx = details.globalPosition.dx - _dragSeekStartDx;
+    final target = _dragSeekBase +
+        Duration(
+            milliseconds:
+                (deltaDx / width * duration.inMilliseconds).round());
+    var clamped = target;
+    if (clamped < Duration.zero) clamped = Duration.zero;
+    if (clamped > duration) clamped = duration;
+    _player.seekTo(clamped);
+    if (mounted) {
+      setState(() {
+        _seekNotice =
+            '${_formatDuration(clamped)} / ${_formatDuration(duration)}';
+        _controlsVisible = true;
+      });
       _scheduleHide();
     }
   }
@@ -2544,6 +2825,8 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
             final width = MediaQuery.sizeOf(context).width;
             _seekBy(_doubleTapX < width / 2 ? -10 : 10);
           },
+          onHorizontalDragStart: _startDragSeek,
+          onHorizontalDragUpdate: _updateDragSeek,
           onVerticalDragUpdate: (details) => _handleVerticalSlide(
               details,
               MediaQuery.sizeOf(context).width,
@@ -2890,6 +3173,26 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                           IgnorePointer(
                             child: _VerticalSlideFeedback(
                                 feedback: _slideFeedback!),
+                          ),
+                        if (_seekNotice != null && _controlsVisible)
+                          // 位于中央播放/暂停按钮下方，避免重叠。
+                          Align(
+                            alignment: const Alignment(0, 0.38),
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                  child: Text(_seekNotice!,
+                                      style: const TextStyle(
+                                          color: Colors.white)),
+                                ),
+                              ),
+                            ),
                           ),
                       ],
                     );
@@ -3436,12 +3739,14 @@ class _CommentSectionState extends State<_CommentSection> {
 }
 
 class _CommentSpans extends StatelessWidget {
-  const _CommentSpans({required this.spans});
+  const _CommentSpans({required this.spans, required this.onLinkTap});
 
   final List<CommentSpan> spans;
+  final void Function(String url) onLinkTap;
 
   @override
-  Widget build(BuildContext context) => ContentSpans(spans: spans);
+  Widget build(BuildContext context) =>
+      ContentSpans(spans: spans, onLinkTap: onLinkTap);
 }
 
 class _CommentCard extends StatefulWidget {
@@ -3460,10 +3765,17 @@ class _CommentCard extends StatefulWidget {
 }
 
 class _CommentReplyDialog extends StatefulWidget {
-  const _CommentReplyDialog({required this.onSubmit, required this.onSuccess});
+  const _CommentReplyDialog({
+    required this.onSubmit,
+    required this.onSuccess,
+    this.initialText = '',
+  });
 
   final Future<void> Function(List<CommentSpan> spans) onSubmit;
   final VoidCallback onSuccess;
+
+  /// 预填文本（如“回复 @xxx ”前缀）。
+  final String initialText;
 
   @override
   State<_CommentReplyDialog> createState() => _CommentReplyDialogState();
@@ -3510,6 +3822,7 @@ class _CommentReplyDialogState extends State<_CommentReplyDialog> {
                     key: _inputKey,
                     hintText: '友善交流，理性发言',
                     fontSize: 14,
+                    initialText: widget.initialText,
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -3554,7 +3867,12 @@ class _CommentReplyDialogState extends State<_CommentReplyDialog> {
 class _CommentCardState extends State<_CommentCard> {
   static final Map<int, UserProfile> _userCache = {};
 
-  Future<List<CommunityComment>>? _replies;
+  List<CommunityComment>? _replies;
+  var _repliesLoading = false;
+
+  /// 本地新增/删除回复的数量，用于修正顶部“N 条回复”计数。
+  int _replyDelta = 0;
+
   Future<UserProfile?>? _profile;
   late int _likes;
   late bool _liked;
@@ -3622,7 +3940,31 @@ class _CommentCardState extends State<_CommentCard> {
             UserProfilePage(controller: widget.controller, userId: userId)));
   }
 
-  void _showReplyComposer() {
+  Future<void> _loadReplies() async {
+    setState(() => _repliesLoading = true);
+    try {
+      final list = await widget.controller.commentReplies(widget.comment.id);
+      if (!mounted) return;
+      setState(() {
+        _replies = list;
+        _repliesLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _repliesLoading = false);
+    }
+  }
+
+  /// 展开/收起二级评论列表。
+  void _toggleReplies() {
+    if (_replies != null) {
+      setState(() => _replies = null);
+      return;
+    }
+    _loadReplies();
+  }
+
+  /// 打开回复编辑器；[mention] 非空时代表“回复 @xxx”的二级回复，会预填 @名 前缀。
+  void _showReplyComposer({String? mention}) {
     if (widget.controller.session == null) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('请先在“我的”页面登录后再回复')));
@@ -3632,15 +3974,15 @@ class _CommentCardState extends State<_CommentCard> {
       context: context,
       useRootNavigator: true,
       builder: (_) => _CommentReplyDialog(
+        initialText: mention == null ? '' : '@$mention ',
         onSubmit: (spans) => widget.controller.createCommentReply(
           commentId: widget.comment.id,
           spans: spans,
         ),
         onSuccess: () {
           if (!mounted) return;
-          setState(() {
-            _replies = widget.controller.commentReplies(widget.comment.id);
-          });
+          setState(() => _replyDelta++);
+          _loadReplies();
           ScaffoldMessenger.of(context)
               .showSnackBar(const SnackBar(content: Text('回复已发布')));
         },
@@ -3821,7 +4163,11 @@ class _CommentCardState extends State<_CommentCard> {
                 ? Text(comment.content.isEmpty
                     ? '（该评论没有文本内容）'
                     : comment.content)
-                : _CommentSpans(spans: comment.spans),
+                : _CommentSpans(
+                    spans: comment.spans,
+                    onLinkTap: (url) => openContentLink(
+                        context, widget.controller, url),
+                  ),
             if (comment.images.isNotEmpty) ...[
               const SizedBox(height: 8),
               SizedBox(
@@ -3899,12 +4245,10 @@ class _CommentCardState extends State<_CommentCard> {
                   ),
                 ),
                 const SizedBox(width: 14),
-                if (comment.replyCount > 0)
+                if (comment.replyCount + _replyDelta > 0)
                   TextButton(
-                    onPressed: () => setState(() {
-                      _replies ??= widget.controller.commentReplies(comment.id);
-                    }),
-                    child: Text('${comment.replyCount} 条回复'),
+                    onPressed: _toggleReplies,
+                    child: Text('${comment.replyCount + _replyDelta} 条回复'),
                   ),
                 TextButton(
                   onPressed: _showReplyComposer,
@@ -3917,48 +4261,45 @@ class _CommentCardState extends State<_CommentCard> {
               ],
             ),
             if (_replies != null)
-              FutureBuilder<List<CommunityComment>>(
-                future: _replies,
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Padding(
-                      padding: EdgeInsets.all(8),
-                      child: LinearProgressIndicator(),
-                    );
-                  }
-                  return Container(
-                    padding: const EdgeInsets.only(left: 12),
-                    decoration: const BoxDecoration(
-                      border:
-                          Border(left: BorderSide(color: Color(0xffdddddd))),
-                    ),
-                    child: Column(
-                      children: snapshot.data!
-                          .map((reply) => Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 6),
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                          '${reply.authorName.isEmpty ? '用户 ${reply.userId}' : reply.authorName}：'),
-                                      if (reply.spans.isEmpty)
-                                        Text(reply.content.isEmpty
-                                            ? '（该评论没有文本内容）'
-                                            : reply.content)
-                                      else
-                                        _CommentSpans(spans: reply.spans),
-                                    ],
-                                  ),
-                                ),
-                              ))
-                          .toList(),
-                    ),
-                  );
-                },
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xfff4f5fa),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    if (_repliesLoading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 6),
+                        child: LinearProgressIndicator(),
+                      ),
+                    if (_replies!.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('暂无回复',
+                            style: TextStyle(
+                                color: Colors.blueGrey, fontSize: 12.5)),
+                      )
+                    else
+                      ..._replies!.map((reply) => _CommentReplyTile(
+                            controller: widget.controller,
+                            rootCommentId: widget.comment.id,
+                            reply: reply,
+                            onReply: (name) =>
+                                _showReplyComposer(mention: name),
+                            onDeleted: () {
+                              if (!mounted) return;
+                              setState(() {
+                                _replies?.removeWhere(
+                                    (item) => item.id == reply.id);
+                                _replyDelta--;
+                              });
+                            },
+                          )),
+                  ],
+                ),
               ),
           ],
         ),
@@ -3968,9 +4309,311 @@ class _CommentCardState extends State<_CommentCard> {
   }
 }
 
-String _formatDuration(Duration value) {
-  String two(int number) => number.toString().padLeft(2, '0');
-  return '${two(value.inMinutes.remainder(60))}:${two(value.inSeconds.remainder(60))}';
+/// 二级评论（回复）：头像 + 昵称 + 内容 + 点赞/回复/删除操作，长按可复制或删除。
+class _CommentReplyTile extends StatefulWidget {
+  const _CommentReplyTile({
+    required this.controller,
+    required this.rootCommentId,
+    required this.reply,
+    this.onReply,
+    this.onDeleted,
+  });
+
+  final AppController controller;
+  final int rootCommentId;
+  final CommunityComment reply;
+
+  /// 回复该二级评论（预填 @昵称 前缀）。
+  final void Function(String userName)? onReply;
+
+  /// 删除成功后回调（供父级移除列表项并修正计数）。
+  final VoidCallback? onDeleted;
+
+  @override
+  State<_CommentReplyTile> createState() => _CommentReplyTileState();
+}
+
+class _CommentReplyTileState extends State<_CommentReplyTile> {
+  late int _likes;
+  late bool _liked;
+  var _likeBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _likes = widget.reply.likes;
+    _liked = widget.reply.liked;
+  }
+
+  Future<void> _toggleLike() async {
+    if (_likeBusy) return;
+    if (widget.controller.session == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('请先在“我的”页面登录后再点赞')));
+      return;
+    }
+    final target = !_liked;
+    setState(() {
+      _likeBusy = true;
+      _liked = target;
+      _likes += target ? 1 : -1;
+    });
+    try {
+      await widget.controller.setCommentReaction(
+        commentId: widget.reply.id,
+        like: target,
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _liked = !target;
+          _likes += target ? -1 : 1;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _likeBusy = false);
+    }
+  }
+
+  void _openUser() {
+    final userId = widget.reply.userId;
+    if (userId == 0) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => UserProfilePage(
+            controller: widget.controller, userId: userId)));
+  }
+
+  /// 长按菜单：复制回复（所有人可用）、删除回复（仅自己）。
+  Future<void> _showActions() async {
+    final reply = widget.reply;
+    final myId = widget.controller.session?.userId;
+    final isMine = myId != null && reply.userId == myId;
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.copy_rounded),
+              title: const Text('复制回复'),
+              onTap: () async {
+                Navigator.of(sheetContext).pop();
+                await Clipboard.setData(
+                    ClipboardData(text: reply.content));
+                if (mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(const SnackBar(content: Text('回复已复制')));
+                }
+              },
+            ),
+            if (isMine)
+              ListTile(
+                leading: Icon(Icons.delete_outline_rounded,
+                    color: Theme.of(sheetContext).colorScheme.error),
+                title: Text('删除回复',
+                    style: TextStyle(
+                        color: Theme.of(sheetContext).colorScheme.error)),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _confirmDelete();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete() async {
+    final reply = widget.reply;
+    final myId = widget.controller.session?.userId;
+    if (myId == null || reply.userId != myId) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('只能删除自己的回复')));
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) => AlertDialog(
+        title: const Text('删除回复'),
+        content: const Text('删除后无法恢复，确定删除这条回复吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.controller.deleteComment(reply.id);
+      if (!mounted) return;
+      widget.onDeleted?.call();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('回复已删除')));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('删除失败：$error')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reply = widget.reply;
+    final name =
+        reply.authorName.isEmpty ? '用户 ${reply.userId}' : reply.authorName;
+    final letter = name.isEmpty ? 'U' : name.substring(0, 1);
+    final myId = widget.controller.session?.userId;
+    final isMine = myId != null && reply.userId == myId;
+    return GestureDetector(
+      onLongPress: _showActions,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              customBorder: const CircleBorder(),
+              onTap: reply.userId == 0 ? null : _openUser,
+              child: CircleAvatar(
+                radius: 13,
+                backgroundColor:
+                    Theme.of(context).colorScheme.primaryContainer,
+                foregroundImage:
+                    reply.avatar.isEmpty ? null : NetworkImage(reply.avatar),
+                child: Text(letter,
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w700)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: reply.userId == 0 ? null : _openUser,
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Text(name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      ),
+                      if (reply.createdAt != null)
+                        Text(_formatDate(reply.createdAt!),
+                            style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  if (reply.spans.isEmpty)
+                    Text(
+                      reply.content.isEmpty ? '（该回复没有文本内容）' : reply.content,
+                      style: const TextStyle(
+                          color: Colors.blueGrey,
+                          fontSize: 13.5,
+                          height: 1.4),
+                    )
+                  else
+                    ContentSpans(
+                      spans: reply.spans,
+                      textStyle: const TextStyle(
+                          color: Colors.blueGrey, fontSize: 13.5, height: 1.4),
+                      stickerSize: 26,
+                      onLinkTap: (url) =>
+                          openContentLink(context, widget.controller, url),
+                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: _toggleLike,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _liked
+                                    ? Icons.thumb_up_alt_rounded
+                                    : Icons.thumb_up_alt_outlined,
+                                size: 13,
+                                color: _liked
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.blueGrey,
+                              ),
+                              const SizedBox(width: 3),
+                              Text('$_likes',
+                                  style: Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: () => widget.onReply?.call(name),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 2),
+                          child: Text('回复',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary)),
+                        ),
+                      ),
+                      if (isMine) ...[
+                        const SizedBox(width: 12),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: _confirmDelete,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 2),
+                            child: Icon(Icons.delete_outline_rounded,
+                                size: 15,
+                                color: Theme.of(context).colorScheme.error),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 String _formatDate(DateTime value) =>
@@ -3978,3 +4621,8 @@ String _formatDate(DateTime value) =>
 
 String _formatDateTime(DateTime? value) =>
     value == null ? '刚刚' : _formatDate(value);
+
+String _formatDuration(Duration value) {
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(value.inMinutes.remainder(60))}:${two(value.inSeconds.remainder(60))}';
+}

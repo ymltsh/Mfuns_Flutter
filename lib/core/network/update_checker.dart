@@ -105,15 +105,20 @@ class UpdateChecker {
   }
 
   /// 从加速站读取仓库内的更新清单（version.json）。
-  static Future<UpdateManifest> fetch() async {
+  ///
+  /// [acceleratorBase] 为用户自定义加速地址；空值或异常时回退默认加速站。
+  static Future<UpdateManifest> fetch({String? acceleratorBase}) async {
+    final base = _normalizeBase(acceleratorBase ?? '');
+    final url = '$base${AppConfig.updateManifestRawUrl}';
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 12);
     try {
       final request = await client
-          .getUrl(Uri.parse(AppConfig.updateManifestUrl))
+          .getUrl(Uri.parse(url))
           .timeout(const Duration(seconds: 12));
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      final response = await request.close().timeout(const Duration(seconds: 12));
+      final response =
+          await request.close().timeout(const Duration(seconds: 12));
       final text = await utf8.decoder.bind(response).join();
       if (response.statusCode != 200) {
         throw HttpException('更新服务器返回 ${response.statusCode}');
@@ -127,4 +132,22 @@ class UpdateChecker {
       client.close(force: true);
     }
   }
+
+  /// 规范化加速地址：去空格、补全 http(s):// 前缀与结尾斜杠。
+  static String normalizeBase(String value) {
+    var base = value.trim();
+    if (base.isEmpty) return AppConfig.defaultAcceleratorBase;
+    if (!base.startsWith('http://') && !base.startsWith('https://')) {
+      base = 'https://$base';
+    }
+    if (!base.endsWith('/')) base = '$base/';
+    return base;
+  }
+
+  static String _normalizeBase(String value) =>
+      normalizeBase(value.isEmpty ? AppConfig.defaultAcceleratorBase : value);
+
+  /// 拼接加速后的完整地址（用于下载链接等任意 GitHub 地址）。
+  static String accelerate(String acceleratorBase, String url) =>
+      '${normalizeBase(acceleratorBase)}$url';
 }

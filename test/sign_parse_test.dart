@@ -14,18 +14,19 @@ void main() {
   });
 
   test('parses the real per-day status array from sign_list', () {
-    // 服务端返回 31 项每日状态数组，索引 i 表示第 i+1 日，"1"=已签到。
-    final list = List.generate(31, (_) => '0');
-    for (final day in [1, 2, 4, 7]) {
-      list[day - 1] = '1';
+    // 服务端返回 1 索引的每日状态数组：list[0] 为占位，list[i]="1" 表示
+    // 第 i 天已签到（与 Web 端 sign[day] 一致），31 天月份长度为 32。
+    final list = List.generate(32, (_) => '0');
+    for (final day in [2, 4, 6, 7, 15]) {
+      list[day] = '1';
     }
     final info = SignInfo.fromJson({
       'list': list,
-      'month_times': 4,
+      'month_times': 5,
       'all_times': 124,
     });
-    expect(info.signedDays, [1, 2, 4, 7]);
-    expect(info.monthTimes, 4);
+    expect(info.signedDays, [2, 4, 6, 7, 15]);
+    expect(info.monthTimes, 5);
     expect(info.allTimes, 124);
   });
 

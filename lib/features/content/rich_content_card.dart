@@ -17,10 +17,14 @@ class RichContentCard extends StatelessWidget {
     super.key,
     required this.source,
     this.padding = const EdgeInsets.all(16),
+    this.onLinkTap,
   });
 
   final String source;
   final EdgeInsetsGeometry padding;
+
+  /// 链接点击回调（用于应用内打开站内链接）；为 null 时复制链接。
+  final void Function(String url)? onLinkTap;
 
   @override
   Widget build(BuildContext context) {
@@ -50,10 +54,14 @@ class RichContentCard extends StatelessWidget {
                   }
                   return _ArticleImage(uri: uri, alt: alt ?? '图片');
                 },
-                onTapLink: (_, href, __) async {
+                onTapLink: (_, href, __) {
                   final link = _safeUri(href);
                   if (link == null) return;
-                  await Clipboard.setData(ClipboardData(text: link.toString()));
+                  if (onLinkTap != null) {
+                    onLinkTap!(link.toString());
+                    return;
+                  }
+                  Clipboard.setData(ClipboardData(text: link.toString()));
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('链接已复制')),

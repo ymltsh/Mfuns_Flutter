@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const Color _defaultSeed = Color(0xFF66CCFF);
+const Color _defaultSeed = Color(0xFF5094B2);
 
 class AppPalette extends ThemeExtension<AppPalette> {
   const AppPalette({required this.primary, required this.accent});

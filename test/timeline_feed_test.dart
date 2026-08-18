@@ -29,6 +29,42 @@ void main() {
     expect(feed.resource, isNull);
   });
 
+  test('parses auto-sync feeds into a content preview resource', () {
+    final feed = TimelineFeed.fromJson({
+      'id': 273061,
+      'user_id': 17627,
+      'resource_id': 122326,
+      'resource_type': 0,
+      'is_auto_sync': true,
+      'content': '<p>自动同步的文章内容</p>',
+      'title': '文章标题',
+      'created_at': 1786716804,
+      'user': {
+        'id': 17627,
+        'name': '微风与少年',
+        'avatar': '/static/avatar.jpg',
+      },
+    });
+
+    expect(feed.isAutoSync, isTrue);
+    expect(feed.resource, isNotNull);
+    expect(feed.resource!.id, 122326);
+    expect(feed.resource!.type, 0);
+    expect(feed.resource!.title, '文章标题');
+    expect(feed.resource!.author, '微风与少年');
+  });
+
+  test('keeps normal feeds without auto-sync resource null', () {
+    final feed = TimelineFeed.fromJson({
+      'id': 42,
+      'content': '<p>普通动态</p>',
+      'created_at': '2026-08-11 09:30:00',
+    });
+
+    expect(feed.isAutoSync, isFalse);
+    expect(feed.resource, isNull);
+  });
+
   test('parses the official auto-sync timeline schema from the browser', () {
     final feed = TimelineFeed.fromJson({
       'id': 272373,

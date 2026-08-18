@@ -46,4 +46,20 @@ void main() {
 
     expect(profile.level, isNull);
   });
+
+  test('parses a backpack item from the real API shape', () {
+    final item = BackpackItem.fromJson({
+      'id': 2,
+      'name': '补签卡',
+      'tag': 'resign_card',
+      'description': '用于补签',
+      'icon': '',
+      'count': 9,
+    });
+    expect(item.id, 2);
+    expect(item.name, '补签卡');
+    expect(item.tag, 'resign_card');
+    expect(item.description, '用于补签');
+    expect(item.count, 9);
+  });
 }

@@ -16,10 +16,14 @@ class InlineEmojiInput extends StatefulWidget {
     this.hintText = '说点什么…',
     this.fontSize = 15,
     this.onUploadImage,
+    this.initialText = '',
   });
 
   final String hintText;
   final double fontSize;
+
+  /// 预填文本（如“回复 @xxx ”前缀），仅在控件首次创建时生效。
+  final String initialText;
 
   /// Uploads picked image bytes and returns the media path (`/static/...`).
   final Future<String> Function(List<int> bytes, String filename)?
@@ -30,9 +34,15 @@ class InlineEmojiInput extends StatefulWidget {
 }
 
 class InlineEmojiInputState extends State<InlineEmojiInput> {
-  final TextEditingController _input = TextEditingController();
+  late final TextEditingController _input;
   final List<String> _images = [];
   var _isUploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _input = TextEditingController(text: widget.initialText);
+  }
 
   /// Text spans with `[pack-id]` markers converted to real stickers, ready
   /// for posting.

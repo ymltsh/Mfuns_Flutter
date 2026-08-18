@@ -85,7 +85,8 @@ class EmojiPackStore {
 
   Future<EmojiData> _fetch() async {
     final responses = await Future.wait([
-      _client.get('/v1/emoji_pack/list'),
+      // with_vip=1 会额外返回 VIP 专属表情包（如 simplevip）。
+      _client.get('/v1/emoji_pack/list', query: {'with_vip': 1}),
       _client.get('/v1/emoji_pack/face_text'),
     ]);
     return EmojiData.fromJson(responses[0].data, responses[1].data);

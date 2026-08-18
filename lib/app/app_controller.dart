@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import '../core/config/user_preferences.dart';
 import '../core/network/mfuns_api_client.dart';
 import '../features/auth/auth_repository.dart';
 import '../features/auth/session_store.dart';
@@ -88,6 +91,9 @@ class AppController extends ChangeNotifier {
   String? _signRankError;
   List<LevelSection> _levelSections = const [];
   bool _isLoadingLevelSections = false;
+  bool _autoSignIn = false;
+  Timer? _autoSignTimer;
+  int _autoSignAttemptedDay = 0;
 
   List<ContentPreview> get recommendations => _recommendations;
   List<ContentPreview> get searchResults => _searchResults;
@@ -132,6 +138,11 @@ class AppController extends ChangeNotifier {
   bool get hasMoreLatestItems => _hasMoreLatestItems;
   bool get isLoadingHistory => _isLoadingHistory;
   bool get isLoadingFavorites => _isLoadingFavorites;
+  bool get hasMoreHistory => _hasMoreHistory;
+  bool get isLoadingMoreHistory => _isLoadingMoreHistory;
+  List<BackpackItem> get backpack => _backpack;
+  bool get isLoadingBackpack => _isLoadingBackpack;
+  String? get backpackError => _backpackError;
   SignInfo? get signInfo => _signInfo;
   List<SignRankEntry> get signRank => _signRank;
   Map<int, List<SignAward>> get signAwards => _signAwards;
@@ -142,6 +153,7 @@ class AppController extends ChangeNotifier {
   String? get signRankError => _signRankError;
   List<LevelSection> get levelSections => _levelSections;
   bool get isLoadingLevelSections => _isLoadingLevelSections;
+  bool get autoSignIn => _autoSignIn;
 
   Future<void> initialize() async {
     _isRestoringSession = true;
@@ -159,6 +171,52 @@ class AppController extends ChangeNotifier {
       notifyListeners();
     }
     await Future.wait([refreshHome(), loadCategories(), loadLevelSections()]);
+    await _initAutoSign();
+  }
+
+  /// 开启自动签到：应用打开状态下每天零点尝试签到。
+  /// 启动时加载偏好并启动周期检查；不配置自启动权限。
+  Future<void> _initAutoSign() async {
+    _autoSignIn = await UserPreferences.loadAutoSignIn();
+    _autoSignTimer?.cancel();
+    if (!_autoSignIn) return;
+    _autoSignTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _maybeAutoSign();
+    });
+    _maybeAutoSign();
+  }
+
+  /// 设置自动签到开关并持久化。
+  Future<void> setAutoSignIn(bool enabled) async {
+    if (_autoSignIn == enabled) return;
+    _autoSignIn = enabled;
+    await UserPreferences.saveAutoSignIn(enabled);
+    _autoSignTimer?.cancel();
+    if (enabled) {
+      _autoSignTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        _maybeAutoSign();
+      });
+      _maybeAutoSign();
+    }
+    notifyListeners();
+  }
+
+  /// 自动签到：应用启动时（以及运行期间每天零点后）检查今日签到状态，
+  /// 若未签到则自动完成签到；每天最多成功一次。
+  Future<void> _maybeAutoSign() async {
+    if (!_autoSignIn || _session == null) return;
+    final now = DateTime.now();
+    if (_autoSignAttemptedDay == now.day) return;
+    _autoSignAttemptedDay = now.day;
+    try {
+      // 先查今日是否已签到，避免重复签到报错。
+      final info = await _home.signList();
+      if (info.signedDays.contains(now.day)) return;
+      await sign();
+    } catch (_) {
+      // 网络/接口失败时重置标记，允许下一次周期检查重试。
+      _autoSignAttemptedDay = 0;
+    }
   }
 
   /// 加载等级经验区间表（公开接口，通常只加载一次）。
@@ -366,7 +424,7 @@ class AppController extends ChangeNotifier {
     _latestItemsError = null;
     notifyListeners();
     try {
-      final page = await _latest.getLatest();
+      final page = await _latest.getLatest(user: _latestUserId());
       _latestItems = page.items;
       _latestBefore = page.nextBefore;
       _hasMoreLatestItems = page.items.isNotEmpty && page.nextBefore != null;
@@ -388,7 +446,8 @@ class AppController extends ChangeNotifier {
     _latestItemsError = null;
     notifyListeners();
     try {
-      final page = await _latest.getLatest(before: _latestBefore);
+      final page =
+          await _latest.getLatest(before: _latestBefore, user: _latestUserId());
       final ids = _latestItems.map((item) => item.stableId).toSet();
       final additions = page.items
           .where((item) => !ids.contains(item.stableId))
@@ -402,6 +461,59 @@ class AppController extends ChangeNotifier {
       _isLoadingMoreLatestItems = false;
       notifyListeners();
     }
+  }
+
+  /// 最新页标记使用登录用户 UID；未登录返回空（服务端忽略）。
+  String _latestUserId() => _session?.userId?.toString() ?? '';
+
+  /// 不友好标记（必须登录）：服务端按 UID 记录，同一用户只计一次；
+  /// 达到 5 人后帖子被服务端屏蔽并从列表移除。
+  Future<LatestMarkResult> markLatestItem(LatestMfunsItem item) async {
+    final userId = _session?.userId;
+    if (userId == null) {
+      throw const LatestMfunsException('请先登录后再标记');
+    }
+    final result = await _latest.markItem(
+      id: item.id,
+      type: item.type,
+      user: '$userId',
+    );
+    final marked =
+        item.copyWith(markCount: result.markCount, markedByMe: true);
+    final updated = <LatestMfunsItem>[];
+    for (final existing in _latestItems) {
+      if (existing.stableId != item.stableId) {
+        updated.add(existing);
+      } else if (!result.blocked) {
+        updated.add(marked);
+      }
+    }
+    _latestItems = updated;
+    notifyListeners();
+    return result;
+  }
+
+  /// 取消不友好标记（必须登录）；帖子被屏蔽后无法再取消。
+  Future<LatestMarkResult> unmarkLatestItem(LatestMfunsItem item) async {
+    final userId = _session?.userId;
+    if (userId == null) {
+      throw const LatestMfunsException('请先登录后再操作');
+    }
+    final result = await _latest.cancelMark(
+      id: item.id,
+      type: item.type,
+      user: '$userId',
+    );
+    final unmarked =
+        item.copyWith(markCount: result.markCount, markedByMe: false);
+    final updated = <LatestMfunsItem>[];
+    for (final existing in _latestItems) {
+      updated.add(
+          existing.stableId == item.stableId ? unmarked : existing);
+    }
+    _latestItems = updated;
+    notifyListeners();
+    return result;
   }
 
   Future<void> _refreshTimeline({required bool following}) async {
@@ -509,16 +621,70 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  double? _historyCursor;
+  bool _hasMoreHistory = false;
+  bool _isLoadingMoreHistory = false;
+  List<BackpackItem> _backpack = const [];
+  bool _isLoadingBackpack = false;
+  String? _backpackError;
+
   Future<void> loadHistory() async {
     _isLoadingHistory = true;
     _historyError = null;
     notifyListeners();
     try {
-      _history = await _home.getHistory();
+      final page = await _home.getHistory();
+      _history = page.items;
+      _historyCursor = page.nextStartTime;
+      _hasMoreHistory = page.items.isNotEmpty && page.nextStartTime != null;
     } on MfunsApiException catch (error) {
       _historyError = error.message;
     } finally {
       _isLoadingHistory = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMoreHistory() async {
+    if (_isLoadingMoreHistory || !_hasMoreHistory || _historyCursor == null) {
+      return;
+    }
+    _isLoadingMoreHistory = true;
+    notifyListeners();
+    try {
+      final page = await _home.getHistory(startTime: _historyCursor);
+      final seen = _history.map((item) => item.id).toSet();
+      final additions = page.items
+          .where((item) => !seen.contains(item.id))
+          .toList(growable: false);
+      _history = [..._history, ...additions];
+      _historyCursor = page.nextStartTime;
+      _hasMoreHistory = additions.isNotEmpty && page.nextStartTime != null;
+    } on MfunsApiException {
+      // 滚动到底可再次触发加载。
+    } finally {
+      _isLoadingMoreHistory = false;
+      notifyListeners();
+    }
+  }
+
+  /// 我的资产：加载背包道具（需登录），喵币余额随会话刷新。
+  Future<void> loadBackpack() async {
+    if (_session == null) {
+      _backpack = const [];
+      _backpackError = '登录后可查看背包道具';
+      notifyListeners();
+      return;
+    }
+    _isLoadingBackpack = true;
+    _backpackError = null;
+    notifyListeners();
+    try {
+      _backpack = await _home.getUserBackpack();
+    } on MfunsApiException catch (error) {
+      _backpackError = error.message;
+    } finally {
+      _isLoadingBackpack = false;
       notifyListeners();
     }
   }
@@ -665,6 +831,13 @@ class AppController extends ChangeNotifier {
       _home.setCommentReaction(commentId: commentId, like: like);
 
   Future<void> deleteFeed(int feedId) => _home.deleteFeed(feedId);
+
+  Future<List<UserProfile>> followList({
+    required int userId,
+    required String type,
+    int lastId = -1,
+  }) =>
+      _home.getFollowList(userId: userId, type: type, lastId: lastId);
 
   Future<List<DanmakuItem>> danmaku(int videoId, int part) =>
       _home.getDanmaku(videoId, part);

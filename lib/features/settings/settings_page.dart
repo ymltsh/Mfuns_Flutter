@@ -40,6 +40,7 @@ class _SettingsPageState extends State<SettingsPage> {
   var _danmakuSize = 20.0;
   var _loaded = false;
   var _checkingUpdate = false;
+  String _acceleratorBase = AppConfig.defaultAcceleratorBase;
 
   @override
   void initState() {
@@ -52,21 +53,74 @@ class _SettingsPageState extends State<SettingsPage> {
       UserPreferences.loadDanmakuOn(),
       UserPreferences.loadDanmakuOpacity(),
       UserPreferences.loadDanmakuSize(),
+      UserPreferences.loadAcceleratorBase(),
     ]);
     if (!mounted) return;
     setState(() {
       _danmakuOn = results[0] as bool;
       _danmakuOpacity = results[1] as double;
       _danmakuSize = results[2] as double;
+      _acceleratorBase = results[3] as String;
       _loaded = true;
     });
+  }
+
+  Future<void> _configureAccelerator() async {
+    final controller = TextEditingController(text: _acceleratorBase);
+    final saved = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (context) => AlertDialog(
+        title: const Text('GitHub 加速地址'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '用于加速更新清单与安装包下载，直接拼接在 GitHub 地址前。',
+              style: TextStyle(fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                hintText: AppConfig.defaultAcceleratorBase,
+                labelText: '加速地址',
+                prefixIcon: Icon(Icons.bolt_rounded),
+              ),
+              onSubmitted: (_) => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final normalized = UpdateChecker.normalizeBase(controller.text);
+    setState(() => _acceleratorBase = normalized);
+    await UserPreferences.saveAcceleratorBase(normalized);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('加速地址已更新，检查更新将使用新的地址')));
+    }
+    controller.dispose();
   }
 
   Future<void> _checkUpdate() async {
     if (_checkingUpdate) return;
     setState(() => _checkingUpdate = true);
     try {
-      final manifest = await UpdateChecker.fetch();
+      final manifest =
+          await UpdateChecker.fetch(acceleratorBase: _acceleratorBase);
       if (!mounted) return;
       final latest = manifest.latest;
       if (latest == null || latest.version.isEmpty) {
@@ -147,8 +201,11 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           if (downloadUrl != null)
             FilledButton(
-              onPressed: () => launchUrl(Uri.parse(downloadUrl),
-                  mode: LaunchMode.externalApplication),
+              onPressed: () => launchUrl(
+                Uri.parse(UpdateChecker.accelerate(
+                    _acceleratorBase, downloadUrl)),
+                mode: LaunchMode.externalApplication,
+              ),
               child: const Text('下载更新'),
             ),
         ],
@@ -230,9 +287,12 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('设置'), centerTitle: true),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
-          children: [
+        // 监听 controller：自动签到等开关变化后立即反映到界面。
+        body: ListenableBuilder(
+          listenable: widget.controller,
+          builder: (context, _) => ListView(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+            children: [
             _SettingsCard(
               children: [
                 _SettingsTile(
@@ -291,6 +351,28 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 14),
             _SettingsCard(
               children: [
+                SwitchListTile(
+                  value: widget.controller.autoSignIn,
+                  title: const Text('自动签到',
+                      style: TextStyle(
+                          color: Colors.blueGrey, fontWeight: FontWeight.w700)),
+                  subtitle: const Text(
+                      '打开应用时检查签到状态，未签到则自动完成；运行期间每天 00:00 也会自动签到',
+                      style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                  secondary: CircleAvatar(
+                    backgroundColor:
+                        AppPalette.of(context).primary.withOpacity(.11),
+                    foregroundColor: AppPalette.of(context).primary,
+                    child: const Icon(Icons.event_repeat_rounded, size: 20),
+                  ),
+                  onChanged: (value) =>
+                      widget.controller.setAutoSignIn(value),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _SettingsCard(
+              children: [
                 _SettingsTile(
                   icon: Icons.system_update_alt_rounded,
                   title: '检查更新',
@@ -298,6 +380,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       ? '正在检查…'
                       : '当前 v${AppConfig.appVersion}，检查是否有新版本',
                   onTap: _checkingUpdate ? null : _checkUpdate,
+                ),
+                const Divider(height: 1, indent: 56),
+                _SettingsTile(
+                  icon: Icons.bolt_rounded,
+                  title: '下载加速配置',
+                  subtitle: '自定义 GitHub 加速地址，用于更新与下载',
+                  onTap: _configureAccelerator,
                 ),
               ],
             ),
@@ -324,6 +413,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
           ],
+          ),
         ),
       );
 }

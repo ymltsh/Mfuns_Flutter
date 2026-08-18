@@ -78,6 +78,7 @@ class TimelineFeed {
     required this.views,
     required this.images,
     required this.resource,
+    this.isAutoSync = false,
   });
 
   final int id;
@@ -93,6 +94,10 @@ class TimelineFeed {
   final List<String> images;
   final ContentPreview? resource;
 
+  /// 发送文章/视频时自动生成的同步动态：Web 端 /feed/{id} 会 302 跳转到
+  /// 对应内容页，App 端点击应直接打开文章/视频页。
+  final bool isAutoSync;
+
   factory TimelineFeed.fromJson(Map<String, dynamic> json) {
     final source = _asMap(json['feed']).isEmpty
         ? json
@@ -100,6 +105,8 @@ class TimelineFeed {
     final user = _asMap(source['user'] ?? source['user_info']);
     final extra = _asMap(source['extra']);
     final resource = _asMap(extra['resource']);
+    final autoSync =
+        source['is_auto_sync'] == true || source['is_auto_sync'] == 1;
     final like = _asMap(_asMap(source['like_status'])['like']);
     final rawContent =
         '${source['content'] ?? source['text'] ?? source['summary'] ?? resource['summary'] ?? resource['title'] ?? ''}';
@@ -136,9 +143,45 @@ class TimelineFeed {
           source['image_list'] ??
           source['pictures'] ??
           extra['images']),
-      resource: resource.isEmpty ? null : ContentPreview.fromJson(resource),
+      resource: _feedResource(source, user, autoSync),
+      isAutoSync: autoSync,
     );
   }
+}
+
+/// 动态引用的内容：优先取 `extra.resource`（普通分享动态）；自动同步动态
+/// （is_auto_sync）没有 extra.resource，用顶层 resource_id / resource_type
+/// 构造文章/视频预览，与 Web 端 302 跳转到内容页的行为一致。
+ContentPreview? _feedResource(
+  Map<String, dynamic> source,
+  Map<String, dynamic> user,
+  bool autoSync,
+) {
+  final extraResource = _asMap(_asMap(source['extra'])['resource']);
+  if (extraResource.isNotEmpty) {
+    return ContentPreview.fromJson(extraResource);
+  }
+  if (!autoSync) return null;
+  final resourceId = _asInt(source['resource_id']);
+  final resourceType = _asInt(source['resource_type']);
+  if (resourceId == null || resourceType == null || resourceId <= 0) {
+    return null;
+  }
+  return ContentPreview(
+    id: resourceId,
+    title: '${source['title'] ?? ''}',
+    summary: _toPlainText('${source['content'] ?? ''}'),
+    cover: _coverUrl(source['cover']),
+    author:
+        '${user['name'] ?? user['username'] ?? source['user_name'] ?? ''}',
+    category: '',
+    type: resourceType,
+    likes: _asInt(source['like_count']) ?? 0,
+    comments: _asInt(source['comment_count']) ?? 0,
+    views: _asInt(source['view_count']) ?? 0,
+    authorId: _asInt(user['id'] ?? user['user_id']),
+    authorAvatar: _coverUrl(user['avatar'] ?? user['face']),
+  );
 }
 
 class UserProfile {
@@ -288,6 +331,42 @@ class SignAward {
   factory SignAward.fromJson(Map<String, dynamic> json) => SignAward(
         desc: '${json['desc'] ?? ''}',
         type: '${json['type'] ?? ''}',
+      );
+}
+
+/// 一页浏览历史：条目与下一页游标（最后一条的 time，null 表示无更多）。
+class HistoryPage {
+  const HistoryPage({required this.items, this.nextStartTime});
+
+  final List<ContentPreview> items;
+  final double? nextStartTime;
+}
+
+/// 用户背包道具（`/v1/user/get_user_backpack`）：改名卡、补签卡等。
+class BackpackItem {
+  const BackpackItem({
+    required this.id,
+    required this.name,
+    required this.tag,
+    required this.description,
+    required this.icon,
+    required this.count,
+  });
+
+  final int id;
+  final String name;
+  final String tag;
+  final String description;
+  final String icon;
+  final int count;
+
+  factory BackpackItem.fromJson(Map<String, dynamic> json) => BackpackItem(
+        id: _asInt(json['id']) ?? 0,
+        name: '${json['name'] ?? ''}',
+        tag: '${json['tag'] ?? ''}',
+        description: '${json['description'] ?? ''}',
+        icon: _coverUrl(json['icon']),
+        count: _asInt(json['count']) ?? 0,
       );
 }
 
@@ -765,6 +844,9 @@ class NotifyItem {
   final String senderName;
   final String senderAvatar;
   final DateTime? createdAt;
+
+  /// 通知正文：优先取新收到的评论内容（`reply_text`），
+  /// 缺失时回退到 `text`（被评论的父内容）。
   final String text;
   final int? commentId;
 
@@ -788,7 +870,7 @@ class NotifyItem {
       senderAvatar: _coverUrl(sender['avatar'] ?? sender['face']),
       createdAt: _asDateTime(json['created_at'] ?? json['time']),
       text: _quillToText(
-          '${params['text'] ?? params['reply_text'] ?? params['content'] ?? ''}'),
+          '${params['reply_text'] ?? params['text'] ?? params['content'] ?? ''}'),
       commentId: _asInt(params['comment_id']),
       areaId: _asInt(params['area_id'] ?? json['area_id']),
       resourceId: _asInt(params['resource_id'] ??
@@ -1104,9 +1186,38 @@ class HomeRepository {
     return _toPreviewList(response.data);
   }
 
-  Future<List<ContentPreview>> getHistory() async {
-    final response = await _client.get('/v1/history/get');
-    return _toPreviewList(response.data);
+  /// 用户背包道具（需登录）：改名卡、补签卡等。
+  Future<List<BackpackItem>> getUserBackpack() async {
+    final response = await _client.get('/v1/user/get_user_backpack');
+    final list = _asMap(response.data)['list'];
+    if (list is! List) return const [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(BackpackItem.fromJson)
+        .where((item) => item.id != 0)
+        .toList(growable: false);
+  }
+
+  /// 一页浏览历史及下一页游标（`/v1/history/get`，按 start_time 分页）。
+  Future<HistoryPage> getHistory({double? startTime}) async {
+    final response = await _client.get(
+      '/v1/history/get',
+      query: {if (startTime != null) 'start_time': startTime},
+    );
+    final list = response.data;
+    double? next;
+    if (list is List) {
+      for (final entry in list.reversed) {
+        if (entry is Map<String, dynamic>) {
+          final time = _asDouble(entry['time']);
+          if (time != null && time > 0) {
+            next = time;
+            break;
+          }
+        }
+      }
+    }
+    return HistoryPage(items: _toPreviewList(list), nextStartTime: next);
   }
 
   Future<List<FavoriteFolder>> getFavoriteFolders(int userId) async {
@@ -1734,6 +1845,30 @@ class HomeRepository {
         if (!follow) 'unfollow': 1,
       });
 
+  /// 关注/粉丝列表（type=follow 关注 / fans 粉丝），last_id=-1 为第一页，
+  /// 之后传上一页最后一个条目的 id 翻页。
+  Future<List<UserProfile>> getFollowList({
+    required int userId,
+    required String type,
+    int lastId = -1,
+  }) async {
+    final response = await _client.get(
+      '/v1/follow/list',
+      query: {
+        'user_id': userId,
+        'last_id': lastId,
+        'type': type,
+      },
+    );
+    final rawList = _asMap(response.data)['list'];
+    if (rawList is! List) return const [];
+    return rawList
+        .whereType<Map<String, dynamic>>()
+        .map(UserProfile.fromJson)
+        .where((user) => user.id != 0)
+        .toList(growable: false);
+  }
+
   Future<List<VideoQuality>> getVideoQualities(int videoId) async {
     final response = await _client.get(
       '/v1/video/getPlayAddress',
@@ -1908,7 +2043,8 @@ int? _levelFromBadges(Object? value) {
 
 /// 解析签到日期列表为当月"日"数组。
 ///
-/// 服务端 `list` 是当月每日状态数组（第 i 项表示第 i+1 日，"1"=已签到）；
+/// 服务端 `list` 是 1 索引的当月每日状态数组：`list[0]` 为占位项，
+/// `list[i] == "1"` 表示第 i 天已签到（与 Web 端 `sign[day]` 一致）；
 /// 同时兼容旧格式的数字列表（[1, 3, 5]）与 "2026-08-03" 这类日期字符串。
 List<int> _signDays(Object? value) {
   if (value is! List) return const [];
@@ -1920,7 +2056,7 @@ List<int> _signDays(Object? value) {
       })) {
     final days = <int>[];
     for (var i = 0; i < entries.length; i++) {
-      if ('${entries[i]}'.trim() == '1') days.add(i + 1);
+      if (i > 0 && '${entries[i]}'.trim() == '1') days.add(i);
     }
     return days;
   }

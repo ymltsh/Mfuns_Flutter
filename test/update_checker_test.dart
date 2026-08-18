@@ -55,4 +55,25 @@ void main() {
     expect(UpdateChecker.isNewer('', 0, '1.0.5', 5), isFalse);
     expect(UpdateChecker.isNewer('abc', 0, '1.0.5', 5), isFalse);
   });
+
+  test('normalizeBase fills scheme and trailing slash', () {
+    expect(UpdateChecker.normalizeBase('hub.wgen.top'),
+        'https://hub.wgen.top/');
+    expect(UpdateChecker.normalizeBase('https://acc.example.com'),
+        'https://acc.example.com/');
+    expect(UpdateChecker.normalizeBase(' https://a.com/ '), 'https://a.com/');
+    expect(UpdateChecker.normalizeBase(''),
+        'https://hub.wgen.top/');
+  });
+
+  test('accelerate prefixes any GitHub url with the base', () {
+    expect(
+      UpdateChecker.accelerate(
+          'hub.wgen.top',
+          'https://github.com/ymltsh/Mfuns_Flutter/releases/'
+          'download/v1.0.8/mfuns-flutter-1.0.8.apk'),
+      'https://hub.wgen.top/https://github.com/ymltsh/Mfuns_Flutter/'
+      'releases/download/v1.0.8/mfuns-flutter-1.0.8.apk',
+    );
+  });
 }
