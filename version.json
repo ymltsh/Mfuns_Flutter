@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.1.7",
-    "build": 22,
-    "name": "Mfuns Flutter v1.1.7",
-    "date": "2026-08-16",
-    "notes": "修复：表情包列表请求补上 with_vip=1，VIP 专属表情包（simplevip）不再缺失。\n新增：单文件一键发布工具 release.py（引导模式 + CLI 参数，自动完成构建/发布/更新清单/推送）。",
+    "version": "1.2.0",
+    "build": 23,
+    "name": "Mfuns Flutter v1.2.0",
+    "date": "2026-08-19",
+    "notes": "新增\n- 媒体播放通知：播放视频后系统通知栏提供播放/暂停/进度控制（Android MediaSession）\n- 深链唤醒：m.mfuns.net / mfuns.wgen.top 链接可直接打开对应视频/文章/动态\n- 评论区：二级评论重新设计，支持回复、点赞、删除\n- 消息通知：评论通知显示收到的评论内容\n- 用户主页：新增发起私信、关注/粉丝列表入口\n- 多分P：切换分P从头播放，结束后自动连播下一P\n- 播放器：竖屏新增返回首页按钮\n- 自动签到：启动时检查并自动签到\n优化\n- 登录/主题弹层自动避让键盘\n- 退出登录增加二次确认",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.7/mfuns-flutter-1.1.7.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.7/mfuns-flutter-windows-1.1.7.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.0/mfuns-flutter-1.2.0.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.0/mfuns-flutter-windows-1.2.0.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.7"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.0"
   },
   "history": [
+    {
+      "version": "1.1.7",
+      "build": 22,
+      "name": "Mfuns Flutter v1.1.7",
+      "date": "2026-08-16",
+      "notes": "修复：表情包列表请求补上 with_vip=1，VIP 专属表情包（simplevip）不再缺失。\n新增：单文件一键发布工具 release.py（引导模式 + CLI 参数，自动完成构建/发布/更新清单/推送）。",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.7/mfuns-flutter-1.1.7.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.7/mfuns-flutter-windows-1.1.7.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.7"
+    },
     {
       "version": "1.1.6",
       "build": 19,
