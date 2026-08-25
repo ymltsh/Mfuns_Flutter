@@ -1,15 +1,15 @@
 {
   "latest": {
-    "version": "1.2.5",
+    "version": "1.2.6",
     "build": 30,
-    "name": "Mfuns Flutter v1.2.5 Beta",
+    "name": "Mfuns Flutter v1.2.6",
     "date": "2026-08-26",
-    "notes": "修复\n- 修复文章长图导出中链接下划线颜色不跟随自定义主题色的问题（固定为 onSurface 色，现跟随主题取色）",
+    "notes": "修复\n- 长图导出：去除链接的黄色下划线，文章标题、用户名等以链接形式出现的内容不再显示下划线（保留主题色，不影响 Markdown 导出）",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.5-beta/mfuns-flutter-1.2.5-beta.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.5-beta/mfuns-flutter-windows-1.2.5-beta.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6/mfuns-flutter-1.2.6.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6/mfuns-flutter-windows-1.2.6.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.5-beta"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.6"
   },
   "history": [
     {
