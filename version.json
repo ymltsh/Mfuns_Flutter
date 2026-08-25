@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.2.4",
-    "build": 28,
-    "name": "Mfuns Flutter v1.2.4",
-    "date": "2026-08-25",
-    "notes": "新增\n- 私信支持表情包，界面显示双方头像\n- 消息/通知未读小红点，查看后自动消失\n- 新私信/赞/评论/提及系统通知，点击直达对应页面\n- Android 后台播放（Beta）开关\n- 横屏长按 2 倍速播放\n优化\n- 首页刷新回到最新内容顶部，交界提示「刚刚看到这里」\n- 拖动视频进度显示加载动画\n- 消息会话预览最新私信，后台定期接收新消息\n\n修复\n- Windows 构建残留导致视频播放异常，已改为全新构建",
+    "version": "1.2.5",
+    "build": 29,
+    "name": "Mfuns Flutter v1.2.5",
+    "date": "2026-08-26",
+    "notes": "新增\n- 文章导出：分享 → 更多 → 导出文章，支持长图与 Markdown 两种格式\n- 导出配置：格式（长图/Markdown）、是否带评论、开源页脚开关（默认长图、不勾页脚、内容 ×2.0）\n- Markdown 导出保留标题/粗体/链接/引用/列表/代码/图片，图片本地化保存，UTF-8 编码\n- 长图导出：分片渲染拼接一张 1080px 宽长图，超长自动降低密度防止内存溢出\n- 带评论导出：分页拉取全部评论（含二级回复），数量与实际一致，评论失败也可继续导出\n- 内容字号比例可调（0.5x~2x），分辨率固定 1080px，插图不变\n- 主题色跟随：长图中引用块/代码块/链接/回复框使用界面主题色\n- 贴纸导出为 [s-2] 代号，评论长图只显示文本\n优化\n- 导出保存到公共目录：Android 内部存储 Pictures|Documents/Mfuns Flutter（MediaStore）、Windows 用户目录\n- 导出完成后询问是否分享；进度弹窗防重复触发、可取消",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.4/mfuns-flutter-1.2.4.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.4/mfuns-flutter-windows-1.2.4.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.5/mfuns-flutter-1.2.5.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.5/mfuns-flutter-windows-1.2.5.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.4"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.5"
   },
   "history": [
+    {
+      "version": "1.2.4",
+      "build": 28,
+      "name": "Mfuns Flutter v1.2.4",
+      "date": "2026-08-25",
+      "notes": "新增\n- 私信支持表情包，界面显示双方头像\n- 消息/通知未读小红点，查看后自动消失\n- 新私信/赞/评论/提及系统通知，点击直达对应页面\n- Android 后台播放（Beta）开关\n- 横屏长按 2 倍速播放\n优化\n- 首页刷新回到最新内容顶部，交界提示「刚刚看到这里」\n- 拖动视频进度显示加载动画\n- 消息会话预览最新私信，后台定期接收新消息",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.4/mfuns-flutter-1.2.4.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.4/mfuns-flutter-windows-1.2.4.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.4"
+    },
     {
       "version": "1.2.3",
       "build": 27,
