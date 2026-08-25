@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.2.0",
-    "build": 23,
-    "name": "Mfuns Flutter v1.2.0",
-    "date": "2026-08-19",
-    "notes": "新增\n- 媒体播放通知：播放视频后系统通知栏提供播放/暂停/进度控制（Android MediaSession）\n- 深链唤醒：m.mfuns.net / mfuns.wgen.top 链接可直接打开对应视频/文章/动态\n- 评论区：二级评论重新设计，支持回复、点赞、删除\n- 消息通知：评论通知显示收到的评论内容\n- 用户主页：新增发起私信、关注/粉丝列表入口\n- 多分P：切换分P从头播放，结束后自动连播下一P\n- 播放器：竖屏新增返回首页按钮\n- 自动签到：启动时检查并自动签到\n优化\n- 登录/主题弹层自动避让键盘\n- 退出登录增加二次确认",
+    "version": "1.2.1",
+    "build": 24,
+    "name": "Mfuns Flutter v1.2.1",
+    "date": "2026-08-25",
+    "notes": "修复\n- 视频播放器时长超过 1 小时只显示分钟，现显示为 H:MM:SS\n- 最新页被标记折叠的内容在刷新后重新出现，已在本地按资源 ID 过滤\n优化\n- 首页 ❤ 图标跟随文字颜色\n- 我的页「退出当前账号」不再固定红色，跟随主题色",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.0/mfuns-flutter-1.2.0.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.0/mfuns-flutter-windows-1.2.0.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.1/mfuns-flutter-1.2.1.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.1/mfuns-flutter-windows-1.2.1.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.0"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.1"
   },
   "history": [
+    {
+      "version": "1.2.0",
+      "build": 23,
+      "name": "Mfuns Flutter v1.2.0",
+      "date": "2026-08-19",
+      "notes": "新增\n- 媒体播放通知：播放视频后系统通知栏提供播放/暂停/进度控制（Android MediaSession）\n- 深链唤醒：m.mfuns.net / mfuns.wgen.top 链接可直接打开对应视频/文章/动态\n- 评论区：二级评论重新设计，支持回复、点赞、删除\n- 消息通知：评论通知显示收到的评论内容\n- 用户主页：新增发起私信、关注/粉丝列表入口\n- 多分P：切换分P从头播放，结束后自动连播下一P\n- 播放器：竖屏新增返回首页按钮\n- 自动签到：启动时检查并自动签到\n优化\n- 登录/主题弹层自动避让键盘\n- 退出登录增加二次确认",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.0/mfuns-flutter-1.2.0.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.0/mfuns-flutter-windows-1.2.0.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.0"
+    },
     {
       "version": "1.1.7",
       "build": 22,
