@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.2.0+23
+version: 1.2.5+30
 environment:
   sdk: ^3.5.4
 
@@ -48,6 +48,11 @@ dependencies:
   wakelock_plus: 1.2.9
   app_links: 6.3.3
   audio_service: ^0.18.17
+  flutter_local_notifications: ^19.5.0
+  # 10.1.x uses the legacy Android Gradle plugin API, compatible with this
+  # project's AGP 8.1 / Kotlin 1.8.22 toolchain (and resolves the web
+  # dependency shared with file_picker); 11+ breaks with the new SharePlus API.
+  share_plus: 10.1.4
 
 dev_dependencies:
   flutter_test:
@@ -78,6 +83,7 @@ flutter:
   assets:
     - assets/mfuns_logo.png
     - assets/app_icon.png
+    - assets/logo.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
