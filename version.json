@@ -1,17 +1,29 @@
 {
   "latest": {
     "version": "1.2.3",
-    "build": 26,
-    "name": "Mfuns Flutter v1.2.3",
+    "build": 27,
+    "name": "Mfuns Flutter v1.2.3 Beta",
     "date": "2026-08-25",
-    "notes": "修复\n- 缩小关于页 Logo 尺寸\n- 修复关于页 Logo 显示异常大的问题\n新增\n- 设置页新增「意见反馈」，点击直达反馈帖，在评论区留言即可\n- 关于弹窗新增 GitHub 项目链接，欢迎点个 Star\n修复\n- 视频播放器时长超过 1 小时只显示分钟，现显示为 H:MM:SS\n- 最新页被标记折叠的内容在刷新后重新出现，已在本地按资源 ID 过滤\n- 关于页 Logo 更换为项目 logo\n- 修复关于页项目链接超出卡片的问题\n优化\n- 首页 ❤ 图标跟随文字颜色\n- 我的页「退出当前账号」不再固定红色，跟随主题色",
+    "notes": "新增\n- 后台播放（Beta）：Android 退到后台时视频继续播放声音，可在「设置 → 播放器配置」中开关\n- 横屏播放支持长按 2 倍速播放\n- 视频拖动 / 切换进度时显示加载动画，不再显示暂停\n修复\n- 修复关于页 Logo 显示异常大的问题\n- 修复关于页项目链接超出卡片的问题\n- 关于页 Logo 更换为项目 logo\n- 视频播放器时长超过 1 小时只显示分钟，现显示为 H:MM:SS\n- 最新页被标记折叠的内容在刷新后重新出现，已在本地按资源 ID 过滤\n新增\n- 设置页新增「意见反馈」，点击直达反馈帖，在评论区留言即可\n- 关于弹窗新增 GitHub 项目链接，欢迎点个 Star\n优化\n- 首页 ❤ 图标跟随文字颜色\n- 我的页「退出当前账号」不再固定红色，跟随主题色",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.3/mfuns-flutter-1.2.3.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.3/mfuns-flutter-windows-1.2.3.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.3-beta/mfuns-flutter-1.2.3-beta.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.3-beta/mfuns-flutter-windows-1.2.3-beta.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.3"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.3-beta"
   },
   "history": [
+    {
+      "version": "1.2.3",
+      "build": 26,
+      "name": "Mfuns Flutter v1.2.3",
+      "date": "2026-08-25",
+      "notes": "修复\n- 缩小关于页 Logo 尺寸\n- 修复关于页 Logo 显示异常大的问题\n新增\n- 设置页新增「意见反馈」，点击直达反馈帖，在评论区留言即可\n- 关于弹窗新增 GitHub 项目链接，欢迎点个 Star\n修复\n- 视频播放器时长超过 1 小时只显示分钟，现显示为 H:MM:SS\n- 最新页被标记折叠的内容在刷新后重新出现，已在本地按资源 ID 过滤\n- 关于页 Logo 更换为项目 logo\n- 修复关于页项目链接超出卡片的问题\n优化\n- 首页 ❤ 图标跟随文字颜色\n- 我的页「退出当前账号」不再固定红色，跟随主题色",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.3/mfuns-flutter-1.2.3.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.3/mfuns-flutter-windows-1.2.3.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.3"
+    },
     {
       "version": "1.2.2",
       "build": 25,
