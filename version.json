@@ -17,7 +17,7 @@
       "build": 30,
       "name": "Mfuns Flutter v1.2.6 Beta",
       "date": "2026-08-26",
-      "notes": "修复\n- 长图导出：去除链接的黄色下划线，文章标题、用户名等以链接形式出现的内容不再显示下划线（保留主题色，不影响 Markdown 导出）",
+    "notes": "修复\n- 彻底修复长图导出中标题、用户名、页脚、来源等文字出现黄色双下划线的问题：导出内容渲染在应用根 Overlay 且无 Material 祖先，纯文本会继承 MaterialApp 根默认样式（Flutter fallback 的红字+黄色双下划线）；现已在导出部件内显式提供基础文本样式，不再被污染\n- 长图导出中的链接不再显示下划线（保留主题色）",
       "urls": {
         "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta/mfuns-flutter-1.2.6-beta.apk",
         "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta/mfuns-flutter-windows-1.2.6-beta.zip"
