@@ -46,3 +46,12 @@ app.*.map.json
 
 # Browser captures can contain session cookies and authorization data.
 *.har
+
+
+latest-mfuns-2/
+MFUNS_FLUTTER_PLAN.md
+mfuns_api_docs.md
+
+update.md
+release.py
+PROJECT_UPGRADE_PROPOSAL.md

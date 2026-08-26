@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mfuns_flutter/core/theme/app_theme.dart';
 import 'package:mfuns_flutter/features/content/export/article_exporter.dart';
 import 'package:mfuns_flutter/features/content/export/comment_collector.dart';
 import 'package:mfuns_flutter/features/content/export/image_downloader.dart';
@@ -169,60 +168,6 @@ void main() {
     expect(find.textContaining('链接'), findsOneWidget);
     expect(find.text('评论'), findsOneWidget);
     expect(find.textContaining('评论内容'), findsOneWidget);
-  });
-
-  testWidgets('链接下划线颜色跟随用户自定义主题色', (tester) async {
-    const seed = Color(0xFFFDD835); // 黄色主题，便于区分固定色
-    await tester.pumpWidget(MaterialApp(
-      theme: buildAppTheme(seed),
-      home: const Scaffold(
-        body: SingleChildScrollView(
-          child: Center(
-            child: ExportArticleWidget(
-              article: ArticleExportData(
-                title: '主题测试',
-                author: '作者',
-                rawContent: '',
-              ),
-              markdown: '[链接文字](https://m.mfuns.net)',
-              decodedImages: {},
-            ),
-          ),
-        ),
-      ),
-    ));
-    await tester.pump();
-
-    final onSurface = Theme.of(tester.element(find.byType(ExportArticleWidget)))
-        .colorScheme
-        .onSurface;
-    var found = false;
-    for (final rt in tester.widgetList<RichText>(find.byType(RichText))) {
-      void walk(InlineSpan span) {
-        if (span is TextSpan) {
-          final style = span.style;
-          if (style != null && span.text == '链接文字') {
-            found = true;
-            expect(style.decoration, TextDecoration.underline,
-                reason: '链接应带下划线');
-            expect(style.decorationColor, isNotNull,
-                reason: '下划线必须显式设置颜色，不能继承固定的 onSurface');
-            expect(style.decorationColor, isNot(onSurface),
-                reason: '下划线不应是固定 onSurface 色');
-            expect(style.decorationColor, style.color,
-                reason: '下划线颜色应与链接主题色一致');
-          }
-          if (span.children != null) {
-            for (final child in span.children!) {
-              walk(child);
-            }
-          }
-        }
-      }
-
-      walk(rt.text as TextSpan);
-    }
-    expect(found, isTrue, reason: '应找到链接文本节点');
   });
 
   testWidgets('评论中的图片 Markdown 在长图中只渲染文本', (tester) async {

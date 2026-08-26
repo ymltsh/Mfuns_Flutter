@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:screen_brightness/screen_brightness.dart';
@@ -12,12 +12,16 @@ import 'package:window_manager/window_manager.dart';
 import '../../app/app_controller.dart';
 import '../../core/config/user_preferences.dart';
 import '../../core/media/media_notification.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_link_handler.dart';
 import '../../core/widgets/content_spans.dart';
 import '../../core/widgets/image_preview_page.dart';
 import '../../core/widgets/inline_emoji_input.dart';
+import '../content/export/article_exporter.dart';
+import '../content/export/comment_collector.dart';
 import '../content/rich_content_card.dart';
 import '../home/home_repository.dart';
+import '../settings/network_diagnostics_page.dart';
 import '../user/user_profile_page.dart';
 
 /// Routes content to a type-specific detail page. Article pages never create a
@@ -632,6 +636,8 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                   _VideoActions(
                     controller: widget.controller,
                     preview: detail.preview,
+                    rawContent: detail.rawContent,
+                    commentAreaId: detail.commentAreaId,
                   ),
                   if (detail.tags.isNotEmpty) ...[
                     const SizedBox(height: 16),
@@ -1050,12 +1056,20 @@ class _VideoActions extends StatefulWidget {
     required this.preview,
     this.resourceType,
     this.linkPath,
+    this.rawContent,
+    this.commentAreaId,
   });
 
   final AppController controller;
   final ContentPreview preview;
   final int? resourceType;
   final String? linkPath;
+
+  /// 文章原始富文本（仅文章详情页提供）；非空时分享面板显示导出入口。
+  final String? rawContent;
+
+  /// 文章评论区 areaId（仅文章详情页提供）；为 null 时评论数为 0。
+  final int? commentAreaId;
 
   @override
   State<_VideoActions> createState() => _VideoActionsState();
@@ -1225,13 +1239,65 @@ class _VideoActionsState extends State<_VideoActions> {
     }
   }
 
+  String get _linkPath =>
+      widget.linkPath ?? (widget.preview.isVideo ? 'video' : 'article');
+
+  String get _articleLink => 'https://m.mfuns.net/$_linkPath/${widget.preview.id}';
+
   Future<void> _copyLink() async {
-    final path =
-        widget.linkPath ?? (widget.preview.isVideo ? 'video' : 'article');
-    await Clipboard.setData(
-        ClipboardData(text: 'https://m.mfuns.net/$path/${widget.preview.id}'));
+    await Clipboard.setData(ClipboardData(text: _articleLink));
     if (mounted) _notice('链接已复制');
   }
+
+  /// 分享面板：复制链接 + 「更多」（文章提供导出 Markdown / 图片）。
+  Future<void> _showSharePanel() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      useRootNavigator: true,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.ios_share_rounded,
+                  color: AppPalette.of(context).primary),
+              title: const Text('分享',
+                  style: TextStyle(
+                      color: Colors.blueGrey, fontWeight: FontWeight.w800)),
+              subtitle: const Text('复制链接，或查看更多操作',
+                  style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.link_rounded),
+              title: const Text('复制链接'),
+              subtitle: Text(_articleLink,
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              onTap: () => Navigator.of(sheetContext).pop('copy'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.more_horiz_rounded),
+              title: const Text('更多'),
+              trailing: const Icon(Icons.chevron_right_rounded,
+                  color: Colors.blueGrey),
+              onTap: () => Navigator.of(sheetContext).pop('more'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'copy') await _copyLink();
+    if (action == 'more') await _showMore();
+  }
+
+  /// 文章（非动态）且正文非空时，在「更多」中提供导出入口。
+  bool get _canExportArticle =>
+      !widget.preview.isVideo &&
+      widget.rawContent != null &&
+      widget.rawContent!.trim().isNotEmpty;
 
   Future<void> _showMore() async {
     final isFeed = widget.resourceType == 3;
@@ -1242,6 +1308,16 @@ class _VideoActionsState extends State<_VideoActions> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_canExportArticle) ...[
+              ListTile(
+                leading: const Icon(Icons.ios_share_rounded),
+                title: const Text('导出文章（Markdown、图片）'),
+                subtitle: const Text('导出为 Markdown 或长图，可附带评论',
+                    style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                onTap: () => Navigator.of(sheetContext).pop('export_article'),
+              ),
+              const Divider(height: 1),
+            ],
             ListTile(
               leading: const Icon(Icons.link_rounded),
               title: const Text('复制链接'),
@@ -1269,6 +1345,145 @@ class _VideoActionsState extends State<_VideoActions> {
     if (action == 'copy') await _copyLink();
     if (action == 'refresh') await _loadStatus();
     if (action == 'delete') await _confirmDeleteFeed();
+    if (action == 'export_article') await _showExportDialog();
+  }
+
+  /// 打开「导出文章」配置弹窗：格式、评论与页脚选项。
+  Future<void> _showExportDialog() async {
+    final rawContent = widget.rawContent;
+    if (rawContent == null || rawContent.trim().isEmpty) {
+      _notice('文章内容为空，无法导出');
+      return;
+    }
+    final result = await showDialog<_ExportArticleDialogResult>(
+      context: context,
+      useRootNavigator: true,
+      builder: (_) => _ExportArticleDialog(
+        controller: widget.controller,
+        areaId: widget.commentAreaId,
+      ),
+    );
+    if (!mounted || result == null) return;
+    await _runExport(result.options, comments: result.comments);
+  }
+
+  /// 执行导出：进度对话框 → 保存到本地 → 询问是否分享。
+  Future<void> _runExport(
+    ArticleExportOptions options, {
+    required List<ArticleExportComment> comments,
+  }) async {
+    final rawContent = widget.rawContent ?? '';
+    final exporter = ArticleExporter();
+    final data = ArticleExportData(
+      title: widget.preview.title,
+      author: widget.preview.author,
+      authorAvatar: widget.preview.authorAvatar,
+      rawContent: rawContent,
+      sourceUrl: _articleLink,
+    );
+
+    final cancellation = ExportCancellation();
+    final progress = ValueNotifier<String>('');
+    var dialogOpen = true;
+    final dialogFuture = showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (_) => _ExportProgressDialog(
+        message: options.format == ArticleExportFormat.markdown
+            ? '正在导出 Markdown…'
+            : '正在生成图片…',
+        progress: progress,
+        onCancel: cancellation.requestCancel,
+      ),
+    );
+    dialogFuture.whenComplete(() => dialogOpen = false);
+
+    List<ExportResult>? results;
+    String? errorNotice;
+    try {
+      results = await exporter.export(
+        context,
+        data,
+        options,
+        comments: comments,
+        onProgress: (message) => progress.value = message,
+        cancellation: cancellation,
+      );
+    } on ExportCancelledException {
+      errorNotice = '已取消导出';
+    } on ArticleExportException catch (error) {
+      errorNotice = '导出失败：${error.message}';
+    } on Exception {
+      errorNotice = '导出失败，请稍后重试';
+    } finally {
+      if (mounted && dialogOpen) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      progress.dispose();
+    }
+    if (!mounted) return;
+    if (errorNotice != null) {
+      _notice(errorNotice);
+      return;
+    }
+    final completed = results;
+    if (completed == null) return;
+
+    // 已保存到本地：询问是否进入系统分享。
+    final share = await _confirmShare(completed);
+    if (!mounted) return;
+    final failed = completed.fold<int>(
+        0, (sum, result) => sum + result.failedImageCount);
+    if (share != true) {
+      _notice(failed > 0 ? '文章已导出，但部分图片下载失败' : '导出成功，文件已保存到本地');
+      return;
+    }
+    try {
+      await exporter.share(completed);
+    } on Exception {
+      // 分享面板不可用（如旧版 Windows）：提示文件位置。
+      _notice('导出成功：${completed.first.path}');
+      return;
+    }
+    _notice(failed > 0 ? '文章已导出，但部分图片下载失败' : '导出成功，已打开分享面板');
+  }
+
+  /// 询问是否分享已导出的文件。
+  Future<bool?> _confirmShare(List<ExportResult> results) {
+    final paths = results.map((r) => r.path).join('\n');
+    return showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('导出完成'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('文章已保存到本地，是否分享？'),
+            const SizedBox(height: 10),
+            Text(
+              paths,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: Colors.blueGrey, fontSize: 12, height: 1.5),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('不分享'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('分享'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _confirmDeleteFeed() async {
@@ -1350,7 +1565,7 @@ class _VideoActionsState extends State<_VideoActions> {
         _ActionIcon(
           icon: Icons.ios_share_rounded,
           label: '分享',
-          onTap: _copyLink,
+          onTap: _showSharePanel,
         ),
         _ActionIcon(
           icon: Icons.more_vert_rounded,
@@ -1421,6 +1636,280 @@ class _PortraitPartSelector extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      );
+}
+
+/// 「导出文章」配置弹窗的返回结果。
+class _ExportArticleDialogResult {
+  const _ExportArticleDialogResult({
+    required this.options,
+    required this.comments,
+  });
+
+  final ArticleExportOptions options;
+
+  /// includeComments 为 true 时，评论为已完整获取的评论列表。
+  final List<ArticleExportComment> comments;
+}
+
+/// 「导出文章」配置弹窗：导出格式、是否带评论、是否带开源项目说明。
+class _ExportArticleDialog extends StatefulWidget {
+  const _ExportArticleDialog({
+    required this.controller,
+    required this.areaId,
+  });
+
+  final AppController controller;
+
+  /// 文章评论区 areaId；为 null 表示无评论区。
+  final int? areaId;
+
+  @override
+  State<_ExportArticleDialog> createState() => _ExportArticleDialogState();
+}
+
+class _ExportArticleDialogState extends State<_ExportArticleDialog> {
+  var _format = ArticleExportFormat.image;
+  var _includeComments = false;
+  var _includeFooter = false;
+  var _imageScale = 2.0;
+
+  /// 已完整获取的评论（顶层 + 回复）；null 表示尚未获取或获取失败。
+  List<ArticleExportComment>? _comments;
+  var _commentsLoading = false;
+  var _commentsFailed = false;
+
+  void _toggleComments(bool value) {
+    setState(() {
+      _includeComments = value;
+      _comments = null;
+      _commentsLoading = false;
+      _commentsFailed = false;
+    });
+    if (!value) return;
+    final areaId = widget.areaId;
+    if (areaId == null) {
+      setState(() => _comments = const []);
+      return;
+    }
+    setState(() => _commentsLoading = true);
+    _loadComments(areaId);
+  }
+
+  Future<void> _loadComments(int areaId) async {
+    try {
+      final comments = await ArticleCommentCollector.collect(
+        controller: widget.controller,
+        areaId: areaId,
+      );
+      if (!mounted || !_includeComments) return;
+      setState(() {
+        _comments = comments;
+        _commentsLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || !_includeComments) return;
+      setState(() {
+        _commentsLoading = false;
+        _commentsFailed = true;
+      });
+    }
+  }
+
+  /// 实际会被导出的评论条目数（顶层评论 + 二级回复）。
+  int _countAll(List<ArticleExportComment> comments) =>
+      comments.fold<int>(0, (sum, comment) => sum + 1 + comment.replies.length);
+
+  String get _commentSubtitle {
+    if (_commentsLoading) return '正在获取评论…';
+    if (_commentsFailed) return '获取评论失败，导出时可不包含评论';
+    final count = _comments == null ? 0 : _countAll(_comments!);
+    return '包含评论数量：$count 条';
+  }
+
+  Future<void> _submit() async {
+    var includeComments = _includeComments;
+    var comments = _comments ?? const <ArticleExportComment>[];
+    if (includeComments && _commentsFailed) {
+      final proceed = await showDialog<bool>(
+        context: context,
+        useRootNavigator: true,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('获取评论失败'),
+          content: const Text('无法获取评论，是否仍然导出文章？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('继续导出'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+      // 继续导出时不带评论，也不生成空的评论章节。
+      includeComments = false;
+      comments = const [];
+    }
+    Navigator.of(context).pop(_ExportArticleDialogResult(
+      options: ArticleExportOptions(
+        format: _format,
+        includeComments: includeComments,
+        includeFooter: _includeFooter,
+        imageScale: _imageScale,
+      ),
+      comments: comments,
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('导出文章'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CheckboxListTile(
+              value: _includeComments,
+              onChanged: (value) => _toggleComments(value ?? false),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('带评论导出',
+                  style: TextStyle(
+                      color: Colors.blueGrey, fontWeight: FontWeight.w700)),
+              subtitle: _includeComments
+                  ? Text(_commentSubtitle,
+                      style: const TextStyle(
+                          color: Colors.blueGrey, fontSize: 12))
+                  : null,
+            ),
+            const SizedBox(height: 6),
+            CheckboxListTile(
+              value: _includeFooter,
+              onChanged: (value) => setState(() => _includeFooter = value ?? true),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('在导出底部加入Mfuns Flutter开源项目说明',
+                  style: TextStyle(
+                      color: Colors.blueGrey, fontWeight: FontWeight.w700)),
+              subtitle: const Text('正文之后附加项目介绍与 GitHub 地址',
+                  style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+            ),
+            const SizedBox(height: 14),
+            const Text('导出格式',
+                style: TextStyle(
+                    color: Colors.blueGrey,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(height: 10),
+            SegmentedButton<ArticleExportFormat>(
+              segments: const [
+                ButtonSegment(
+                  value: ArticleExportFormat.markdown,
+                  label: Text('Markdown'),
+                  icon: Icon(Icons.notes_rounded),
+                ),
+                ButtonSegment(
+                  value: ArticleExportFormat.image,
+                  label: Text('图片'),
+                  icon: Icon(Icons.image_outlined),
+                ),
+              ],
+              selected: {_format},
+              onSelectionChanged: (selection) =>
+                  setState(() => _format = selection.first),
+            ),
+            if (_format == ArticleExportFormat.image) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Text('内容大小',
+                      style: TextStyle(
+                          color: Colors.blueGrey,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800)),
+                  const Spacer(),
+                  Text('×${_imageScale.toStringAsFixed(1)}',
+                      style: TextStyle(
+                          color: AppPalette.of(context).primary,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
+              Slider(
+                value: _imageScale,
+                min: 0.5,
+                max: 2.0,
+                divisions: 15,
+                label: '×${_imageScale.toStringAsFixed(1)}',
+                onChanged: (value) => setState(() => _imageScale = value),
+              ),
+              const Text('调整字号相对图片的大小，输出分辨率固定为 1080px',
+                  style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _commentsLoading ? null : _submit,
+          child: const Text('导出'),
+        ),
+      ],
+    );
+  }
+}
+
+/// 导出进度对话框：展示当前进度与取消按钮，阻止系统返回与误触关闭。
+class _ExportProgressDialog extends StatelessWidget {
+  const _ExportProgressDialog({
+    required this.message,
+    required this.progress,
+    required this.onCancel,
+  });
+
+  final String message;
+  final ValueListenable<String> progress;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              const SizedBox(height: 16),
+              ValueListenableBuilder<String>(
+                valueListenable: progress,
+                builder: (context, value, _) => Text(
+                  value.isEmpty ? message : value,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: Colors.blueGrey,
+                      fontSize: 13,
+                      height: 1.4),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextButton(onPressed: onCancel, child: const Text('取消')),
+            ],
+          ),
         ),
       );
 }
@@ -1704,7 +2193,7 @@ class MfunsVideoPlayer extends StatefulWidget {
 }
 
 class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   VideoPlayerController? _player;
   VideoQuality? _selected;
   List<DanmakuItem> _danmaku = const [];
@@ -1718,6 +2207,7 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
   var _showPlaybackOptions = false;
   var _hasStarted = false;
   var _isLongPressSpeed = false;
+  var _isSeeking = false;
   double _doubleTapX = 0;
   String? _seekNotice;
   _SlideFeedback? _slideFeedback;
@@ -1732,10 +2222,12 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
   Duration _dragSeekBase = Duration.zero;
   var _wakelockHeld = false;
   var _isFullscreen = false;
+  var _backgroundPlay = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // The player is drawn edge-to-edge: keep the layout consistent across
     // devices (Android <15 legacy vs enforced edge-to-edge) and use light
     // status bar icons over the black player surface.
@@ -1747,12 +2239,25 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     ));
     _loadPreferences();
     _ticker = Timer.periodic(const Duration(milliseconds: 350), (_) {
-      if (mounted && _player?.value.isPlaying == true) setState(() {});
+      if (mounted &&
+          (_player?.value.isPlaying == true ||
+              _player?.value.isBuffering == true)) {
+        setState(() {});
+      }
       _syncWakelock();
       _checkAutoNextPart();
     });
     _scheduleControlsHide();
     _loadBrightness();
+  }
+
+  /// 后台播放（Beta）关闭时，App 退到后台自动暂停视频，避免静默播放。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused && !_backgroundPlay) {
+      _player?.pause();
+      if (mounted) setState(() {});
+    }
   }
 
   /// 播放时保持屏幕唤醒（wakelock_plus），暂停/停止/销毁时释放，
@@ -1792,6 +2297,7 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
       UserPreferences.loadDanmakuSize(),
       UserPreferences.loadDefaultQuality(),
       UserPreferences.loadAutoPlay(),
+      UserPreferences.loadBackgroundPlay(),
     ]);
     if (!mounted) return;
     final qualityPreference = results[3] as String;
@@ -1801,6 +2307,7 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
       _danmakuSize = results[2] as double;
       _qualityPreference = qualityPreference;
       _autoPlay = results[4] as bool;
+      _backgroundPlay = results[5] as bool;
     });
     widget.onDanmakuChanged?.call(_showDanmaku);
     // 首次加载完成后按偏好选择清晰度；开启自动播放时直接开始播放。
@@ -1846,6 +2353,7 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     _controlsTimer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -1859,6 +2367,9 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     MfunsAudioHandler.instance.detach();
     super.dispose();
   }
+
+  /// 播放器初始化（拉取视频数据）的超时上限，超时后提示用户排查网络。
+  static const videoInitTimeout = Duration(seconds: 10);
 
   Future<void> _select(
     VideoQuality quality, {
@@ -1886,7 +2397,9 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     if (!mounted || request != _selectionRequest) return;
     final nextPlayer = VideoPlayerController.networkUrl(Uri.parse(quality.url));
     try {
-      await nextPlayer.initialize().timeout(const Duration(seconds: 8));
+      await nextPlayer
+          .initialize()
+          .timeout(videoInitTimeout);
       await nextPlayer.setVolume(_volume);
       await nextPlayer.setPlaybackSpeed(_playbackSpeed);
       if (resumePosition > Duration.zero) {
@@ -1909,7 +2422,7 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
         await nextPlayer.play();
       }
       await _loadDanmaku(quality.part);
-    } catch (_) {
+    } catch (error) {
       await nextPlayer.dispose();
       if (!mounted || request != _selectionRequest) return;
       if (retrySameSource) {
@@ -1932,7 +2445,11 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
           return;
         }
       }
-      setState(() => _error = '播放地址加载失败，请点击画面重试');
+      setState(() {
+        _error = error is TimeoutException
+            ? '视频加载超时（${videoInitTimeout.inSeconds} 秒），请检查网络后重试'
+            : '播放地址加载失败，请点击重试';
+      });
     }
   }
 
@@ -2091,7 +2608,10 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     if (player == null) return;
     _dragSeekStartDx = details.globalPosition.dx;
     _dragSeekBase = player.value.position;
+    setState(() => _isSeeking = true);
   }
+
+  void _finishDragSeek() => setState(() => _isSeeking = false);
 
   void _updateDragSeek(DragUpdateDetails details) {
     final player = _player;
@@ -2221,6 +2741,8 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
         onLongPressCancel: () => _setLongPressSpeed(false),
         onHorizontalDragStart: _startDragSeek,
         onHorizontalDragUpdate: _updateDragSeek,
+        onHorizontalDragEnd: (_) => _finishDragSeek(),
+        onHorizontalDragCancel: _finishDragSeek,
         onVerticalDragUpdate: (details) => _handleVerticalSlide(
             details, MediaQuery.sizeOf(context).width, videoHeight),
         onVerticalDragEnd: (_) => _clearSlideFeedback(),
@@ -2237,15 +2759,49 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                           child: _error == null
                               ? const CircularProgressIndicator(
                                   color: Colors.white)
-                              : FilledButton.icon(
-                                  style: FilledButton.styleFrom(
-                                      backgroundColor: Colors.white24,
-                                      foregroundColor: Colors.white),
-                                  onPressed: selected == null
-                                      ? null
-                                      : () => _select(selected),
-                                  icon: const Icon(Icons.refresh_rounded),
-                                  label: Text(_error!),
+                              : Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 24),
+                                      child: Text(
+                                        _error!,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            height: 1.4),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    FilledButton.icon(
+                                      style: FilledButton.styleFrom(
+                                          backgroundColor: Colors.white24,
+                                          foregroundColor: Colors.white),
+                                      onPressed: selected == null
+                                          ? null
+                                          : () => _select(selected),
+                                      icon: const Icon(Icons.refresh_rounded),
+                                      label: const Text('点击重试'),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    TextButton.icon(
+                                      style: TextButton.styleFrom(
+                                          foregroundColor: Colors.white70),
+                                      onPressed: () => Navigator.of(context)
+                                          .push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) =>
+                                              const NetworkDiagnosticsPage(),
+                                        ),
+                                      ),
+                                      icon: const Icon(
+                                          Icons.network_check_rounded,
+                                          size: 18),
+                                      label: const Text('网络诊断'),
+                                    ),
+                                  ],
                                 ),
                         )
                       : Stack(
@@ -2360,26 +2916,29 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                                 ),
                               ),
                               Center(
-                                child: IconButton.filledTonal(
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.black54,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                  iconSize: 48,
-                                  onPressed: () async {
-                                    if (!_hasStarted) {
-                                      setState(() => _hasStarted = true);
-                                    }
-                                    player.value.isPlaying
-                                        ? await player.pause()
-                                        : await player.play();
-                                    if (mounted) setState(() {});
-                                    _scheduleControlsHide();
-                                  },
-                                  icon: Icon(player.value.isPlaying
-                                      ? Icons.pause_rounded
-                                      : Icons.play_arrow_rounded),
-                                ),
+                                child: _isSeeking || player.value.isBuffering
+                                    ? const CircularProgressIndicator(
+                                        color: Colors.white)
+                                    : IconButton.filledTonal(
+                                        style: IconButton.styleFrom(
+                                          backgroundColor: Colors.black54,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        iconSize: 48,
+                                        onPressed: () async {
+                                          if (!_hasStarted) {
+                                            setState(() => _hasStarted = true);
+                                          }
+                                          player.value.isPlaying
+                                              ? await player.pause()
+                                              : await player.play();
+                                          if (mounted) setState(() {});
+                                          _scheduleControlsHide();
+                                        },
+                                        icon: Icon(player.value.isPlaying
+                                            ? Icons.pause_rounded
+                                            : Icons.play_arrow_rounded),
+                                      ),
                               ),
                               if (_showPlaybackOptions)
                                 Positioned(
@@ -2455,6 +3014,10 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                                                       milliseconds.round()));
                                               _scheduleControlsHide();
                                             },
+                                            onChangeStart: (_) =>
+                                                setState(() => _isSeeking = true),
+                                            onChangeEnd: (_) =>
+                                                setState(() => _isSeeking = false),
                                           ),
                                         ),
                                       ),
@@ -2602,6 +3165,8 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
   String? _seekNotice;
   double _dragSeekStartDx = 0;
   Duration _dragSeekBase = Duration.zero;
+  var _isLongPressSpeed = false;
+  var _isSeeking = false;
 
   @override
   void initState() {
@@ -2765,6 +3330,12 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
 
   void _clearSlideFeedback() => setState(() => _slideFeedback = null);
 
+  Future<void> _setLongPressSpeed(bool active) async {
+    if (_isLongPressSpeed == active) return;
+    setState(() => _isLongPressSpeed = active);
+    await _player.setPlaybackSpeed(active ? 2 : _playbackSpeed);
+  }
+
   Future<void> _seekBy(int seconds) async {
     var target = _player.value.position + Duration(seconds: seconds);
     if (target < Duration.zero) target = Duration.zero;
@@ -2786,7 +3357,10 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
   void _startDragSeek(DragStartDetails details) {
     _dragSeekStartDx = details.globalPosition.dx;
     _dragSeekBase = _player.value.position;
+    setState(() => _isSeeking = true);
   }
+
+  void _finishDragSeek() => setState(() => _isSeeking = false);
 
   void _updateDragSeek(DragUpdateDetails details) {
     final duration = _player.value.duration;
@@ -2825,8 +3399,13 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
             final width = MediaQuery.sizeOf(context).width;
             _seekBy(_doubleTapX < width / 2 ? -10 : 10);
           },
+          onLongPressStart: (_) => _setLongPressSpeed(true),
+          onLongPressEnd: (_) => _setLongPressSpeed(false),
+          onLongPressCancel: () => _setLongPressSpeed(false),
           onHorizontalDragStart: _startDragSeek,
           onHorizontalDragUpdate: _updateDragSeek,
+          onHorizontalDragEnd: (_) => _finishDragSeek(),
+          onHorizontalDragCancel: _finishDragSeek,
           onVerticalDragUpdate: (details) => _handleVerticalSlide(
               details,
               MediaQuery.sizeOf(context).width,
@@ -3095,22 +3674,25 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                       ),
                                     ),
                                   Center(
-                                    child: IconButton.filledTonal(
-                                      style: IconButton.styleFrom(
-                                        backgroundColor: Colors.black54,
-                                        foregroundColor: Colors.white,
-                                      ),
-                                      iconSize: 54,
-                                      onPressed: () async {
-                                        value.isPlaying
-                                            ? await _player.pause()
-                                            : await _player.play();
-                                        _scheduleHide();
-                                      },
-                                      icon: Icon(value.isPlaying
-                                          ? Icons.pause_rounded
-                                          : Icons.play_arrow_rounded),
-                                    ),
+                                    child: _isSeeking || value.isBuffering
+                                        ? const CircularProgressIndicator(
+                                            color: Colors.white)
+                                        : IconButton.filledTonal(
+                                            style: IconButton.styleFrom(
+                                              backgroundColor: Colors.black54,
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            iconSize: 54,
+                                            onPressed: () async {
+                                              value.isPlaying
+                                                  ? await _player.pause()
+                                                  : await _player.play();
+                                              _scheduleHide();
+                                            },
+                                            icon: Icon(value.isPlaying
+                                                ? Icons.pause_rounded
+                                                : Icons.play_arrow_rounded),
+                                          ),
                                   ),
                                   Positioned(
                                     left: 12,
@@ -3149,6 +3731,10 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                                         milliseconds.round()));
                                                 _scheduleHide();
                                               },
+                                              onChangeStart: (_) => setState(
+                                                  () => _isSeeking = true),
+                                              onChangeEnd: (_) => setState(
+                                                  () => _isSeeking = false),
                                             ),
                                           ),
                                           Text(_formatDuration(duration),
@@ -3191,6 +3777,21 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                       style: const TextStyle(
                                           color: Colors.white)),
                                 ),
+                              ),
+                            ),
+                          ),
+                        if (_isLongPressSpeed)
+                          IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                                child: Text('2.0× 倍速播放',
+                                    style: TextStyle(color: Colors.white)),
                               ),
                             ),
                           ),
@@ -4624,5 +5225,9 @@ String _formatDateTime(DateTime? value) =>
 
 String _formatDuration(Duration value) {
   String two(int number) => number.toString().padLeft(2, '0');
-  return '${two(value.inMinutes.remainder(60))}:${two(value.inSeconds.remainder(60))}';
+  final hours = value.inHours;
+  final minutes = two(value.inMinutes.remainder(60));
+  final seconds = two(value.inSeconds.remainder(60));
+  if (hours > 0) return '$hours:$minutes:$seconds';
+  return '$minutes:$seconds';
 }

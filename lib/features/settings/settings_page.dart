@@ -10,6 +10,8 @@ import '../../core/config/user_preferences.dart';
 import '../../core/emoji/emoji_pack_store.dart';
 import '../../core/network/update_checker.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/content_link_handler.dart';
+import 'network_diagnostics_page.dart';
 
 const _genderOptions = <int, String>{0: '保密', 1: '男', 2: '女', 3: '其他'};
 
@@ -272,14 +274,55 @@ class _SettingsPageState extends State<SettingsPage> {
         .showSnackBar(const SnackBar(content: Text('缓存已清除')));
   }
 
+  /// 打开反馈帖（站内文章），提示用户在评论区留言。
+  void _openFeedback() {
+    pushMfunsTarget(context, widget.controller,
+        const MfunsLinkTarget(type: 'article', id: 122326));
+  }
+
   void _showAbout(BuildContext context) {
     showAboutDialog(
       context: context,
       applicationName: 'Mfuns Flutter',
       applicationVersion: AppConfig.appVersion,
-      applicationIcon: const Icon(Icons.pets_rounded, size: 44),
-      children: const [
-        Text('Mfuns 社区的非官方客户端，Android-first。'),
+      applicationIcon: Image.asset('assets/logo.png',
+          width: 42, height: 42, fit: BoxFit.contain),
+      children: [
+        const Text('Mfuns Flutter，由社区支持的Material Design风格的Mfuns客户端。'),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            const Icon(Icons.code_rounded, size: 16),
+            const SizedBox(width: 6),
+            Expanded(
+              child: InkWell(
+                onTap: () => launchUrl(
+                  Uri.parse('https://github.com/ymltsh/Mfuns_Flutter'),
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: const Text(
+                  'https://github.com/ymltsh/Mfuns_Flutter',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: Colors.blue,
+                      decoration: TextDecoration.underline),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star_rounded, size: 16, color: Color(0xFFE6A23C)),
+            SizedBox(width: 6),
+            Flexible(
+              child: Text('如果喜欢这个项目，欢迎在 GitHub 点个 Star 支持我们！'),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -374,6 +417,21 @@ class _SettingsPageState extends State<SettingsPage> {
             _SettingsCard(
               children: [
                 _SettingsTile(
+                  icon: Icons.network_check_rounded,
+                  title: '网络诊断',
+                  subtitle: '检测连接状态、DNS、延迟与业务接口连通性',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const NetworkDiagnosticsPage(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _SettingsCard(
+              children: [
+                _SettingsTile(
                   icon: Icons.system_update_alt_rounded,
                   title: '检查更新',
                   subtitle: _checkingUpdate
@@ -401,9 +459,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const Divider(height: 1, indent: 56),
                 _SettingsTile(
+                  icon: Icons.feedback_outlined,
+                  title: '意见反馈',
+                  subtitle: '点击打开反馈帖，在评论区留言即可',
+                  onTap: _openFeedback,
+                ),
+                const Divider(height: 1, indent: 56),
+                _SettingsTile(
                   icon: Icons.info_outline_rounded,
                   title: '关于',
-                  subtitle: 'Mfuns Flutter v${AppConfig.appVersion}',
+                  subtitle: '为 Mfuns Flutter 点个Star吧！ v${AppConfig.appVersion}',
                   onTap: () => _showAbout(context),
                 ),
               ],
@@ -429,6 +494,7 @@ class PlayerSettingsPage extends StatefulWidget {
 class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
   var _quality = '';
   var _autoPlay = true;
+  var _backgroundPlay = false;
   var _loaded = false;
 
   @override
@@ -441,11 +507,13 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
     final results = await Future.wait([
       UserPreferences.loadDefaultQuality(),
       UserPreferences.loadAutoPlay(),
+      UserPreferences.loadBackgroundPlay(),
     ]);
     if (!mounted) return;
     setState(() {
       _quality = results[0] as String;
       _autoPlay = results[1] as bool;
+      _backgroundPlay = results[2] as bool;
       _loaded = true;
     });
   }
@@ -526,10 +594,27 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
                         }
                       : null,
                 ),
+                const Divider(height: 1, indent: 56),
+                SwitchListTile(
+                  value: _backgroundPlay,
+                  title: const Text('后台播放（Beta）',
+                      style: TextStyle(
+                          color: Colors.blueGrey,
+                          fontWeight: FontWeight.w700)),
+                  subtitle: const Text('退到后台时视频继续播放声音（Android）',
+                      style:
+                          TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                  onChanged: _loaded
+                      ? (value) {
+                          setState(() => _backgroundPlay = value);
+                          UserPreferences.saveBackgroundPlay(value);
+                        }
+                      : null,
+                ),
               ],
             ),
             const SizedBox(height: 10),
-            const Text('设置立即生效，并保存在本机',
+            const Text(': )',
                 style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
           ],
         ),

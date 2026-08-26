@@ -253,8 +253,8 @@ void main() {
       );
       final content = await File(withFooter.path).readAsString();
       expect(content, contains('## 关于 Mfuns Flutter'));
-      expect(content,
-          contains('本项目是一个由社区支持的Material Design风格的Mfuns客户端，完全开源免费无广告，请点个star吧！'));
+      expect(content, contains('本文由 Mfuns Flutter 导出。'));
+      expect(content, contains(ExportFooter.description));
       expect(content, contains(ExportFooter.repositoryUrl));
 
       final withoutFooter = await MarkdownExporter.export(

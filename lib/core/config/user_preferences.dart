@@ -11,6 +11,7 @@ class UserPreferences {
   static const _keyAutoPlay = 'pref.autoplay';
   static const _keyAutoSignIn = 'pref.auto_sign_in';
   static const _keyAcceleratorBase = 'pref.accelerator_base';
+  static const _keyBackgroundPlay = 'pref.background_play';
 
   /// 自定义 GitHub 加速地址（用于更新清单与下载），默认官方加速站。
   static Future<String> loadAcceleratorBase() async {
@@ -126,6 +127,23 @@ class UserPreferences {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_keyAutoPlay, enabled);
+    } catch (_) {}
+  }
+
+  /// 后台播放开关（Beta）：退到后台时视频继续播放声音，默认关闭。
+  static Future<bool> loadBackgroundPlay() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyBackgroundPlay) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> saveBackgroundPlay(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyBackgroundPlay, enabled);
     } catch (_) {}
   }
 }

@@ -10,6 +10,7 @@ import 'app/app_controller.dart';
 import 'app/mfuns_app.dart';
 import 'core/media/media_notification.dart';
 import 'core/network/link_router.dart';
+import 'core/notify/local_message_notifier.dart';
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 
@@ -41,6 +42,24 @@ void main() async {
     // 平台不支持时静默，视频播放不受影响。
   }
   final controller = AppController();
+  // 消息前台通知（Notification API）：初始化通道、请求权限；
+  // 点击通知时回到根页面并跳转对应页面（私信/赞/评论/提及）。
+  await LocalMessageNotifier.instance.init(onTap: (payload) {
+    _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+    switch (payload) {
+      case LocalMessageNotifier.payloadLike:
+        controller.openMessagesTab(subTab: 1, notifyTab: 0);
+      case LocalMessageNotifier.payloadComment:
+        controller.openMessagesTab(subTab: 1, notifyTab: 1);
+      case LocalMessageNotifier.payloadMention:
+        controller.openMessagesTab(subTab: 1, notifyTab: 2);
+      case LocalMessageNotifier.payloadSystem:
+        controller.openMessagesTab(subTab: 1, notifyTab: 2);
+      default:
+        controller.openMessagesTab();
+    }
+  });
+  await LocalMessageNotifier.instance.requestPermission();
   runApp(MfunsApp(controller: controller, navigatorKey: _navigatorKey));
   // 链接唤醒：mfuns:// 协议与 mfuns.net / mfuns.wgen.top 深链打开对应页面。
   LinkRouter(controller: controller, navigatorKey: _navigatorKey).start();

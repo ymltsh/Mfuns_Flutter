@@ -26,22 +26,40 @@ class NotificationsPage extends StatefulWidget {
   State<NotificationsPage> createState() => NotificationsPageState();
 }
 
-class NotificationsPageState extends State<NotificationsPage> {
+class NotificationsPageState extends State<NotificationsPage>
+    with SingleTickerProviderStateMixin {
   static final Map<int, UserProfile> _userCache = {};
-
-  late Future<NotifyCounts> _counts;
+  late final TabController _notifyTabs;
 
   @override
   void initState() {
     super.initState();
-    _counts = widget.controller.notifyCounts();
+    _notifyTabs = TabController(length: _notifyTypes.length, vsync: this);
+    widget.controller.notifySubTabRequest.addListener(_onNotifyTabRequest);
+    // 页面懒加载，晚于通知点击跳转请求构建时，补应用目标子标签。
+    if (widget.controller.consumeNotifySubTab()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onNotifyTabRequest();
+      });
+    }
   }
 
-  Future<void> reload() async {
-    final next = widget.controller.notifyCounts();
-    setState(() => _counts = next);
-    await next;
+  @override
+  void dispose() {
+    widget.controller.notifySubTabRequest.removeListener(_onNotifyTabRequest);
+    _notifyTabs.dispose();
+    super.dispose();
   }
+
+  /// 通知点击跳转：切到赞/评论/提及对应子标签（消费一次性请求）。
+  void _onNotifyTabRequest() {
+    widget.controller.consumeNotifySubTab();
+    final value = widget.controller.notifySubTabRequest.value;
+    if (value != _notifyTabs.index) _notifyTabs.animateTo(value);
+  }
+
+  /// 刷新未读明细（与红点同一数据源，保持同步）。
+  Future<void> reload() => widget.controller.refreshUnreadCounts();
 
   void _openUser(BuildContext context, int userId) {
     if (userId == 0) return;
@@ -62,58 +80,57 @@ class NotificationsPageState extends State<NotificationsPage> {
 
   Widget _buildBody(BuildContext context) {
     final palette = AppPalette.of(context);
-    return FutureBuilder<NotifyCounts>(
-        future: _counts,
-        builder: (context, snapshot) {
-          final counts = snapshot.data ??
-              const NotifyCounts(like: 0, comment: 0, mention: 0, system: 0);
-          return DefaultTabController(
-            length: _notifyTypes.length,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Row(
-                    children: [
-                      Text('未读',
-                          style: TextStyle(
-                              color: palette.primary,
-                              fontWeight: FontWeight.w800)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '赞 ${counts.like} · 评论 ${counts.comment} · 提及 ${counts.mention} · 系统 ${counts.system}',
-                          style: const TextStyle(
-                              color: Colors.blueGrey, fontSize: 13),
-                        ),
-                      ),
-                    ],
+    return Column(
+      children: [
+        // 未读明细直接读取 controller（与小红点同一数据源，保持同步）。
+        ListenableBuilder(
+          listenable: widget.controller,
+          builder: (context, _) {
+            final counts = widget.controller.notifyCountsData;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Row(
+                children: [
+                  Text('未读',
+                      style: TextStyle(
+                          color: palette.primary,
+                          fontWeight: FontWeight.w800)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '赞 ${counts.like} · 评论 ${counts.comment} · 提及 ${counts.mention} · 系统 ${counts.system}',
+                      style: const TextStyle(
+                          color: Colors.blueGrey, fontSize: 13),
+                    ),
                   ),
-                ),
-                TabBar(
-                  labelColor: palette.primary,
-                  unselectedLabelColor: Colors.blueGrey,
-                  tabs: _notifyTypes.entries
-                      .map((entry) => Tab(text: entry.value))
-                      .toList(growable: false),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    children: _notifyTypes.entries.map((entry) {
-                      return _NotifyTab(
-                        controller: widget.controller,
-                        type: entry.key,
-                        onOpenUser: (userId) => _openUser(context, userId),
-                        userCache: _userCache,
-                      );
-                    }).toList(growable: false),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
+                ],
+              ),
+            );
+          },
+        ),
+        TabBar(
+          controller: _notifyTabs,
+          labelColor: palette.primary,
+          unselectedLabelColor: Colors.blueGrey,
+          tabs: _notifyTypes.entries
+              .map((entry) => Tab(text: entry.value))
+              .toList(growable: false),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _notifyTabs,
+            children: _notifyTypes.entries.map((entry) {
+              return _NotifyTab(
+                controller: widget.controller,
+                type: entry.key,
+                onOpenUser: (userId) => _openUser(context, userId),
+                userCache: _userCache,
+              );
+            }).toList(growable: false),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -147,6 +164,8 @@ class _NotifyTabState extends State<_NotifyTab> {
     final next = widget.controller.notifications(type: widget.type);
     setState(() => _future = next);
     await next;
+    // 拉取通知列表后服务端视为已读，同步刷新未读与小红点。
+    widget.controller.refreshUnreadCounts();
   }
 
   @override

@@ -4,6 +4,7 @@ import '../../app/app_controller.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_link_handler.dart';
 import '../../core/widgets/content_spans.dart';
+import '../../core/widgets/emoji_picker_sheet.dart';
 import '../home/home_repository.dart';
 
 class MessageListPage extends StatefulWidget {
@@ -21,18 +22,63 @@ class MessageListPage extends StatefulWidget {
 }
 
 class MessageListPageState extends State<MessageListPage> {
-  late Future<List<MessageConversation>> _future;
+  List<MessageConversation>? _items;
+  String? _error;
+  int _lastDmUnread = -1;
 
   @override
   void initState() {
     super.initState();
-    _future = widget.controller.messageConversations();
+    widget.controller.addListener(_onControllerChanged);
+    reload();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
+    super.dispose();
+  }
+
+  /// 私信未读变化（轮询/查看后刷新）时静默刷新会话列表，
+  /// 最新一条私信预览与未读角标随之自动更新。
+  void _onControllerChanged() {
+    final dmUnread = widget.controller.notifyCountsData.message;
+    if (dmUnread == _lastDmUnread) return;
+    _lastDmUnread = dmUnread;
+    reload();
   }
 
   Future<void> reload() async {
-    final next = widget.controller.messageConversations();
-    setState(() => _future = next);
-    await next;
+    try {
+      final items = await widget.controller.messageConversations();
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        if (_items == null) _error = '加载会话失败：$error';
+      });
+    }
+  }
+
+  Future<void> _openConversation(MessageConversation item) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MessageDetailPage(
+          controller: widget.controller,
+          peerId: item.userId,
+          peerName: item.userName,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    // 返回会话列表时立即刷新：服务端已将该会话标记已读，
+    // 未读小红点随之消失，预览显示最新一条私信。
+    widget.controller.refreshUnreadCounts();
+    reload();
   }
 
   @override
@@ -46,45 +92,29 @@ class MessageListPageState extends State<MessageListPage> {
   }
 
   Widget _buildBody(BuildContext context) {
-    return FutureBuilder<List<MessageConversation>>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return _MessageState(
-            message: '加载会话失败：${snapshot.error}',
-            onRetry: reload,
-          );
-        }
-        final items = snapshot.data ?? const <MessageConversation>[];
-        if (items.isEmpty) {
-          return _MessageState(message: '还没有私信会话', onRetry: reload);
-        }
-        return RefreshIndicator(
-          color: AppPalette.of(context).primary,
-          onRefresh: reload,
-          child: ListView.separated(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) => _ConversationCard(
-              item: items[index],
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => MessageDetailPage(
-                    controller: widget.controller,
-                    peerId: items[index].userId,
-                    peerName: items[index].userName,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
+    final items = _items;
+    if (items == null) {
+      if (_error != null) {
+        return _MessageState(message: _error!, onRetry: reload);
+      }
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (items.isEmpty) {
+      return _MessageState(message: '还没有私信会话', onRetry: reload);
+    }
+    return RefreshIndicator(
+      color: AppPalette.of(context).primary,
+      onRefresh: reload,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, index) => _ConversationCard(
+          item: items[index],
+          onTap: () => _openConversation(items[index]),
+        ),
+      ),
     );
   }
 }
@@ -179,27 +209,75 @@ class MessageDetailPage extends StatefulWidget {
 
 class _MessageDetailPageState extends State<MessageDetailPage> {
   final _input = TextEditingController();
-  late Future<List<MessageRecord>> _future;
+  List<MessageRecord>? _items;
+  String? _error;
   var _isSending = false;
+  int _lastDmUnread = -1;
+  UserProfile? _peer;
 
   int? get _myId => widget.controller.session?.userId;
 
   @override
   void initState() {
     super.initState();
-    _future = widget.controller.messageRecord(widget.peerId);
+    widget.controller.addListener(_onControllerChanged);
+    _reload();
+    _loadPeer();
+  }
+
+  /// 对方资料（头像等）加载失败时静默，界面不依赖它。
+  Future<void> _loadPeer() async {
+    try {
+      final profile = await widget.controller.userProfile(widget.peerId);
+      if (mounted) setState(() => _peer = profile);
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
     _input.dispose();
     super.dispose();
   }
 
+  /// 私信未读变化（新消息到达）时静默刷新聊天记录，保持在会话内接收最新消息。
+  void _onControllerChanged() {
+    final dmUnread = widget.controller.notifyCountsData.message;
+    if (dmUnread == _lastDmUnread) return;
+    _lastDmUnread = dmUnread;
+    _reload();
+  }
+
   Future<void> _reload() async {
-    final next = widget.controller.messageRecord(widget.peerId);
-    setState(() => _future = next);
-    await next;
+    try {
+      final items = await widget.controller.messageRecord(widget.peerId);
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _error = null;
+      });
+      // 拉取会话记录后服务端视为已读，同步刷新未读与小红点。
+      widget.controller.refreshUnreadCounts();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        if (_items == null) _error = '加载聊天记录失败：$error';
+      });
+    }
+  }
+
+  /// 打开表情选择面板：选中表情以 `[pack-id]` 标记插入输入框，
+  /// 发送时由 commentQuillJson 转换为带 sticker 的富文本。
+  void _pickEmoji() {
+    EmojiPickerSheet.show(context, (span) {
+      if (!mounted) return;
+      setState(() {
+        _input.text = _input.text +
+            (span.isSticker ? '[${span.stickerKey}]' : span.text);
+        _input.selection =
+            TextSelection.collapsed(offset: _input.text.length);
+      });
+    });
   }
 
   Future<void> _send() async {
@@ -207,7 +285,9 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
     if (text.isEmpty || _isSending) return;
     setState(() => _isSending = true);
     try {
-      await widget.controller.sendMessage(toUid: widget.peerId, text: text);
+      final spans = commentSpansFromText(text);
+      final payload = commentQuillJson(spans);
+      await widget.controller.sendMessage(toUid: widget.peerId, text: payload);
       _input.clear();
       await _reload();
     } catch (error) {
@@ -231,41 +311,37 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
       body: Column(
         children: [
           Expanded(
-            child: FutureBuilder<List<MessageRecord>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
+            child: Builder(builder: (context) {
+              final items = _items;
+              if (items == null) {
+                if (_error != null) {
+                  return _MessageState(message: _error!, onRetry: _reload);
                 }
-                if (snapshot.hasError) {
-                  return _MessageState(
-                    message: '加载聊天记录失败：${snapshot.error}',
-                    onRetry: _reload,
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (items.isEmpty) {
+                return const _MessageState(message: '和 TA 说点什么吧');
+              }
+              return ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                reverse: true,
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final record = items[items.length - 1 - index];
+                  final isMine = _myId != null && record.uid == _myId;
+                  return _MessageBubble(
+                    record: record,
+                    isMine: isMine,
+                    palette: palette,
+                    controller: widget.controller,
+                    myAvatar: widget.controller.session?.avatar ?? '',
+                    peerAvatar: _peer?.avatar ?? '',
                   );
-                }
-                final items = snapshot.data ?? const <MessageRecord>[];
-                if (items.isEmpty) {
-                  return const _MessageState(message: '和 TA 说点什么吧');
-                }
-                return ListView.separated(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                  reverse: true,
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final record = items[items.length - 1 - index];
-                    final isMine = _myId != null && record.uid == _myId;
-                    return _MessageBubble(
-                      record: record,
-                      isMine: isMine,
-                      palette: palette,
-                      controller: widget.controller,
-                    );
-                  },
-                );
-              },
-            ),
+                },
+              );
+            }),
           ),
           SafeArea(
             top: false,
@@ -288,7 +364,12 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: '表情',
+                    onPressed: _pickEmoji,
+                    icon: const Icon(Icons.emoji_emotions_outlined),
+                  ),
+                  const SizedBox(width: 4),
                   IconButton.filled(
                     tooltip: '发送',
                     onPressed: _isSending ? null : _send,
@@ -310,12 +391,24 @@ class _MessageBubble extends StatelessWidget {
     required this.isMine,
     required this.palette,
     required this.controller,
+    required this.myAvatar,
+    required this.peerAvatar,
   });
 
   final MessageRecord record;
   final bool isMine;
   final AppPalette palette;
   final AppController controller;
+  final String myAvatar;
+  final String peerAvatar;
+
+  Widget _avatar(String url) => CircleAvatar(
+        radius: 16,
+        backgroundColor: palette.primary.withOpacity(.12),
+        foregroundImage: url.isEmpty ? null : NetworkImage(url),
+        foregroundColor: palette.primary,
+        child: const Icon(Icons.person_rounded, size: 18),
+      );
 
   @override
   Widget build(BuildContext context) => Align(
@@ -324,47 +417,72 @@ class _MessageBubble extends StatelessWidget {
           constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * .72,
           ),
-          child: Column(
-            crossAxisAlignment:
-                isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isMine
-                      ? palette.primary
-                      : Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(12),
-                    topRight: const Radius.circular(12),
-                    bottomLeft: Radius.circular(isMine ? 12 : 2),
-                    bottomRight: Radius.circular(isMine ? 2 : 12),
-                  ),
-                ),
-                child: record.spans.isEmpty
-                    ? Text(
-                        record.message.isEmpty ? '（空消息）' : record.message,
-                        style: TextStyle(
-                          color: isMine ? Colors.white : Colors.blueGrey,
-                          height: 1.35,
-                        ),
-                      )
-                    : ContentSpans(
-                        spans: record.spans,
-                        stickerSize: 34,
-                        onLinkTap: (url) =>
-                            openContentLink(context, controller, url),
-                        textStyle: TextStyle(
-                          color: isMine ? Colors.white : Colors.blueGrey,
-                          height: 1.35,
+              if (!isMine) ...[
+                _avatar(peerAvatar),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
+                child: Column(
+                  crossAxisAlignment:
+                      isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isMine
+                            ? palette.primary
+                            : Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(12),
+                          topRight: const Radius.circular(12),
+                          bottomLeft: Radius.circular(isMine ? 12 : 2),
+                          bottomRight: Radius.circular(isMine ? 2 : 12),
                         ),
                       ),
+                      child: record.spans.isEmpty
+                          ? Text(
+                              record.message.isEmpty
+                                  ? '（空消息）'
+                                  : record.message,
+                              style: TextStyle(
+                                color: isMine
+                                    ? Colors.white
+                                    : Colors.blueGrey,
+                                height: 1.35,
+                              ),
+                            )
+                          : ContentSpans(
+                              spans: record.spans,
+                              stickerSize: 34,
+                              onLinkTap: (url) =>
+                                  openContentLink(context, controller, url),
+                              textStyle: TextStyle(
+                                color: isMine
+                                    ? Colors.white
+                                    : Colors.blueGrey,
+                                height: 1.35,
+                              ),
+                            ),
+                    ),
+                    if (record.time != null) ...[
+                      const SizedBox(height: 3),
+                      Text(_msgTime(record.time!),
+                          style: const TextStyle(
+                              color: Colors.blueGrey, fontSize: 10.5)),
+                    ],
+                  ],
+                ),
               ),
-              if (record.time != null) ...[
-                const SizedBox(height: 3),
-                Text(_msgTime(record.time!),
-                    style: const TextStyle(color: Colors.blueGrey, fontSize: 10.5)),
+              if (isMine) ...[
+                const SizedBox(width: 8),
+                _avatar(myAvatar),
               ],
             ],
           ),

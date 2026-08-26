@@ -48,7 +48,7 @@ void main() {
     expect(record.spans[0].isSticker, isTrue);
     expect(record.spans[0].stickerKey, 's-1');
     expect(record.spans[1].text, '冲鸭');
-    expect(record.message, '冲鸭');
+    expect(record.message, '[表情]冲鸭');
   });
 
   test('reads referenced content info from notify params', () {

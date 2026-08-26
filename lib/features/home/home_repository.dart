@@ -812,6 +812,7 @@ class NotifyCounts {
     required this.comment,
     required this.mention,
     required this.system,
+    this.message = 0,
   });
 
   final int like;
@@ -819,11 +820,15 @@ class NotifyCounts {
   final int mention;
   final int system;
 
+  /// 私信未读数（/v1/notify/count 返回的 message 字段，与通知同一来源）。
+  final int message;
+
   factory NotifyCounts.fromJson(Map<String, dynamic> json) => NotifyCounts(
         like: _asInt(json['like']) ?? 0,
         comment: _asInt(json['comment']) ?? 0,
         mention: _asInt(json['mention']) ?? 0,
         system: _asInt(json['system']) ?? 0,
+        message: _asInt(json['message']) ?? 0,
       );
 }
 
@@ -1353,18 +1358,21 @@ class HomeRepository {
         .toList(growable: false);
   }
 
-  Future<List<CommunityComment>> getComments(int areaId) async {
+  Future<List<CommunityComment>> getComments(int areaId, {int page = 1}) async {
     final response = await _client.get(
       '/v1/comment/list',
-      query: {'area_id': areaId, 'page': 1, 'order': 'desc', 'html': 0},
+      query: {'area_id': areaId, 'page': page, 'order': 'desc', 'html': 0},
     );
     return _toComments(response.data);
   }
 
-  Future<List<CommunityComment>> getCommentReplies(int commentId) async {
+  Future<List<CommunityComment>> getCommentReplies(
+    int commentId, {
+    int page = 1,
+  }) async {
     final response = await _client.get(
       '/v1/comment/reply_list',
-      query: {'comment_id': commentId, 'page': 1, 'html': 0},
+      query: {'comment_id': commentId, 'page': page, 'html': 0},
     );
     return _toComments(response.data);
   }
@@ -2160,12 +2168,15 @@ String _quillToText(String raw) {
   try {
     final ops = _asMap(jsonDecode(value))['ops'];
     if (ops is List) {
-      return ops
-          .whereType<Map<String, dynamic>>()
-          .map((item) => item['insert'])
-          .whereType<String>()
-          .join()
-          .trim();
+      final parts = ops.whereType<Map<String, dynamic>>().map((item) {
+        final insert = item['insert'];
+        if (insert is String) return insert;
+        if (insert is Map<String, dynamic> && insert['sticker'] is String) {
+          return '[表情]';
+        }
+        return '';
+      });
+      return parts.join().trim();
     }
   } on FormatException {
     // Fall back to the raw text below.

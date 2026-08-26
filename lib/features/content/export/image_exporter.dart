@@ -73,13 +73,7 @@ MarkdownStyleSheet _exportMarkdownStyleFor(Color primary) {
       color: primary.withOpacity(0.06),
       borderRadius: const BorderRadius.all(Radius.circular(6)),
     ),
-    // 显式指定下划线颜色：不指定时会被 MarkdownBody 的 fallback 主题合并
-    // 成固定的 onSurface 色，导致下划线不随用户自定义主题色变化。
-    a: TextStyle(
-      color: accent,
-      decoration: TextDecoration.underline,
-      decorationColor: accent,
-    ),
+    a: TextStyle(color: accent),
   );
 }
 
@@ -124,7 +118,11 @@ class ExportArticleWidget extends StatelessWidget {
       data: MediaQuery.of(context).copyWith(
         textScaler: TextScaler.linear(contentScale),
       ),
-      child: ColoredBox(
+      // 显式提供基础文本样式：导出内容渲染在根 Overlay 中，没有 Material 祖先，
+      // 否则纯文本会继承 MaterialApp 的 fallback 样式（红字 + 黄色下划线）。
+      child: DefaultTextStyle(
+        style: const TextStyle(color: Color(0xFF1F2329), fontSize: 16),
+        child: ColoredBox(
       color: const Color(0xFFFFFFFF),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(40, 44, 40, 40),
@@ -188,6 +186,7 @@ class ExportArticleWidget extends StatelessWidget {
             ],
           ],
         ),
+      ),
       ),
       ),
     );

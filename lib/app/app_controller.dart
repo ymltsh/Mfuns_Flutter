@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/config/user_preferences.dart';
 import '../core/network/mfuns_api_client.dart';
+import '../core/notify/local_message_notifier.dart';
 import '../features/auth/auth_repository.dart';
 import '../features/auth/session_store.dart';
 import '../features/home/home_repository.dart';
@@ -32,6 +33,36 @@ class AppController extends ChangeNotifier {
   final MfunsApiClient _api;
   final SessionStore _sessionStore;
   late final AuthRepository _auth;
+
+  /// 通知点击等场景请求主界面切换到指定底部标签（0 首页 / 1 动态 / 2 消息 / 3 我的）。
+  final ValueNotifier<int> homeTabRequest = ValueNotifier<int>(0);
+
+  /// 消息中心子标签请求：0 私信 / 1 通知。
+  final ValueNotifier<int> messageSubTabRequest = ValueNotifier<int>(0);
+
+  /// 通知页子标签请求：0 赞 / 1 评论 / 2 提及。
+  final ValueNotifier<int> notifySubTabRequest = ValueNotifier<int>(0);
+
+  /// 请求切换到消息中心对应页面（通知点击跳转用）。
+  /// [subTab] 0 私信 / 1 通知；[notifyTab] 通知页子标签 0 赞 / 1 评论 / 2 提及。
+  void openMessagesTab({int subTab = 0, int? notifyTab}) {
+    homeTabRequest.value = 2;
+    messageSubTabRequest.value = subTab;
+    if (notifyTab != null) {
+      notifySubTabRequest.value = notifyTab;
+      _notifyTabConsumed = false;
+    }
+    refreshUnreadCounts();
+  }
+
+  bool _notifyTabConsumed = true;
+
+  /// 通知页晚于跳转请求构建时，消费未应用的子标签跳转（只生效一次）。
+  bool consumeNotifySubTab() {
+    if (_notifyTabConsumed) return false;
+    _notifyTabConsumed = true;
+    return true;
+  }
   late final HomeRepository _home;
   late final LatestMfunsRepository _latest;
 
@@ -43,6 +74,10 @@ class AppController extends ChangeNotifier {
   List<TimelineFeed> _feeds;
   List<TimelineFeed> _followingFeeds;
   List<LatestMfunsItem> _latestItems;
+
+  /// 本次会话中用户标记过的资源 stableId 集合。
+  /// 刷新后仍在本地过滤这些资源，避免被标记（折叠）的内容重新出现。
+  final Set<String> _latestMarkedIds = <String>{};
   List<ContentPreview> _history;
   List<FavoriteFolder> _favoriteFolders;
   List<ContentPreview> _favoriteItems;
@@ -51,6 +86,10 @@ class AppController extends ChangeNotifier {
   bool _isLoadingMoreFavorites = false;
   int _submissionTotal = 0;
   UserSession? _session;
+  Timer? _unreadTimer;
+  int _unreadCount = 0;
+  int _notifyUnread = 0;
+  NotifyCounts? _lastNotifyCounts;
   String? _homeError;
   String? _searchError;
   String? _hotRankingsError;
@@ -171,6 +210,7 @@ class AppController extends ChangeNotifier {
       notifyListeners();
     }
     await Future.wait([refreshHome(), loadCategories(), loadLevelSections()]);
+    if (_session != null) _startUnreadPolling();
     await _initAutoSign();
   }
 
@@ -234,15 +274,24 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshHome() async {
+  /// 刷新首页推荐：新内容前置合并，返回本次新增条数（用于交界标记）。
+  Future<int> refreshHome() async {
     _isLoadingHome = true;
     _homeError = null;
     notifyListeners();
     try {
       final fresh = await _home.getRecommendations();
+      final existingIds =
+          _recommendations.map((i) => '${i.type}:${i.id}').toSet();
+      final added = fresh
+          .where((item) =>
+              item.id != 0 && !existingIds.contains('${item.type}:${item.id}'))
+          .length;
       _recommendations = mergeRecommendations(fresh, _recommendations);
+      return added;
     } on MfunsApiException catch (error) {
       _homeError = error.message;
+      return 0;
     } finally {
       _isLoadingHome = false;
       notifyListeners();
@@ -419,13 +468,19 @@ class AppController extends ChangeNotifier {
 
   Future<void> loadMoreFollowingFeeds() => _loadMoreTimeline(following: true);
 
+  /// 过滤掉本次会话中已被用户标记的资源（本地记住，刷新后不再出现）。
+  List<LatestMfunsItem> _filterLatestMarked(List<LatestMfunsItem> items) =>
+      items
+          .where((item) => !_latestMarkedIds.contains(item.stableId))
+          .toList(growable: false);
+
   Future<void> loadLatestItems() async {
     _isLoadingLatestItems = true;
     _latestItemsError = null;
     notifyListeners();
     try {
       final page = await _latest.getLatest(user: _latestUserId());
-      _latestItems = page.items;
+      _latestItems = _filterLatestMarked(page.items);
       _latestBefore = page.nextBefore;
       _hasMoreLatestItems = page.items.isNotEmpty && page.nextBefore != null;
     } on LatestMfunsException catch (error) {
@@ -449,7 +504,7 @@ class AppController extends ChangeNotifier {
       final page =
           await _latest.getLatest(before: _latestBefore, user: _latestUserId());
       final ids = _latestItems.map((item) => item.stableId).toSet();
-      final additions = page.items
+      final additions = _filterLatestMarked(page.items)
           .where((item) => !ids.contains(item.stableId))
           .toList(growable: false);
       _latestItems = [..._latestItems, ...additions];
@@ -468,6 +523,7 @@ class AppController extends ChangeNotifier {
 
   /// 不友好标记（必须登录）：服务端按 UID 记录，同一用户只计一次；
   /// 达到 5 人后帖子被服务端屏蔽并从列表移除。
+  /// 标记后本地记住资源 id，刷新时过滤，不再重新出现。
   Future<LatestMarkResult> markLatestItem(LatestMfunsItem item) async {
     final userId = _session?.userId;
     if (userId == null) {
@@ -478,6 +534,7 @@ class AppController extends ChangeNotifier {
       type: item.type,
       user: '$userId',
     );
+    _latestMarkedIds.add(item.stableId);
     final marked =
         item.copyWith(markCount: result.markCount, markedByMe: true);
     final updated = <LatestMfunsItem>[];
@@ -504,6 +561,7 @@ class AppController extends ChangeNotifier {
       type: item.type,
       user: '$userId',
     );
+    _latestMarkedIds.remove(item.stableId);
     final unmarked =
         item.copyWith(markCount: result.markCount, markedByMe: false);
     final updated = <LatestMfunsItem>[];
@@ -764,6 +822,7 @@ class AppController extends ChangeNotifier {
       _session = await _auth.login(account: account.trim(), password: password);
       await _sessionStore.saveToken(_session!.accessToken);
       await loadFavoriteFolders();
+      _startUnreadPolling();
       return null;
     } on MfunsApiException catch (error) {
       return error.message;
@@ -776,6 +835,7 @@ class AppController extends ChangeNotifier {
   Future<void> clearLocalSession() async {
     _api.clearAccessToken();
     _session = null;
+    _stopUnreadPolling();
     notifyListeners();
     await _sessionStore.clear();
   }
@@ -791,11 +851,14 @@ class AppController extends ChangeNotifier {
   Future<List<VideoQuality>> videoQualities(int videoId) =>
       _home.getVideoQualities(videoId);
 
-  Future<List<CommunityComment>> comments(int areaId) =>
-      _home.getComments(areaId);
+  Future<List<CommunityComment>> comments(int areaId, {int page = 1}) =>
+      _home.getComments(areaId, page: page);
 
-  Future<List<CommunityComment>> commentReplies(int commentId) =>
-      _home.getCommentReplies(commentId);
+  Future<List<CommunityComment>> commentReplies(
+    int commentId, {
+    int page = 1,
+  }) =>
+      _home.getCommentReplies(commentId, page: page);
 
   Future<void> createComment({
     required int areaId,
@@ -852,6 +915,80 @@ class AppController extends ChangeNotifier {
       _home.sendMessage(toUid: toUid, text: text);
 
   Future<NotifyCounts> notifyCounts() => _home.getNotifyCounts();
+
+  /// 未读总数（私信 + 通知），用于底部导航“消息”小红点。
+  int get unreadCount => _unreadCount;
+
+  /// 未读通知数（赞/评论/提及/系统），用于消息中心的“通知”标签红点。
+  int get notifyUnread => _notifyUnread;
+
+  /// 未读通知明细（与红点同一数据源，保证同步显示）。
+  NotifyCounts get notifyCountsData =>
+      _lastNotifyCounts ??
+      const NotifyCounts(like: 0, comment: 0, mention: 0, system: 0);
+
+  /// 登录后每 30 秒轮询未读数；新消息/赞/评论/提及/系统通知按类型
+  /// 弹前台通知，未读总数与红点同步更新。
+  /// 私信与通知未读统一取自 `/v1/notify/count`（含 message 字段），
+  /// 与服务端同一数据源，查看相关页面后即视为已读。
+  Future<void> refreshUnreadCounts() async {
+    if (_session == null) return;
+    try {
+      final counts = await _home.getNotifyCounts();
+      final previous = _lastNotifyCounts;
+      if (previous != null) {
+        if (counts.message > previous.message) {
+          LocalMessageNotifier.instance
+              .showDm(counts.message - previous.message);
+        }
+        if (counts.like > previous.like) {
+          LocalMessageNotifier.instance
+              .showLikes(counts.like - previous.like);
+        }
+        if (counts.comment > previous.comment) {
+          LocalMessageNotifier.instance
+              .showComments(counts.comment - previous.comment);
+        }
+        if (counts.mention > previous.mention) {
+          LocalMessageNotifier.instance
+              .showMentions(counts.mention - previous.mention);
+        }
+        if (counts.system > previous.system) {
+          LocalMessageNotifier.instance
+              .showSystem(counts.system - previous.system);
+        }
+      }
+      _lastNotifyCounts = counts;
+      final notifyTotal = counts.like +
+          counts.comment +
+          counts.mention +
+          counts.system;
+      final total = notifyTotal + counts.message;
+      if (total != _unreadCount || notifyTotal != _notifyUnread) {
+        _unreadCount = total;
+        _notifyUnread = notifyTotal;
+        notifyListeners();
+      }
+    } on MfunsApiException {
+      // 网络/接口异常时静默，等待下一轮。
+    }
+  }
+
+  void _startUnreadPolling() {
+    _unreadTimer?.cancel();
+    _unreadTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      refreshUnreadCounts();
+    });
+    refreshUnreadCounts();
+  }
+
+  void _stopUnreadPolling() {
+    _unreadTimer?.cancel();
+    _unreadTimer = null;
+    _unreadCount = 0;
+    _notifyUnread = 0;
+    _lastNotifyCounts = null;
+  }
 
   Future<List<NotifyItem>> notifications({required int type, int page = 1}) =>
       _home.getNotifications(type: type, page: page);

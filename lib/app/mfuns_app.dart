@@ -92,7 +92,41 @@ class _HomeShellState extends State<_HomeShell> {
   final _timelineKey = GlobalKey<_TimelinePageState>();
   final _messageKey = GlobalKey<_MessageCenterPageState>();
 
-  Future<void> _refreshActiveTab() {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.homeTabRequest.addListener(_onTabRequest);
+    // 冷启动（App 由点击通知拉起）时请求先于本页面构建已发生，
+    // 构建后补应用跳转目标。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final value = widget.controller.homeTabRequest.value;
+      if (value != 0 && value != _index) {
+        setState(() => _index = value);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.controller.homeTabRequest.removeListener(_onTabRequest);
+    super.dispose();
+  }
+
+  /// 通知点击等外部请求切换底部标签。
+  void _onTabRequest() {
+    if (!mounted) return;
+    setState(() => _index = widget.controller.homeTabRequest.value);
+  }
+
+  /// 切到消息中心时立即刷新未读数，已读后小红点自动消失。
+  void _switchTab(int value) {
+    setState(() => _index = value);
+    if (value == 2) widget.controller.refreshUnreadCounts();
+  }
+
+  Future<void> _refreshActiveTab() async {
+    widget.controller.refreshUnreadCounts();
     switch (_index) {
       case 1:
         return _timelineKey.currentState?.refreshActiveTab() ??
@@ -134,39 +168,53 @@ class _HomeShellState extends State<_HomeShell> {
     );
     final isLandscape =
         MediaQuery.orientationOf(context) == Orientation.landscape;
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      // 横屏时底栏自动变为左侧垂直导航，充分利用宽屏空间。
-      child: isLandscape
-          ? Scaffold(
-              body: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _SideRail(
-                    index: _index,
-                    onChanged: (value) => setState(() => _index = value),
+    // 监听 controller：未读小红点随轮询结果即时刷新。
+    return AnimatedBuilder(
+      animation: widget.controller,
+      builder: (context, _) {
+        final hasUnread = widget.controller.unreadCount > 0;
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle.light,
+          // 横屏时底栏自动变为左侧垂直导航，充分利用宽屏空间。
+          child: isLandscape
+              ? Scaffold(
+                  body: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _SideRail(
+                        index: _index,
+                        onChanged: _switchTab,
+                        hasUnread: hasUnread,
+                      ),
+                      Expanded(child: content),
+                    ],
                   ),
-                  Expanded(child: content),
-                ],
-              ),
-            )
-          : Scaffold(
-              body: content,
-              bottomNavigationBar: _BottomNavigation(
-                index: _index,
-                onChanged: (value) => setState(() => _index = value),
-              ),
-            ),
+                )
+              : Scaffold(
+                  body: content,
+                  bottomNavigationBar: _BottomNavigation(
+                    index: _index,
+                    onChanged: _switchTab,
+                    hasUnread: hasUnread,
+                  ),
+                ),
+        );
+      },
     );
   }
 }
 
 /// 横屏左侧垂直导航栏。
 class _SideRail extends StatelessWidget {
-  const _SideRail({required this.index, required this.onChanged});
+  const _SideRail({
+    required this.index,
+    required this.onChanged,
+    required this.hasUnread,
+  });
 
   final int index;
   final ValueChanged<int> onChanged;
+  final bool hasUnread;
 
   @override
   Widget build(BuildContext context) {
@@ -191,16 +239,19 @@ class _SideRail extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 7),
                   child: InkWell(
                     onTap: () => onChanged(i),
-                    child: Column(
-                      children: [
-                        Icon(
-                          i == index ? items[i].$2 : items[i].$1,
-                          size: 23,
-                          color: i == index
-                              ? palette.primary
-                              : const Color(0xff777681),
-                        ),
-                        const SizedBox(height: 3),
+                      child: Column(
+                        children: [
+                          _NavIcon(
+                            showDot: i == 2 && hasUnread,
+                            child: Icon(
+                              i == index ? items[i].$2 : items[i].$1,
+                              size: 23,
+                              color: i == index
+                                  ? palette.primary
+                                  : const Color(0xff777681),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
                         Text(items[i].$3,
                             style: TextStyle(
                                 fontSize: 11,
@@ -318,10 +369,15 @@ class _MastheadTab extends StatelessWidget {
 }
 
 class _BottomNavigation extends StatelessWidget {
-  const _BottomNavigation({required this.index, required this.onChanged});
+  const _BottomNavigation({
+    required this.index,
+    required this.onChanged,
+    required this.hasUnread,
+  });
 
   final int index;
   final ValueChanged<int> onChanged;
+  final bool hasUnread;
 
   @override
   Widget build(BuildContext context) => BottomNavigationBar(
@@ -334,23 +390,57 @@ class _BottomNavigation extends StatelessWidget {
         unselectedItemColor: const Color(0xff777681),
         selectedFontSize: 12,
         unselectedFontSize: 12,
-        items: const [
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(
               icon: Icon(Icons.home_outlined),
               activeIcon: Icon(Icons.home_rounded),
               label: '首页'),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
               icon: Icon(Icons.auto_awesome_outlined),
               activeIcon: Icon(Icons.auto_awesome),
               label: '动态'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.chat_bubble_outline_rounded),
-              activeIcon: Icon(Icons.chat_bubble_rounded),
+              icon: _NavIcon(
+                showDot: hasUnread,
+                child: const Icon(Icons.chat_bubble_outline_rounded),
+              ),
+              activeIcon: _NavIcon(
+                showDot: hasUnread,
+                child: const Icon(Icons.chat_bubble_rounded),
+              ),
               label: '消息'),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
               icon: Icon(Icons.person_outline_rounded),
               activeIcon: Icon(Icons.person_rounded),
               label: '我的'),
+        ],
+      );
+}
+
+/// 图标右上角的小红点（未读提示）。
+class _NavIcon extends StatelessWidget {
+  const _NavIcon({required this.child, required this.showDot});
+
+  final Widget child;
+  final bool showDot;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+        clipBehavior: Clip.none,
+        children: [
+          child,
+          if (showDot)
+            const Positioned(
+              right: -3,
+              top: -3,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                child: SizedBox(width: 7, height: 7),
+              ),
+            ),
         ],
       );
 }
@@ -398,19 +488,36 @@ class _MessageCenterPageState extends State<_MessageCenterPage>
     super.initState();
     _tabController = TabController(length: 2, vsync: this)
       ..addListener(_syncTab);
+    widget.controller.messageSubTabRequest.addListener(_onSubTabRequest);
+    // 冷启动时请求可能先于本页面构建，构建后补应用。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onSubTabRequest();
+    });
   }
 
   @override
   void dispose() {
+    widget.controller.messageSubTabRequest.removeListener(_onSubTabRequest);
     _tabController.dispose();
     super.dispose();
   }
 
-  /// 滑动切换私信/通知时同步高亮。
+  /// 通知点击跳转：切到对应的私信/通知子标签。
+  void _onSubTabRequest() {
+    final value = widget.controller.messageSubTabRequest.value;
+    if (value != _tab && _tabController.index != value) {
+      _tabController.animateTo(value);
+    }
+  }
+
+  /// 滑动切换私信/通知时同步高亮；进入“通知”页视为已读，立即刷新未读。
   void _syncTab() {
     if (_tabController.indexIsChanging) return;
     if (_tabController.index == _tab) return;
     setState(() => _tab = _tabController.index);
+    if (_tabController.index == 1) {
+      widget.controller.refreshUnreadCounts();
+    }
   }
 
   /// Entry point for the shared masthead refresh button.
@@ -456,6 +563,9 @@ class _MessageCenterPageState extends State<_MessageCenterPage>
                   child: _TimelineTabs(
                     index: _tab,
                     labels: const ['私信', '通知'],
+                    badges: widget.controller.notifyUnread > 0
+                        ? const {1}
+                        : const <int>{},
                     onChanged: (value) => _tabController.animateTo(value),
                   ),
                 ),
@@ -502,6 +612,10 @@ class _DiscoverPageState extends State<_DiscoverPage>
   late final TabController _tabController;
   var _tab = 0;
   int? _categoryId;
+  final _homeScroll = ScrollController();
+
+  /// 最近一次刷新插入的新内容条数（信息流交界标记位置）。
+  int _homeNewCount = 0;
 
   @override
   void initState() {
@@ -513,7 +627,28 @@ class _DiscoverPageState extends State<_DiscoverPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _homeScroll.dispose();
     super.dispose();
+  }
+
+  /// 刷新推荐流：记录新增条数，并在完成后回到最新内容顶部。
+  Future<void> _refreshHome() async {
+    final added = await widget.controller.refreshHome();
+    if (added > 0 && mounted) setState(() => _homeNewCount = added);
+    // 刷新完成后回到最新内容的最顶部（offset 0）。
+    if (mounted && _homeScroll.hasClients) {
+      _homeScroll.animateTo(0,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    }
+  }
+
+  /// 点击交界标记：回到顶部查看新内容，并再次刷新。
+  Future<void> _onHomeJunctionTap() async {
+    if (_homeScroll.hasClients) {
+      _homeScroll.animateTo(0,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    }
+    await _refreshHome();
   }
 
   /// 滑动切换标签时同步高亮并加载对应数据。
@@ -548,7 +683,7 @@ class _DiscoverPageState extends State<_DiscoverPage>
 
   /// 刷新当前分区页激活的标签：推荐 / 排行 / 分区内容。
   Future<void> refreshActiveTab() {
-    if (_tab == 0) return widget.controller.refreshHome();
+    if (_tab == 0) return _refreshHome();
     if (_tab == 1) return widget.controller.loadHotRankings();
     final categoryId = _categoryId;
     if (categoryId != null) {
@@ -583,13 +718,17 @@ class _DiscoverPageState extends State<_DiscoverPage>
                       _KeepAliveTab(
                         child: RefreshIndicator(
                           color: _palette(context).accent,
-                          onRefresh: widget.controller.refreshHome,
+                          onRefresh: _refreshHome,
                           child: _ContentGrid(
                             controller: widget.controller,
                             items: items,
                             isLoading: widget.controller.isLoadingHome,
                             error: widget.controller.homeError,
                             emptyText: '暂时没有推荐内容',
+                            scrollController: _homeScroll,
+                            junctionIndex:
+                                _homeNewCount > 0 ? _homeNewCount : null,
+                            onJunctionTap: _onHomeJunctionTap,
                           ),
                         ),
                       ),
@@ -751,6 +890,9 @@ class _TimelinePageState extends State<_TimelinePage>
   static const _visualToTab = [2, 1, 0];
   late final TabController _tabController;
   var _tab = 2;
+  final _feedScroll = ScrollController();
+  final _latestScroll = ScrollController();
+  final _followingScroll = ScrollController();
 
   @override
   void initState() {
@@ -765,6 +907,9 @@ class _TimelinePageState extends State<_TimelinePage>
   @override
   void dispose() {
     _tabController.dispose();
+    _feedScroll.dispose();
+    _latestScroll.dispose();
+    _followingScroll.dispose();
     super.dispose();
   }
 
@@ -783,7 +928,19 @@ class _TimelinePageState extends State<_TimelinePage>
     return widget.controller.loadFeeds();
   }
 
-  Future<void> _refreshActiveTab() => _loadForTab(_tab);
+  /// 刷新完成后回到列表顶部（动态页点击刷新后应回到顶部查看最新内容）。
+  Future<void> _refreshActiveTab() async {
+    await _loadForTab(_tab);
+    final controller = switch (_tab) {
+      0 => _followingScroll,
+      1 => _latestScroll,
+      _ => _feedScroll,
+    };
+    if (controller.hasClients) {
+      controller.animateTo(0,
+          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    }
+  }
 
   /// Entry point for the shared masthead refresh button.
   Future<void> refreshActiveTab() => _refreshActiveTab();
@@ -948,6 +1105,7 @@ class _TimelinePageState extends State<_TimelinePage>
                           onOpenResource: _openContentDetail,
                           onOpenFeed: _openFeedDetail,
                           emptyText: '时间线暂时没有可展示的动态',
+                          scrollController: _feedScroll,
                         ),
                       ),
                     ),
@@ -967,6 +1125,7 @@ class _TimelinePageState extends State<_TimelinePage>
                           onOpenUser: _openUserProfile,
                           onOpenItem: _openLatestItem,
                           onMarkItem: _markLatestItem,
+                          scrollController: _latestScroll,
                         ),
                       ),
                     ),
@@ -996,6 +1155,7 @@ class _TimelinePageState extends State<_TimelinePage>
                                 onOpenFeed: _openFeedDetail,
                                 emptyText:
                                     '还没有关注动态，先去时间线发现创作者吧',
+                                scrollController: _followingScroll,
                               ),
                             ),
                           ),
@@ -1019,6 +1179,7 @@ class _LatestItemList extends StatelessWidget {
     required this.onOpenUser,
     required this.onOpenItem,
     required this.onMarkItem,
+    this.scrollController,
   });
 
   final List<LatestMfunsItem> items;
@@ -1030,6 +1191,7 @@ class _LatestItemList extends StatelessWidget {
   final ValueChanged<int> onOpenUser;
   final ValueChanged<LatestMfunsItem> onOpenItem;
   final ValueChanged<LatestMfunsItem> onMarkItem;
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -1048,6 +1210,7 @@ class _LatestItemList extends StatelessWidget {
         return false;
       },
       child: ListView.separated(
+        controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 86),
         itemCount: items.length + 1,
@@ -1351,6 +1514,7 @@ class _TimelineTabs extends StatelessWidget {
     required this.onChanged,
     this.labels = const ['关注', '最新', '时间线'],
     this.order,
+    this.badges = const <int>{},
   });
 
   final int index;
@@ -1359,6 +1523,9 @@ class _TimelineTabs extends StatelessWidget {
 
   /// Display order as logical tab indices; defaults to `[0, 1, ...]`.
   final List<int>? order;
+
+  /// Positions (in display order) that show a red unread dot.
+  final Set<int> badges;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1387,12 +1554,30 @@ class _TimelineTabs extends StatelessWidget {
                           ]
                         : null,
                   ),
-                  child: Text(labels[position],
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: selected ? _palette(context).primary : _muted,
-                          fontWeight:
-                              selected ? FontWeight.w800 : FontWeight.w600)),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.center,
+                    children: [
+                      Text(labels[position],
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              color: selected ? _palette(context).primary : _muted,
+                              fontWeight:
+                                  selected ? FontWeight.w800 : FontWeight.w600)),
+                      if (badges.contains(position))
+                        const Positioned(
+                          right: -6,
+                          top: -6,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            child: SizedBox(width: 7, height: 7),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -1455,6 +1640,7 @@ class _TimelineFeedList extends StatelessWidget {
     required this.onOpenFeed,
     required this.emptyText,
     required this.controller,
+    this.scrollController,
   });
 
   final List<TimelineFeed> items;
@@ -1468,6 +1654,7 @@ class _TimelineFeedList extends StatelessWidget {
   final ValueChanged<int> onOpenFeed;
   final String emptyText;
   final AppController controller;
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -1484,6 +1671,7 @@ class _TimelineFeedList extends StatelessWidget {
         return false;
       },
       child: ListView.separated(
+        controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 86),
         itemCount: items.length + 1,
@@ -2396,8 +2584,8 @@ class _ProfileMemberBody extends StatelessWidget {
       context: context,
       useRootNavigator: true,
       builder: (context) => AlertDialog(
-        title: const Text('退出当前会话'),
-        content: const Text('退出后将清除登录 Token，需要重新登录才能继续使用。确定退出吗？'),
+        title: const Text('退出当前账号'),
+        content: const Text('退出后将清除登录凭证，需要重新登录才能继续使用。确定退出吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -2465,8 +2653,7 @@ class _ProfileMemberBody extends StatelessWidget {
           _ProfileItem(
             icon: Icons.logout_rounded,
             title: '退出当前会话',
-            subtitle: '这将清除登录Token',
-            danger: true,
+            subtitle: '这将清除登录凭证',
             onTap: () => _confirmLogout(context, controller),
           ),
         ],
@@ -2678,13 +2865,11 @@ class _ProfileItem extends StatelessWidget {
       {required this.icon,
       required this.title,
       required this.subtitle,
-      this.danger = false,
       this.onTap});
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final bool danger;
   final VoidCallback? onTap;
 
   @override
@@ -2694,14 +2879,14 @@ class _ProfileItem extends StatelessWidget {
           onTap: onTap,
           leading: CircleAvatar(
             backgroundColor:
-                (danger ? _palette(context).accent : _palette(context).primary).withOpacity(.11),
-            foregroundColor: danger ? _palette(context).accent : _palette(context).primary,
+                _palette(context).primary.withOpacity(.11),
+            foregroundColor: _palette(context).primary,
             child: Icon(icon),
           ),
           title: Text(title,
-              style: TextStyle(
+              style: const TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: danger ? _palette(context).accent : _ink)),
+                  color: _ink)),
           subtitle: Text(subtitle),
           trailing: const Icon(Icons.chevron_right_rounded),
         ),
@@ -2889,6 +3074,9 @@ class _ContentGrid extends StatelessWidget {
     this.onLoadMore,
     this.isLoadingMore = false,
     this.hasMore = false,
+    this.scrollController,
+    this.junctionIndex,
+    this.onJunctionTap,
   });
 
   final AppController controller;
@@ -2899,6 +3087,11 @@ class _ContentGrid extends StatelessWidget {
   final Future<void> Function()? onLoadMore;
   final bool isLoadingMore;
   final bool hasMore;
+  final ScrollController? scrollController;
+
+  /// 新内容交界位置：在此处插入“刚刚看到这里”标记（行首全宽）。
+  final int? junctionIndex;
+  final VoidCallback? onJunctionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2915,41 +3108,65 @@ class _ContentGrid extends StatelessWidget {
         final cardWidth =
             (constraints.maxWidth - 24 - (columns - 1) * 10) / columns;
         final cellHeight = cardWidth / 1.38 + 96;
-        final grid = GridView.builder(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 82),
-          physics: const AlwaysScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 10,
-            mainAxisExtent: cellHeight,
-          ),
-          itemCount: items.length + (onLoadMore == null ? 0 : 1),
-          itemBuilder: (context, index) {
-            if (index == items.length) {
-              if (isLoadingMore) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: CircularProgressIndicator(strokeWidth: 2.4),
-                  ),
-                );
-              }
-              if (!hasMore) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: Text('已经到底了',
-                        style: TextStyle(color: _muted, fontSize: 12)),
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            }
-            return _ContentCard(controller: controller, item: items[index]);
-          },
+        final delegate = SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 10,
+          mainAxisExtent: cellHeight,
         );
-        if (onLoadMore == null) return grid;
+        final junction = (junctionIndex ?? 0).clamp(0, items.length);
+        Widget footer;
+        if (isLoadingMore) {
+          footer = const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+          );
+        } else if (!hasMore && onLoadMore != null) {
+          footer = const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Center(
+                child: Text('已经到底了',
+                    style: TextStyle(color: _muted, fontSize: 12))),
+          );
+        } else {
+          footer = const SizedBox(height: 2);
+        }
+        final slivers = <Widget>[
+          if (junction > 0) ...[
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              sliver: SliverGrid(
+                gridDelegate: delegate,
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) =>
+                      _ContentCard(controller: controller, item: items[index]),
+                  childCount: junction,
+                ),
+              ),
+            ),
+            // 新内容与旧内容的交界标记：点击刷新并回到顶部。
+            SliverToBoxAdapter(child: _FeedJunction(onTap: onJunctionTap)),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          ],
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(12, junction > 0 ? 0 : 12, 12, 82),
+            sliver: SliverGrid(
+              gridDelegate: delegate,
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _ContentCard(
+                    controller: controller, item: items[junction + index]),
+                childCount: items.length - junction,
+              ),
+            ),
+          ),
+          if (onLoadMore != null) SliverToBoxAdapter(child: footer),
+        ];
+        final scroll = CustomScrollView(
+          controller: scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: slivers,
+        );
+        if (onLoadMore == null) return scroll;
         return NotificationListener<ScrollNotification>(
           onNotification: (notification) {
             if (notification.metrics.extentAfter < 300 &&
@@ -2959,11 +3176,48 @@ class _ContentGrid extends StatelessWidget {
             }
             return false;
           },
-          child: grid,
+          child: scroll,
         );
       },
     );
   }
+}
+
+/// 信息流交界标记：刷新后新内容插入在旧内容之上，
+/// 在交界处提示“刚刚看到这里”，点击刷新并回到顶部查看新内容。
+class _FeedJunction extends StatelessWidget {
+  const _FeedJunction({this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xffeeedf5),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0x33888888)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh_rounded, size: 15, color: _muted),
+                  SizedBox(width: 6),
+                  Text('刚刚看到这里，点击刷新',
+                      style: TextStyle(color: _muted, fontSize: 12.5)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _ContentCard extends StatelessWidget {
@@ -3011,8 +3265,8 @@ class _ContentCard extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(9, 3, 9, 8),
                 child: Row(
                   children: [
-                    Icon(Icons.favorite_rounded,
-                        size: 13, color: _palette(context).accent),
+                    const Icon(Icons.favorite_rounded,
+                        size: 13, color: _muted),
                     const SizedBox(width: 3),
                     Text('${item.likes}',
                         style: const TextStyle(color: _muted, fontSize: 11)),
