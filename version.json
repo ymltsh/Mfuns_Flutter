@@ -1,17 +1,29 @@
 {
   "latest": {
     "version": "1.2.6",
-    "build": 30,
-    "name": "Mfuns Flutter v1.2.6 Beta",
+    "build": 31,
+    "name": "Mfuns Flutter v1.2.6 Beta 2",
     "date": "2026-08-26",
     "notes": "修复\n- 长图导出：去除链接的黄色下划线，文章标题、用户名等以链接形式出现的内容不再显示下划线（保留主题色，不影响 Markdown 导出）",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta/mfuns-flutter-1.2.6-beta.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta/mfuns-flutter-windows-1.2.6-beta.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta2/mfuns-flutter-1.2.6-beta2.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta2/mfuns-flutter-windows-1.2.6-beta2.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.6-beta"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.6-beta2"
   },
   "history": [
+    {
+      "version": "1.2.6",
+      "build": 30,
+      "name": "Mfuns Flutter v1.2.6 Beta",
+      "date": "2026-08-26",
+      "notes": "修复\n- 长图导出：去除链接的黄色下划线，文章标题、用户名等以链接形式出现的内容不再显示下划线（保留主题色，不影响 Markdown 导出）",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta/mfuns-flutter-1.2.6-beta.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta/mfuns-flutter-windows-1.2.6-beta.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.6-beta"
+    },
     {
       "version": "1.2.5",
       "build": 29,
