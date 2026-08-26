@@ -128,8 +128,8 @@ class MfunsAudioHandler extends BaseAudioHandler {
     if (snapshot.duration != _lastDuration) {
       _lastDuration = snapshot.duration;
       _pushMediaItem(
-        title: _lastTitle ?? 'Mfuns 视频',
-        subtitle: _lastSubtitle ?? 'Mfuns 视频',
+        title: _lastTitle ?? 'Mfuns',
+        subtitle: _lastSubtitle ?? 'Mfuns',
         artUri: _lastArtUri,
         duration: snapshot.duration,
       );

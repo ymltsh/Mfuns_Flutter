@@ -99,10 +99,20 @@ abstract class BackgroundAudioEngine {
 ///
 /// - `handleInterruptions: false`：不因系统音频焦点变化自动暂停，
 ///   规避部分 ROM（尤其 MIUI/HyperOS）退后台时抢占焦点导致后台音频被杀。
+/// - `userAgent: 'ExoPlayer'`：与 video_player 插件完全一致的 UA。
+///   播放源 CDN 带 auth_key 防盗链、按 UA 白名单放行，just_audio 默认的
+///   `just_audio/1.0 (Linux;...)` 长 UA 会被 403 拒绝（Source error）。
+/// - `useProxyForRequestHeaders: false`：UA 直接经 ExoPlayer HTTP 栈发送，
+///   与 video_player 走同一条网络路径，避免本地代理引入额外失败点。
 /// - 不创建 MediaSession：MediaSession 由 audio_service 统一持有。
 class JustAudioBackgroundEngine implements BackgroundAudioEngine {
   JustAudioBackgroundEngine({AudioPlayer? player})
-      : _player = player ?? AudioPlayer(handleInterruptions: false);
+      : _player = player ??
+            AudioPlayer(
+              userAgent: 'ExoPlayer',
+              useProxyForRequestHeaders: false,
+              handleInterruptions: false,
+            );
 
   final AudioPlayer _player;
   bool _hasSource = false;
@@ -128,6 +138,14 @@ class JustAudioBackgroundEngine implements BackgroundAudioEngine {
   @override
   double get speed => _player.speed;
 
+  /// 最近一次加载失败的详情（media3 errorCode / message），供日志排查。
+  String? lastErrorFrom(Object error) {
+    if (error is PlayerException) {
+      return '${error.code}: ${error.message} ${error.details}';
+    }
+    return error.toString();
+  }
+
   @override
   Future<void> load(
     String url, {
@@ -142,6 +160,9 @@ class JustAudioBackgroundEngine implements BackgroundAudioEngine {
       _hasSource = true;
     } catch (error) {
       _hasSource = false;
+      PlaybackLog.d(
+          'background engine load FAILED url=$url error=$error '
+          'detail=${lastErrorFrom(error)}');
       rethrow;
     }
   }

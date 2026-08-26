@@ -2511,7 +2511,7 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     MfunsAudioHandler.instance.attach(
       player: player,
       title: widget.title,
-      subtitle: 'Mfuns 视频',
+      subtitle: 'Mfuns',
       artUri: widget.coverUrl,
       url: quality.url,
       part: quality.part,
