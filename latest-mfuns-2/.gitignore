@@ -1,0 +1,7 @@
+mfuns_token.pkl
+device_id.cache
+config.json
+aggregator.db
+last.json
+__pycache__/
+*.pyc

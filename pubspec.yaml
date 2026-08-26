@@ -53,6 +53,8 @@ dependencies:
   # project's AGP 8.1 / Kotlin 1.8.22 toolchain (and resolves the web
   # dependency shared with file_picker); 11+ breaks with the new SharePlus API.
   share_plus: 10.1.4
+  just_audio: ^0.9.46
+  audio_session: ^0.1.25
 
 dev_dependencies:
   flutter_test:

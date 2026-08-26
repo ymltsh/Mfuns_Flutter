@@ -12,6 +12,8 @@ import 'package:window_manager/window_manager.dart';
 import '../../app/app_controller.dart';
 import '../../core/config/user_preferences.dart';
 import '../../core/media/media_notification.dart';
+import '../../core/media/playback_coordinator.dart';
+import '../../core/media/playback_log.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_link_handler.dart';
 import '../../core/widgets/content_spans.dart';
@@ -2251,12 +2253,17 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     _loadBrightness();
   }
 
-  /// 后台播放（Beta）关闭时，App 退到后台自动暂停视频，避免静默播放。
+  /// 后台播放（Beta）：
+  /// - 开启：退后台时由 MfunsPlaybackCoordinator 把音频 handoff 到
+  ///   just_audio 后台引擎继续播放，回前台时切回视频。
+  /// - 关闭：退后台自动暂停视频，避免静默播放。
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused && !_backgroundPlay) {
-      _player?.pause();
-      if (mounted) setState(() {});
+    if (state == AppLifecycleState.paused) {
+      MfunsPlaybackCoordinator.instance
+          .onAppBackgrounded(backgroundPlayEnabled: _backgroundPlay);
+    } else if (state == AppLifecycleState.resumed) {
+      MfunsPlaybackCoordinator.instance.onAppForegrounded();
     }
   }
 
@@ -2277,6 +2284,11 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
   /// 全屏时由全屏层自己检测，避免共享控制器被本状态替换）。
   void _checkAutoNextPart() {
     if (_isFullscreen) return;
+    // 页面被上层路由覆盖（例如从相关视频进入 B 页）时不做自动连播，
+    // 避免不可见页面的自动切换抢走当前页面的播放权（全局单播放器仲裁）。
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
+    // App 在后台（音频已交接给后台引擎）时不创建新播放器。
+    if (MfunsPlaybackCoordinator.instance.phase.isBackground) return;
     final player = _player;
     final selected = _selected;
     if (player == null || selected == null) return;
@@ -2363,8 +2375,16 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
       _wakelockHeld = false;
       WakelockPlus.disable();
     }
-    _player?.dispose();
-    MfunsAudioHandler.instance.detach();
+    final player = _player;
+    if (player != null) {
+      final wasBound =
+          MfunsPlaybackCoordinator.instance.unbindVideo(player);
+      PlaybackLog.d('player dispose id=${identityHashCode(player)} bound=$wasBound');
+      player.dispose();
+      if (wasBound) {
+        MfunsAudioHandler.instance.detach();
+      }
+    }
     super.dispose();
   }
 
@@ -2393,13 +2413,28 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
       _danmaku = const [];
     });
     widget.onQualityChanged?.call(quality);
+    if (oldPlayer != null) {
+      MfunsPlaybackCoordinator.instance.unbindVideo(oldPlayer);
+    }
     await oldPlayer?.dispose();
     if (!mounted || request != _selectionRequest) return;
-    final nextPlayer = VideoPlayerController.networkUrl(Uri.parse(quality.url));
+    final nextPlayer = VideoPlayerController.networkUrl(
+      Uri.parse(quality.url),
+      videoPlayerOptions: VideoPlayerOptions(
+        // 真正的“是否启用后台播放”由本页 _backgroundPlay 控制；
+        // 退后台时由 MfunsPlaybackCoordinator 负责暂停或 handoff。
+        allowBackgroundPlayback: _backgroundPlay,
+      ),
+    );
+    PlaybackLog.d(
+        'create player id=${identityHashCode(nextPlayer)} url=${quality.url}');
     try {
       await nextPlayer
           .initialize()
           .timeout(videoInitTimeout);
+      PlaybackLog.d(
+          'initialize ok id=${identityHashCode(nextPlayer)} '
+          'duration=${nextPlayer.value.duration}');
       await nextPlayer.setVolume(_volume);
       await nextPlayer.setPlaybackSpeed(_playbackSpeed);
       if (resumePosition > Duration.zero) {
@@ -2408,21 +2443,30 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
             : resumePosition;
         await nextPlayer.seekTo(target);
       }
-      if (wasPlaying || forcePlay) await nextPlayer.play();
+      await MfunsPlaybackCoordinator.instance.bindVideo(
+        nextPlayer,
+        url: quality.url,
+        part: quality.part,
+      );
+      if (wasPlaying || forcePlay) {
+        await MfunsPlaybackCoordinator.instance.requestPlay();
+      }
       if (!mounted || request != _selectionRequest) {
+        MfunsPlaybackCoordinator.instance.unbindVideo(nextPlayer);
         await nextPlayer.dispose();
         return;
       }
       setState(() => _player = nextPlayer);
-      _attachMediaNotification(nextPlayer);
+      _attachMediaNotification(nextPlayer, quality);
       // 打开视频自动播放：仅在首次初始化时生效。
       if (autoPlay && !_autoPlayed) {
         _autoPlayed = true;
         _hasStarted = true;
-        await nextPlayer.play();
+        await MfunsPlaybackCoordinator.instance.requestPlay();
       }
       await _loadDanmaku(quality.part);
     } catch (error) {
+      MfunsPlaybackCoordinator.instance.unbindVideo(nextPlayer);
       await nextPlayer.dispose();
       if (!mounted || request != _selectionRequest) return;
       if (retrySameSource) {
@@ -2463,12 +2507,14 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
   }
 
   /// 绑定媒体通知：在系统通知栏展示当前视频并同步播放/暂停/进度。
-  void _attachMediaNotification(VideoPlayerController player) {
+  void _attachMediaNotification(VideoPlayerController player, VideoQuality quality) {
     MfunsAudioHandler.instance.attach(
       player: player,
       title: widget.title,
       subtitle: 'Mfuns 视频',
       artUri: widget.coverUrl,
+      url: quality.url,
+      part: quality.part,
     );
   }
 
@@ -2929,9 +2975,15 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                                           if (!_hasStarted) {
                                             setState(() => _hasStarted = true);
                                           }
-                                          player.value.isPlaying
-                                              ? await player.pause()
-                                              : await player.play();
+                                          if (player.value.isPlaying) {
+                                            await MfunsPlaybackCoordinator
+                                                .instance
+                                                .requestPause();
+                                          } else {
+                                            await MfunsPlaybackCoordinator
+                                                .instance
+                                                .requestPlay();
+                                          }
                                           if (mounted) setState(() {});
                                           _scheduleControlsHide();
                                         },
@@ -3262,6 +3314,8 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
   /// 当前分P播放结束后自动连播下一分P（全屏层自己替换共享控制器）。
   Future<void> _checkAutoNextPart() async {
     if (_switchingQuality) return;
+    // App 在后台时不创建新播放器（音频已交接给后台引擎）。
+    if (MfunsPlaybackCoordinator.instance.phase.isBackground) return;
     final value = _player.value;
     if (value.duration <= Duration.zero) return;
     if (value.isPlaying) return;
@@ -3273,7 +3327,7 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
     if (next == null) return;
     await _selectQuality(next);
     if (mounted && !_player.value.isPlaying) {
-      await _player.play();
+      await MfunsPlaybackCoordinator.instance.requestPlay();
     }
   }
 
@@ -3684,9 +3738,15 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                             ),
                                             iconSize: 54,
                                             onPressed: () async {
-                                              value.isPlaying
-                                                  ? await _player.pause()
-                                                  : await _player.play();
+                                              if (value.isPlaying) {
+                                                await MfunsPlaybackCoordinator
+                                                    .instance
+                                                    .requestPause();
+                                              } else {
+                                                await MfunsPlaybackCoordinator
+                                                    .instance
+                                                    .requestPlay();
+                                              }
                                               _scheduleHide();
                                             },
                                             icon: Icon(value.isPlaying

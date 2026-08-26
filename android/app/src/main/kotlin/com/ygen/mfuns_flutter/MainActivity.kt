@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -54,6 +55,19 @@ class MainActivity : AudioServiceActivity() {
                 }
                 saveExportFile(call, result)
             }
+        // 播放链路日志通道：Dart 侧 PlaybackLog 经此写入
+        // logcat tag MfunsPlayback，可用 `adb logcat -s MfunsPlayback:D` 过滤。
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.ygen.mfuns_flutter/playback_log",
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "log") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            Log.d("MfunsPlayback", call.arguments as? String ?: "")
+            result.success(null)
+        }
     }
 
     private fun saveImage(call: MethodCall, result: MethodChannel.Result) {

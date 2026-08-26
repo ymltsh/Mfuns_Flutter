@@ -1,0 +1,137 @@
+{
+  "timestamp": "2026-07-05T01:29:32.122268",
+  "page_analysis": {
+    "feed": {
+      "has_ssr": true,
+      "has_error": true,
+      "has_user": false,
+      "username": null
+    },
+    "video": {
+      "has_ssr": false
+    },
+    "article": {
+      "has_ssr": true,
+      "has_error": false,
+      "has_user": true,
+      "username": "Qwes3721"
+    }
+  },
+  "recommendations": [
+    {
+      "id": 1,
+      "priority": "HIGH",
+      "title": "真实用户名支持 (从 __NUXT__ SSR 提取)",
+      "desc": "Article 和 Video 的移动端页面 SSR 中包含完整的用户数据 (username, user_id, avatar, bio, fans)。Feed 的 SSR 当前有错误，需单独处理。",
+      "action": [
+        "在 parse_page() 中解析 __NUXT__ 状态提取 author/author_id/author_avatar",
+        "ALTER TABLE items ADD COLUMN author TEXT, author_id TEXT, author_avatar TEXT, author_bio TEXT",
+        "更新 insert_item() 传入 author 参数",
+        "更新 API 返回 author 字段",
+        "更新 webui.py 使用真实 author 替代 generateUserData() 假名",
+        "对于 feed (SSR 无 user 数据)，可通过 /user/get_user API 按条件查询补充"
+      ]
+    },
+    {
+      "id": 2,
+      "priority": "HIGH",
+      "title": "修复 Token 验证端点 BUG",
+      "desc": "scraper.py:93 的 is_token_valid() 使用 /v1/user/profile 端点，该端点返回 {code:404} 但 HTTP 200，导致 token 始终判为有效。正确端点是 /v1/user/info。",
+      "action": [
+        "修改 VALIDATE_URL = 'https://api.mfuns.net/v1/user/info'",
+        "检查 response.json()['code'] == 1 而非仅检查 HTTP status"
+      ]
+    },
+    {
+      "id": 3,
+      "priority": "HIGH",
+      "title": "凭据安全 - 环境变量化",
+      "desc": "scraper.py:114-117 硬编码手机号和密码.",
+      "action": [
+        "使用 os.getenv('MFUNS_ACCOUNT') / os.getenv('MFUNS_PASSWORD')",
+        "添加 .env.example 文件",
+        "将 TOKEN_FILE, device_id.cache, .env 加入 .gitignore"
+      ]
+    },
+    {
+      "id": 4,
+      "priority": "HIGH",
+      "title": "Sitemap 增量发现 (替代 ID 遍历)",
+      "desc": "www.mfuns.net/sitemap.xml 包含 10000 条 video+article 记录 (含 lastmod 日期)，可替代低效的 ID 遍历.",
+      "action": [
+        "新增 parse_sitemap() 方法解析 sitemap.xml",
+        "对于 video/article: 按 lastmod 排序后增量抓取新增条目",
+        "Feed 不在 sitemap 中，仍需 ID 遍历 (或寻找其他批量接口)",
+        "实现时注意 sitemap 上限 10000 条，可能需分页"
+      ]
+    },
+    {
+      "id": 5,
+      "priority": "MEDIUM",
+      "title": "API 批量获取用户信息",
+      "desc": "/v1/user/get_user?id=X 可获取任意用户的完整 Profile (name/avatar/bio/fans/badges)。如果从 SSR 或页面提取到 user_id，可异步补充用户信息。",
+      "action": [
+        "新增 user_profiles 缓存表",
+        "爬取时异步调用 get_user API 获取详细信息",
+        "支持按用户维度筛选内容"
+      ]
+    },
+    {
+      "id": 6,
+      "priority": "MEDIUM",
+      "title": "数据库 Schema 升级",
+      "desc": "当前 items 表只有 (id, type, title, url, description, cover, created_at)，缺少作者、标签等维度。",
+      "action": [
+        "ALTER TABLE items ADD COLUMN author TEXT DEFAULT ''",
+        "ALTER TABLE items ADD COLUMN author_id TEXT DEFAULT ''",
+        "ALTER TABLE items ADD COLUMN author_avatar TEXT DEFAULT ''",
+        "ALTER TABLE items ADD COLUMN author_bio TEXT DEFAULT ''",
+        "ALTER TABLE items ADD COLUMN tags TEXT DEFAULT ''"
+      ]
+    },
+    {
+      "id": 7,
+      "priority": "MEDIUM",
+      "title": "爬虫并发性能优化",
+      "desc": "当前 craw_type() 串行遍历 ID，速度受单请求延迟限制。",
+      "action": [
+        "使用 asyncio.Semaphore(5) 控制并发",
+        "使用 asyncio.as_completed() 而非逐个 await",
+        "对 sitemap 中的已知 ID 批量请求"
+      ]
+    },
+    {
+      "id": 8,
+      "priority": "MEDIUM",
+      "title": "Feed SSR 错误处理",
+      "desc": "所有 feed 页面 SSR 均报错 'Cannot read properties of undefined (reading like_status)'，导致无法从 HTML 获取用户数据。",
+      "action": [
+        "尝试使用 Headless Browser (Playwright) 渲染 feed 页面获取数据",
+        "或寻找 feed 相关的 API 端点",
+        "或从 sitemap 的关联数据中间接获取 feed 的作者信息"
+      ]
+    },
+    {
+      "id": 9,
+      "priority": "LOW",
+      "title": "错误重试 & 指数退避",
+      "desc": "当前遇到错误直接跳过，无重试机制。",
+      "action": [
+        "区分 404 (永久) vs 429/503 (临时) 错误",
+        "临时错误 3 次重试 + 指数退避",
+        "全局速率限制自适应调整"
+      ]
+    },
+    {
+      "id": 10,
+      "priority": "LOW",
+      "title": "User-Agent / 设备指纹轮换",
+      "desc": "固定 UA 和 device_id 可能被风控识别。",
+      "action": [
+        "维护 UA 池随机选择",
+        "定期更新 device_id",
+        "添加 Referer 头模拟正常浏览"
+      ]
+    }
+  ]
+}

@@ -48,7 +48,6 @@ app.*.map.json
 *.har
 
 
-latest-mfuns-2/
 MFUNS_FLUTTER_PLAN.md
 mfuns_api_docs.md
 

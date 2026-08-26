@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -40,6 +41,14 @@ void main() async {
     );
   } catch (_) {
     // 平台不支持时静默，视频播放不受影响。
+  }
+  // 后台音频引擎（just_audio）使用音乐播放的音频会话配置：
+  // usage=media / contentType=music，配合 Android 前台媒体服务。
+  try {
+    final session = await AudioSession.instance;
+    await session.configure(const AudioSessionConfiguration.music());
+  } catch (_) {
+    // 平台不支持时静默。
   }
   final controller = AppController();
   // 消息前台通知（Notification API）：初始化通道、请求权限；

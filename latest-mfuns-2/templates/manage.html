@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{TITLE}} 管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --ink: #2c2c2c;
+            --paper: #f5f0e8;
+            --paper-deep: #e8e2d8;
+            --red: #e74c3c;
+            --blue: #3498db;
+            --green: #27ae60;
+            --yellow: #f39c12;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background-color: var(--paper);
+            background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='220'%20height='220'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='0.85'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA%20type='linear'%20slope='0.05'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect%20width='220'%20height='220'%20filter='url(%23n)'/%3E%3C/svg%3E");
+            color: var(--ink); line-height: 1.5;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+        header {
+            background-color: var(--paper);
+            padding: 14px 0; border-bottom: 2px dashed var(--ink);
+        }
+        header .container { display: flex; align-items: center; gap: 12px; padding-top: 0; padding-bottom: 0; }
+        header h1 {
+            font-family: Georgia, 'Songti SC', 'Noto Serif SC', 'STSong', SimSun, serif;
+            font-size: 18px; font-weight: 700;
+            text-decoration: underline wavy var(--red);
+            text-decoration-thickness: 2px; text-underline-offset: 4px;
+        }
+        .user-area { margin-left: auto; display: flex; gap: 8px; align-items: center; font-size: 13px; color: #6b6b6b; }
+        .card {
+            background-color: var(--paper);
+            border: 2px dashed var(--ink); border-radius: 2px;
+            padding: 20px; margin-bottom: 16px; position: relative;
+            box-shadow: 2px 2px 0 rgba(44,44,44,0.3);
+            transform: rotate(-0.4deg);
+        }
+        .card:nth-of-type(2n) { transform: rotate(0.3deg); }
+        .card:nth-of-type(3n) { transform: rotate(0.6deg); }
+        .card::after {
+            content: ''; position: absolute; inset: 0; pointer-events: none;
+            background-image: url("data:image/svg+xml;utf8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='9'%20height='9'%3E%3Cpath%20d='M0%209L9%200'%20stroke='%232c2c2c'%20stroke-width='1.2'/%3E%3C/svg%3E");
+            opacity: 0.05;
+        }
+        .card h2 {
+            font-family: Georgia, 'Songti SC', 'Noto Serif SC', serif;
+            font-size: 15px; font-weight: 700; margin-bottom: 14px; display: inline-block;
+            text-decoration: underline wavy rgba(231,76,60,0.85);
+            text-decoration-thickness: 1.5px; text-underline-offset: 4px;
+        }
+        .card h3 {
+            font-family: Georgia, 'Songti SC', 'Noto Serif SC', serif;
+            font-size: 13px; font-weight: 700; margin: 16px 0 8px; color: #6b6b6b;
+        }
+        .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+        input, select {
+            padding: 8px 12px; border: 2px dashed var(--ink); border-radius: 2px;
+            font-size: 14px; outline: none; background-color: var(--paper-deep); color: var(--ink); font-family: inherit;
+            transition: background-color 120ms ease;
+        }
+        input::placeholder { color: #8a8a8a; }
+        input:focus, select:focus { background-color: var(--paper); outline: 2px dashed var(--blue); outline-offset: 2px; }
+        input.wide { flex: 1; min-width: 160px; }
+        input.id-input { width: 120px; }
+        button {
+            padding: 8px 18px; border: 2px dashed var(--ink); border-radius: 2px;
+            background-color: transparent; color: var(--ink);
+            font-size: 14px; font-weight: 600; cursor: pointer; min-height: 44px;
+            box-shadow: 1px 1px 0 rgba(44,44,44,0.3);
+            transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 120ms ease, opacity 120ms ease;
+        }
+        button:hover { background-color: var(--ink); color: var(--paper); }
+        button:active { box-shadow: none; transform: translate(2px, 2px) rotate(0.5deg); }
+        button:focus-visible { outline: 2px dashed var(--blue); outline-offset: 2px; }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+        button.primary { background-color: var(--ink); color: var(--paper); }
+        button.primary:hover { opacity: 0.9; background-color: var(--ink); }
+        button.sm { padding: 4px 12px; font-size: 13px; min-height: 34px; }
+        button.danger { color: var(--red); border-color: var(--red); box-shadow: 1px 1px 0 rgba(231,76,60,0.3); }
+        button.danger:hover { background-color: var(--red); border-color: var(--red); color: var(--paper); }
+        .msg { font-size: 12px; color: var(--red); min-height: 18px; margin-top: 8px; }
+        .list { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+        .list li {
+            background-color: var(--paper-deep);
+            border: 2px dashed rgba(44,44,44,0.5); border-radius: 2px;
+            padding: 6px 12px; font-size: 13px; display: flex; align-items: center; gap: 8px;
+        }
+        .list li.empty { color: #8a8a8a; background: none; border-style: none; padding: 4px 0; }
+        .list li.search-item {
+            width: 100%; display: flex; align-items: center; gap: 12px;
+            padding: 10px 12px; background-color: var(--paper);
+        }
+        .search-info { flex: 1; min-width: 0; }
+        .search-title {
+            font-family: Georgia, 'Songti SC', 'Noto Serif SC', serif;
+            font-size: 13px; font-weight: 700;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .search-meta { font-size: 12px; color: #6b6b6b; margin-top: 2px; }
+        .remove-x { cursor: pointer; color: #8a8a8a; font-size: 16px; line-height: 1; padding: 0 2px; }
+        .remove-x:hover { color: var(--red); }
+        .login-box { max-width: 320px; margin: 80px auto 0; transform: rotate(-0.8deg); }
+        #panelCard {
+            display: grid; grid-template-columns: 1fr; gap: 16px;
+            align-items: start;
+        }
+        #panelCard[hidden] { display: none; }
+        #panelCard > .card { margin-bottom: 0; }
+        @media (min-width: 900px) {
+            #panelCard { grid-template-columns: repeat(2, 1fr); }
+        }
+        .login-box h2 {
+            font-size: 17px; margin-bottom: 16px; text-align: center; display: block;
+            text-decoration: underline wavy var(--red);
+            text-decoration-thickness: 2px; text-underline-offset: 4px;
+        }
+        .login-box input { width: 100%; margin-bottom: 12px; min-height: 44px; }
+        .login-box button { width: 100%; }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>{{TITLE}} 管理后台</h1>
+            <div class="user-area" id="userArea"></div>
+        </div>
+    </header>
+    <div class="container">
+        <div class="card login-box" id="loginCard">
+            <h2>管理员登录</h2>
+            <div><input id="loginUser" placeholder="用户名" autocomplete="username" /></div>
+            <div><input id="loginPass" type="password" placeholder="密码" autocomplete="current-password" /></div>
+            <button class="primary" id="loginBtn" onclick="doLogin()">登录</button>
+            <div class="msg" id="loginMsg"></div>
+        </div>
+
+        <div id="panelCard" hidden>
+            <div class="card">
+                <h2>内容检索屏蔽</h2>
+                <div class="row">
+                    <input class="wide" id="searchInput" placeholder="输入关键词检索内容（标题/简介/标签/作者）" />
+                    <button class="primary" onclick="searchItems()">搜索</button>
+                </div>
+                <ul class="list" id="searchList"><li class="empty">输入关键词检索要屏蔽的内容</li></ul>
+            </div>
+
+            <div class="card">
+                <h2>被标记内容</h2>
+                <div class="row"><span class="search-meta">被用户标记但未达 5 人的内容，可手动屏蔽</span></div>
+                <ul class="list" id="markedList"><li class="empty">加载中...</li></ul>
+            </div>
+
+            <div class="card">
+                <h2>屏蔽词管理</h2>
+                <div class="row">
+                    <input class="wide" id="wordInput" placeholder="输入要屏蔽的词" />
+                    <button class="primary" onclick="addWord()">添加</button>
+                </div>
+                <ul class="list" id="wordList"><li class="empty">加载中...</li></ul>
+            </div>
+
+            <div class="card">
+                <h2>屏蔽内容管理</h2>
+                <div class="row">
+                    <select id="blockType">
+                        <option value="feed">动态</option>
+                        <option value="video">视频</option>
+                        <option value="article">文章</option>
+                    </select>
+                    <input class="id-input" id="blockId" placeholder="内容ID" />
+                    <button class="primary" onclick="blockItem()">屏蔽</button>
+                </div>
+                <ul class="list" id="blockedList"><li class="empty">加载中...</li></ul>
+            </div>
+        </div>
+    </div>
+    <script>
+        var TYPE_NAMES = {'feed': '动态', 'video': '视频', 'article': '文章'};
+        var IS_ADMIN = false;
+        var SEARCH_LIMIT = 200;
+        var searchOffset = 0;
+
+        function h(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showLogin() {
+            document.getElementById('loginCard').hidden = false;
+            document.getElementById('panelCard').hidden = true;
+            document.getElementById('loginUser').focus();
+        }
+
+        function showPanel() {
+            document.getElementById('loginCard').hidden = true;
+            document.getElementById('panelCard').hidden = false;
+            loadBanned();
+        }
+
+        async function checkSession() {
+            try {
+                var res = await fetch('/admin/session', {credentials: 'same-origin'});
+                var data = await res.json();
+                IS_ADMIN = !!data.logged_in;
+                var name = data.username || '';
+                if (IS_ADMIN) {
+                    showPanel();
+                    renderUserArea(name);
+                } else {
+                    showLogin();
+                }
+            } catch (e) {
+                showLogin();
+            }
+        }
+
+        function renderUserArea(name) {
+            var area = document.getElementById('userArea');
+            area.innerHTML = '';
+            var span = document.createElement('span');
+            span.textContent = name;
+            area.appendChild(span);
+            var logoutBtn = document.createElement('button');
+            logoutBtn.className = 'sm';
+            logoutBtn.textContent = '退出';
+            logoutBtn.onclick = function() { doLogout(); };
+            area.appendChild(logoutBtn);
+        }
+
+        async function doLogin() {
+            var user = document.getElementById('loginUser').value.trim();
+            var pass = document.getElementById('loginPass').value;
+            var btn = document.getElementById('loginBtn');
+            var msgEl = document.getElementById('loginMsg');
+            msgEl.textContent = '';
+            btn.disabled = true;
+            try {
+                var res = await fetch('/admin/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: user, password: pass}),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) {
+                    var err = await res.json().catch(function() { return {}; });
+                    msgEl.textContent = err.detail || '登录失败';
+                    return;
+                }
+                var data = await res.json();
+                IS_ADMIN = true;
+                showPanel();
+                renderUserArea(data.username);
+            } catch (e) {
+                msgEl.textContent = '请求失败: ' + e.message;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function doLogout() {
+            try {
+                await fetch('/admin/logout', {method: 'POST', credentials: 'same-origin'});
+            } catch (e) {}
+            IS_ADMIN = false;
+            showLogin();
+        }
+
+        async function loadBanned() {
+            try {
+                var res = await fetch('/admin/banned', {credentials: 'same-origin'});
+                if (!res.ok) return;
+                var data = await res.json();
+                renderWords(data.words || []);
+                renderBlockedItems(data.items || []);
+                loadMarked();
+            } catch (e) {}
+        }
+
+        async function loadMarked() {
+            try {
+                var res = await fetch('/admin/marked', {credentials: 'same-origin'});
+                if (!res.ok) return;
+                var data = await res.json();
+                renderMarkedItems(data.items || []);
+            } catch (e) {}
+        }
+
+        function renderMarkedItems(items) {
+            var list = document.getElementById('markedList');
+            list.innerHTML = '';
+            if (items.length === 0) {
+                list.innerHTML = '<li class="empty">暂无被标记内容</li>';
+                return;
+            }
+            items.forEach(function(it) {
+                var li = document.createElement('li');
+                li.className = 'search-item';
+                var info = document.createElement('div');
+                info.className = 'search-info';
+                var title = document.createElement('div');
+                title.className = 'search-title';
+                title.textContent = TYPE_NAMES[it.type] + ' · ' +
+                    (it.title || '#' + it.id) + '（' + it.mark_count + '/5 人标记）';
+                info.appendChild(title);
+                li.appendChild(info);
+                var btn = document.createElement('button');
+                btn.className = 'primary sm';
+                btn.textContent = '屏蔽';
+                btn.onclick = function() { blockFromSearch(it, li); };
+                li.appendChild(btn);
+                list.appendChild(li);
+            });
+        }
+
+        function renderWords(words) {
+            var list = document.getElementById('wordList');
+            list.innerHTML = '';
+            if (words.length === 0) {
+                list.innerHTML = '<li class="empty">暂无屏蔽词</li>';
+                return;
+            }
+            words.forEach(function(word) {
+                var li = document.createElement('li');
+                var text = document.createElement('span');
+                text.textContent = word;
+                li.appendChild(text);
+                var remove = document.createElement('span');
+                remove.className = 'remove-x';
+                remove.textContent = '×';
+                remove.onclick = function() { removeWord(word); };
+                li.appendChild(remove);
+                list.appendChild(li);
+            });
+        }
+
+        function renderBlockedItems(items) {
+            var list = document.getElementById('blockedList');
+            list.innerHTML = '';
+            if (items.length === 0) {
+                list.innerHTML = '<li class="empty">暂无屏蔽内容</li>';
+                return;
+            }
+            items.forEach(function(it) {
+                var li = document.createElement('li');
+                var text = document.createElement('span');
+                var title = it.title ? it.title : '#' + it.id;
+                text.textContent = TYPE_NAMES[it.type] + ' · ' + title;
+                li.appendChild(text);
+                var remove = document.createElement('span');
+                remove.className = 'remove-x';
+                remove.textContent = '×';
+                remove.onclick = function() { unblockItem(it); };
+                li.appendChild(remove);
+                list.appendChild(li);
+            });
+        }
+
+        async function searchItems() {
+            var q = document.getElementById('searchInput').value.trim();
+            var list = document.getElementById('searchList');
+            if (!q) return;
+            searchOffset = 0;
+            list.innerHTML = '<li class="empty">搜索中...</li>';
+            await fetchSearch(q, true);
+        }
+
+        async function loadMoreSearch() {
+            var q = document.getElementById('searchInput').value.trim();
+            await fetchSearch(q, false);
+        }
+
+        async function fetchSearch(q, firstPage) {
+            var list = document.getElementById('searchList');
+            try {
+                var res = await fetch('/admin/search?q=' + encodeURIComponent(q) +
+                    '&limit=' + SEARCH_LIMIT + '&offset=' + searchOffset,
+                    {credentials: 'same-origin'});
+                if (!res.ok) {
+                    if (firstPage) list.innerHTML = '<li class="empty">搜索失败</li>';
+                    return;
+                }
+                var data = await res.json();
+                var items = data.items || [];
+                if (items.length === 0) {
+                    if (firstPage) {
+                        list.innerHTML = '<li class="empty">无匹配内容</li>';
+                    } else {
+                        removeLoadMore();
+                    }
+                    return;
+                }
+                searchOffset += items.length;
+                if (firstPage) list.innerHTML = '';
+                items.forEach(function(it) {
+                    list.appendChild(searchItemEl(it));
+                });
+                if (items.length === SEARCH_LIMIT) {
+                    appendLoadMore();
+                } else {
+                    removeLoadMore();
+                }
+            } catch (e) {
+                if (firstPage) list.innerHTML = '<li class="empty">请求失败</li>';
+            }
+        }
+
+        function appendLoadMore() {
+            removeLoadMore();
+            var li = document.createElement('li');
+            li.className = 'search-item';
+            li.id = 'loadMoreLi';
+            var btn = document.createElement('button');
+            btn.className = 'primary sm';
+            btn.textContent = '加载更多';
+            btn.onclick = function() {
+                btn.disabled = true;
+                btn.textContent = '加载中...';
+                loadMoreSearch();
+            };
+            li.appendChild(btn);
+            document.getElementById('searchList').appendChild(li);
+        }
+
+        function removeLoadMore() {
+            var el = document.getElementById('loadMoreLi');
+            if (el) el.remove();
+        }
+
+        function searchItemEl(it) {
+            var li = document.createElement('li');
+            li.className = 'search-item';
+            var info = document.createElement('div');
+            info.className = 'search-info';
+            var title = document.createElement('div');
+            title.className = 'search-title';
+            title.textContent = (TYPE_NAMES[it.type] || it.type) + ' · ' + (it.title || '#' + it.id);
+            info.appendChild(title);
+            var meta = document.createElement('div');
+            meta.className = 'search-meta';
+            meta.textContent = (it.author || '未知作者') + ' · ' + new Date(it.created_at * 1000).toLocaleString('zh-CN');
+            info.appendChild(meta);
+            li.appendChild(info);
+            var btn = document.createElement('button');
+            if (it.blocked) {
+                btn.textContent = '已屏蔽';
+                btn.disabled = true;
+            } else {
+                btn.className = 'primary sm';
+                btn.textContent = '屏蔽';
+                btn.onclick = function() { blockFromSearch(it, li); };
+            }
+            li.appendChild(btn);
+            return li;
+        }
+
+        async function blockFromSearch(it, li) {
+            try {
+                var res = await fetch('/admin/banned/items', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id: it.id, type: it.type}),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) {
+                    var err = await res.json().catch(function() { return {}; });
+                    alert(err.detail || '屏蔽失败');
+                    return;
+                }
+                it.blocked = true;
+                var btn = li.querySelector('button');
+                btn.textContent = '已屏蔽';
+                btn.disabled = true;
+                btn.className = '';
+                loadBanned();
+            } catch (e) {}
+        }
+
+        async function addWord() {
+            var input = document.getElementById('wordInput');
+            var word = input.value.trim();
+            if (!word) return;
+            try {
+                var res = await fetch('/admin/banned/words', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({word: word}),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) {
+                    var err = await res.json().catch(function() { return {}; });
+                    alert(err.detail || '添加失败');
+                    return;
+                }
+                input.value = '';
+                renderWords((await res.json()).words || []);
+            } catch (e) {}
+        }
+
+        async function removeWord(word) {
+            try {
+                var res = await fetch('/admin/banned/words/' + encodeURIComponent(word), {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) return;
+                renderWords((await res.json()).words || []);
+            } catch (e) {}
+        }
+
+        async function blockItem() {
+            var id = document.getElementById('blockId').value.trim();
+            var type = document.getElementById('blockType').value;
+            if (!id) return;
+            try {
+                var res = await fetch('/admin/banned/items', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({id: parseInt(id, 10), type: type}),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) {
+                    var err = await res.json().catch(function() { return {}; });
+                    alert(err.detail || '屏蔽失败');
+                    return;
+                }
+                document.getElementById('blockId').value = '';
+                loadBanned();
+            } catch (e) {}
+        }
+
+        async function unblockItem(it) {
+            try {
+                var res = await fetch('/admin/banned/items/' + it.type + '/' + it.id, {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) return;
+                loadBanned();
+            } catch (e) {}
+        }
+
+        document.getElementById('loginPass').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') doLogin();
+        });
+        document.getElementById('searchInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') searchItems();
+        });
+
+        checkSession();
+    </script>
+</body>
+</html>
