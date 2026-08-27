@@ -12,6 +12,7 @@ class UserPreferences {
   static const _keyAutoSignIn = 'pref.auto_sign_in';
   static const _keyAcceleratorBase = 'pref.accelerator_base';
   static const _keyBackgroundPlay = 'pref.background_play';
+  static const _keyArticleScrollbar = 'pref.article_scrollbar';
 
   /// 自定义 GitHub 加速地址（用于更新清单与下载），默认官方加速站。
   static Future<String> loadAcceleratorBase() async {
@@ -144,6 +145,24 @@ class UserPreferences {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_keyBackgroundPlay, enabled);
+    } catch (_) {}
+  }
+
+  /// 文章阅读进度滑块开关：长文章右侧显示可拖拽的阅读进度条，
+  /// 默认关闭。
+  static Future<bool> loadArticleScrollbar() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyArticleScrollbar) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> saveArticleScrollbar(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyArticleScrollbar, enabled);
     } catch (_) {}
   }
 }

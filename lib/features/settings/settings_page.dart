@@ -394,6 +394,21 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 14),
             _SettingsCard(
               children: [
+                _SettingsTile(
+                  icon: Icons.menu_book_outlined,
+                  title: '文章阅读设置',
+                  subtitle: '阅读进度滑块等长文章阅读选项',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ArticleReaderSettingsPage(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _SettingsCard(
+              children: [
                 SwitchListTile(
                   value: widget.controller.autoSignIn,
                   title: const Text('自动签到',
@@ -730,6 +745,75 @@ class _DanmakuSettingsPageState extends State<DanmakuSettingsPage> {
         ),
       );
 }
+/// 文章阅读设置子页面：阅读进度滑块开关。
+class ArticleReaderSettingsPage extends StatefulWidget {
+  const ArticleReaderSettingsPage({super.key});
+
+  @override
+  State<ArticleReaderSettingsPage> createState() =>
+      _ArticleReaderSettingsPageState();
+}
+
+class _ArticleReaderSettingsPageState extends State<ArticleReaderSettingsPage> {
+  var _scrollbarEnabled = false;
+  var _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final enabled = await UserPreferences.loadArticleScrollbar();
+    if (!mounted) return;
+    setState(() {
+      _scrollbarEnabled = enabled;
+      _loaded = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('文章阅读设置'), centerTitle: true),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+          children: [
+            _SettingsCard(
+              children: [
+                SwitchListTile(
+                  value: _scrollbarEnabled,
+                  title: const Text('阅读进度滑块(Beta)',
+                      style: TextStyle(
+                          color: Colors.blueGrey, fontWeight: FontWeight.w700)),
+                  subtitle: const Text(
+                      '长文章右侧显示可拖拽的阅读进度条，滚动时自动出现，无操作自动隐藏',
+                      style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                  secondary: CircleAvatar(
+                    backgroundColor:
+                        AppPalette.of(context).primary.withOpacity(.11),
+                    foregroundColor: AppPalette.of(context).primary,
+                    child: const Icon(Icons.drag_indicator_rounded, size: 20),
+                  ),
+                  onChanged: _loaded
+                      ? (value) {
+                          setState(() => _scrollbarEnabled = value);
+                          UserPreferences.saveArticleScrollbar(value);
+                        }
+                      : null,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '滑块默认关闭。开启后阅读长文章时在右侧出现进度条，可拖拽拇指跳转、点击轨道跳转进度。',
+              style: TextStyle(color: Colors.blueGrey, fontSize: 12, height: 1.5),
+            ),
+          ],
+        ),
+      );
+}
+
 class _SettingsCard extends StatelessWidget {
   const _SettingsCard({required this.children});
 
