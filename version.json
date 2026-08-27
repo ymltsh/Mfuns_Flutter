@@ -1,15 +1,15 @@
 {
   "latest": {
-    "version": "1.3.0",
+    "version": "1.3.1",
     "build": 35,
-    "name": "Mfuns Flutter v1.3.0",
+    "name": "Mfuns Flutter v1.3.1",
     "date": "2026-08-27",
-    "notes": "新增\n- 文章阅读新增拖动滑块：长文右侧竖条可拖动快速定位阅读位置，滚动/拖动停止后自动隐藏（静默），优化长文章阅读体验\n- 私信支持图片：可发送与接收图片，图片消息以缩略图展示，点击全屏预览；图片消息在会话列表显示「[图片]」\n- 评论区支持 @ 用户：@ 按钮 + 用户搜索（/v1/search/user），发布为 Quill mention 富文本，评论内以高亮 @用户名 渲染\n- 评论输入静默识别：输入「@用户名 + 空格」自动识别为 @ 用户\n- 搜索页新增「用户」检索：按用户名搜索用户，结果列表展示头像与简介，点击直达用户主页\n- 私信消息头像可点击：点击对方或自己的头像直接进入对应主页\n- Android 后台播放正式版：退后台/锁屏后视频声音不中断（Android 14 / 小米 HyperOS），重构为「前台视频 + 后台音频」双引擎，通知栏播放/暂停/进度拖拽在后台真实生效\n优化\n- 评论区输入框与「图片 / @ / 表情包」按钮拆分为两行\n修复\n- 修复 A 视频播放中进入相关视频 B 后两个视频同时出声的问题：全局单播放器仲裁，同一时刻只有一个视频/音频在播放\n- 修复后台播放开关关闭时通知栏状态与实际播放不一致的问题\n- 新增播放链路日志（adb logcat -s MfunsPlayback:D），便于排查播放问题",
+    "notes": "新增\n- 文章阅读进度滑块：长文右侧进度条，可拖拽拇指/点击轨道跳转阅读位置，无操作自动隐藏；「设置 → 文章阅读设置」可开关（默认关闭）\n- 文章正文长按支持跨段落复制（桌面端可拖拽选区）\n- 文章代码块新增一键「复制」按钮\n- 私信支持图片：可发送与接收图片，图片消息以缩略图展示，点击全屏预览；会话列表显示「[图片]」\n- 评论区支持 @ 用户：@ 按钮 + 用户搜索，发布为富文本，评论内高亮渲染\n- 评论输入静默识别：输入「@用户名 + 空格」自动识别为 @ 用户\n- 搜索页新增「用户」检索，点击直达用户主页\n- 私信消息头像可点击进入对应主页\n- Android 后台播放正式版：退后台/锁屏视频声音不中断，通知栏播放/暂停/进度真实生效\n优化\n- 修复文章滚动概率性卡住：滑块命中区收窄、仅拇指可拖动、轨道点击跳转，正文滑动不再被滑块抢走\n- 滑块拖动更跟手：拖拽期间冻结滚动范围、跳转按帧合并，消除进度条抽动\n- 评论区输入框与「图片 / @ / 表情包」按钮拆分为两行\n修复\n- 修复文章滑块首帧构建时位置未完成布局导致整页发灰不可操作\n- 修复 A 视频播放中进入相关视频 B 后两个视频同时出声（全局单播放器仲裁）\n- 修复后台播放开关关闭时通知栏状态与实际不一致\n- 新增播放链路日志（adb logcat -s MfunsPlayback:D）",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.3.0/mfuns-flutter-1.3.0.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.3.0/mfuns-flutter-windows-1.3.0.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.3.1/mfuns-flutter-1.3.1.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.3.1/mfuns-flutter-windows-1.3.1.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.3.0"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.3.1"
   },
   "history": [
     {
