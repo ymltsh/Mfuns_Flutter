@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.2.8",
-    "build": 33,
-    "name": "Mfuns Flutter v1.2.8",
+    "version": "1.2.9",
+    "build": 34,
+    "name": "Mfuns Flutter v1.2.9",
     "date": "2026-08-27",
-    "notes": "新增\n- 私信支持图片：可发送与接收图片，图片消息以缩略图展示，点击全屏预览；图片消息在会话列表显示「[图片]」\n- 评论区支持 @ 用户：@ 按钮 + 用户搜索（/v1/search/user），发布为 Quill mention 富文本，评论内以高亮 @用户名 渲染\n- 评论输入静默识别：输入「@用户名 + 空格」自动识别为 @ 用户\n优化\n- 评论区输入框与「图片 / @ / 表情包」按钮拆分为两行",
+    "notes": "新增\n- 搜索页新增「用户」检索：支持按用户名搜索用户，结果列表展示头像与简介，点击直达用户主页\n- 私信消息头像可点击：点击对方或自己的头像直接进入对应主页",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.8/mfuns-flutter-1.2.8.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.8/mfuns-flutter-windows-1.2.8.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.9/mfuns-flutter-1.2.9.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.9/mfuns-flutter-windows-1.2.9.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.8"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.9"
   },
   "history": [
+    {
+      "version": "1.2.8",
+      "build": 33,
+      "name": "Mfuns Flutter v1.2.8",
+      "date": "2026-08-27",
+      "notes": "新增\n- 私信支持图片：可发送与接收图片，图片消息以缩略图展示，点击全屏预览；图片消息在会话列表显示「[图片]」\n- 评论区支持 @ 用户：@ 按钮 + 用户搜索（/v1/search/user），发布为 Quill mention 富文本，评论内以高亮 @用户名 渲染\n- 评论输入静默识别：输入「@用户名 + 空格」自动识别为 @ 用户\n优化\n- 评论区输入框与「图片 / @ / 表情包」按钮拆分为两行",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.8/mfuns-flutter-1.2.8.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.8/mfuns-flutter-windows-1.2.8.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.8"
+    },
     {
       "version": "1.2.7",
       "build": 32,
