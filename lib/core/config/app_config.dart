@@ -8,8 +8,8 @@ class AppConfig {
   static const latestMfunsHost = 'mfuns.wgen.top';
 
   /// 当前应用版本号与构建号（与 pubspec.yaml 保持一致）。
-  static const appVersion = '1.2.8';
-  static const appBuild = 33;
+  static const appVersion = '1.2.9';
+  static const appBuild = 34;
 
   /// 默认 GitHub 加速地址（用户可在设置中自定义）。
   static const defaultAcceleratorBase = 'https://hub.wgen.top/';
