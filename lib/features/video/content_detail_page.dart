@@ -572,11 +572,18 @@ class ArticleDetailPage extends StatefulWidget {
 
 class _ArticleDetailPageState extends State<ArticleDetailPage> {
   late Future<ContentDetail> _detail;
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _detail = widget.controller.contentDetail(widget.preview);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _reload() =>
@@ -617,50 +624,56 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               );
             }
             final detail = snapshot.requireData;
-            return _landscapeCentered(
-              context,
-              ListView(
-                key: PageStorageKey<String>(
-                    'article-detail-${detail.preview.id}'),
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
-                children: [
-                  _ArticleInfoCard(
-                    detail: detail,
-                    controller: widget.controller,
+            return Stack(
+              children: [
+                _landscapeCentered(
+                  context,
+                  ListView(
+                    key: PageStorageKey<String>(
+                        'article-detail-${detail.preview.id}'),
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+                    children: [
+                      _ArticleInfoCard(
+                        detail: detail,
+                        controller: widget.controller,
+                      ),
+                      const SizedBox(height: 12),
+                      RichContentCard(
+                        source: detail.rawContent,
+                        onLinkTap: (url) =>
+                            openContentLink(context, widget.controller, url),
+                      ),
+                      const SizedBox(height: 12),
+                      _VideoActions(
+                        controller: widget.controller,
+                        preview: detail.preview,
+                        rawContent: detail.rawContent,
+                        commentAreaId: detail.commentAreaId,
+                      ),
+                      if (detail.tags.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: detail.tags
+                              .map((tag) => Chip(label: Text('#$tag')))
+                              .toList(growable: false),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      if (detail.commentAreaId != null)
+                        _CommentSection(
+                          controller: widget.controller,
+                          areaId: detail.commentAreaId!,
+                        )
+                      else
+                        const _ArticleCommentUnavailable(),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  RichContentCard(
-                    source: detail.rawContent,
-                    onLinkTap: (url) =>
-                        openContentLink(context, widget.controller, url),
-                  ),
-                  const SizedBox(height: 12),
-                  _VideoActions(
-                    controller: widget.controller,
-                    preview: detail.preview,
-                    rawContent: detail.rawContent,
-                    commentAreaId: detail.commentAreaId,
-                  ),
-                  if (detail.tags.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: detail.tags
-                          .map((tag) => Chip(label: Text('#$tag')))
-                          .toList(growable: false),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  if (detail.commentAreaId != null)
-                    _CommentSection(
-                      controller: widget.controller,
-                      areaId: detail.commentAreaId!,
-                    )
-                  else
-                    const _ArticleCommentUnavailable(),
-                ],
-              ),
+                ),
+                _ArticleScrollSlider(controller: _scrollController),
+              ],
             );
           },
         ),
@@ -679,6 +692,147 @@ Widget _landscapeCentered(BuildContext context, Widget child) {
       child: child,
     ),
   );
+}
+
+/// 文章长页拖动滑块：右侧竖向轨道，拖动可快速定位阅读位置；
+/// 滚动/拖动停止后自动隐藏（静默），不遮挡正文。
+class _ArticleScrollSlider extends StatefulWidget {
+  const _ArticleScrollSlider({required this.controller});
+
+  final ScrollController controller;
+
+  /// 无操作后自动隐藏的时间。
+  static const autoHideDelay = Duration(milliseconds: 2500);
+
+  @override
+  State<_ArticleScrollSlider> createState() => _ArticleScrollSliderState();
+}
+
+class _ArticleScrollSliderState extends State<_ArticleScrollSlider> {
+  var _visible = false;
+  var _dragging = false;
+  double? _dragFraction;
+  Timer? _hideTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onScroll);
+    _hideTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_dragging) return;
+    if (!_visible) setState(() => _visible = true);
+    _scheduleHide();
+  }
+
+  void _scheduleHide() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(_ArticleScrollSlider.autoHideDelay, () {
+      if (!mounted || _dragging) return;
+      setState(() => _visible = false);
+    });
+  }
+
+  void _onDragStart(DragStartDetails details) {
+    _hideTimer?.cancel();
+    setState(() {
+      _dragging = true;
+      _visible = true;
+    });
+  }
+
+  void _onDragUpdate(DragUpdateDetails details, double trackHeight) {
+    final position = widget.controller.position;
+    if (position.maxScrollExtent <= 0) return;
+    final fraction = (details.localPosition.dy / trackHeight).clamp(0.0, 1.0);
+    widget.controller.jumpTo(fraction * position.maxScrollExtent);
+    setState(() => _dragFraction = fraction);
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    setState(() {
+      _dragging = false;
+      _dragFraction = null;
+    });
+    _scheduleHide();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = widget.controller;
+    if (!controller.hasClients) return const SizedBox.shrink();
+    final position = controller.position;
+    final maxExtent = position.maxScrollExtent;
+    if (maxExtent <= 0) return const SizedBox.shrink();
+    final size = MediaQuery.sizeOf(context);
+    final trackTop = MediaQuery.paddingOf(context).top + kToolbarHeight + 14;
+    final trackBottom = MediaQuery.paddingOf(context).bottom + 22;
+    final trackHeight = size.height - trackTop - trackBottom;
+    if (trackHeight <= 0) return const SizedBox.shrink();
+    final viewportFraction =
+        (position.viewportDimension / (position.viewportDimension + maxExtent))
+            .clamp(0.12, 0.55);
+    final thumbHeight = trackHeight * viewportFraction;
+    final fraction =
+        (_dragFraction ?? (position.pixels / maxExtent)).clamp(0.0, 1.0);
+
+    return Positioned(
+      top: trackTop,
+      right: 3,
+      width: 26,
+      height: trackHeight,
+      child: IgnorePointer(
+        ignoring: !_visible,
+        child: AnimatedOpacity(
+          opacity: _visible ? 1 : 0,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragStart: _onDragStart,
+            onVerticalDragUpdate: (details) =>
+                _onDragUpdate(details, trackHeight),
+            onVerticalDragEnd: _onDragEnd,
+            child: Stack(
+              children: [
+                Center(
+                  child: Container(
+                    width: 3,
+                    height: trackHeight,
+                    decoration: BoxDecoration(
+                      color: Colors.blueGrey.withOpacity(.22),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: fraction * (trackHeight - thumbHeight),
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: thumbHeight,
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: AppPalette.of(context).primary.withOpacity(.5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ArticleInfoCard extends StatelessWidget {
