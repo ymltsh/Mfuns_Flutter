@@ -770,6 +770,9 @@ class _ArticleScrollSliderState extends State<_ArticleScrollSlider> {
     final controller = widget.controller;
     if (!controller.hasClients) return const SizedBox.shrink();
     final position = controller.position;
+    // 位置刚挂载但尚未完成首帧布局时 _maxScrollExtent 仍为 null，
+    // 直接访问 maxScrollExtent 会抛错导致整页构建失败。
+    if (!position.haveDimensions) return const SizedBox.shrink();
     final maxExtent = position.maxScrollExtent;
     if (maxExtent <= 0) return const SizedBox.shrink();
     final size = MediaQuery.sizeOf(context);
