@@ -108,8 +108,8 @@ void main() {
 
   test('serializes mentions into quill ops', () {
     final payload = commentQuillJson([
-      CommentSpan.mention('38461', '少女乌斯'),
-      CommentSpan.text('QWQ'),
+      const CommentSpan.mention('38461', '少女乌斯'),
+      const CommentSpan.text('QWQ'),
     ]);
     expect(payload,
         '{"ops":[{"insert":{"mention":{"id":"38461","value":"少女乌斯"}}},{"insert":"QWQ\\n"}]}');

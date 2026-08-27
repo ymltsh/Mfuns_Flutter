@@ -99,7 +99,7 @@ void main() {
 
   test('embeds images into quill content when sending', () {
     final json = messageQuillJson(
-        [CommentSpan.text('看图')], ['/static/a.png']);
+        const [CommentSpan.text('看图')], const ['/static/a.png']);
     final ops = (jsonDecode(json) as Map<String, dynamic>)['ops'] as List;
     expect(ops[0], {'insert': '看图\n'});
     expect(ops[1], {'insert': {'image': '/static/a.png'}});
