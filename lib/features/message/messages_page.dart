@@ -7,6 +7,7 @@ import '../../core/widgets/content_spans.dart';
 import '../../core/widgets/image_preview_page.dart';
 import '../../core/widgets/inline_emoji_input.dart';
 import '../home/home_repository.dart';
+import '../user/user_profile_page.dart';
 
 class MessageListPage extends StatefulWidget {
   const MessageListPage({
@@ -393,12 +394,22 @@ class _MessageBubble extends StatelessWidget {
   final String myAvatar;
   final String peerAvatar;
 
-  Widget _avatar(String url) => CircleAvatar(
-        radius: 16,
-        backgroundColor: palette.primary.withOpacity(.12),
-        foregroundImage: url.isEmpty ? null : NetworkImage(url),
-        foregroundColor: palette.primary,
-        child: const Icon(Icons.person_rounded, size: 18),
+  /// 头像：点击进入对应用户主页（[userId] 为 0 时不可点击）。
+  Widget _avatar(BuildContext context, String url, int userId) => InkWell(
+        onTap: userId <= 0
+            ? null
+            : () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => UserProfilePage(
+                      controller: controller, userId: userId),
+                )),
+        customBorder: const CircleBorder(),
+        child: CircleAvatar(
+          radius: 16,
+          backgroundColor: palette.primary.withOpacity(.12),
+          foregroundImage: url.isEmpty ? null : NetworkImage(url),
+          foregroundColor: palette.primary,
+          child: const Icon(Icons.person_rounded, size: 18),
+        ),
       );
 
   /// 私信图片缩略图（横向滑动，点击进入全屏预览），参考评论区图片实现。
@@ -457,7 +468,7 @@ class _MessageBubble extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (!isMine) ...[
-                _avatar(peerAvatar),
+                _avatar(context, peerAvatar, record.uid),
                 const SizedBox(width: 8),
               ],
               Flexible(
@@ -538,7 +549,7 @@ class _MessageBubble extends StatelessWidget {
               ),
               if (isMine) ...[
                 const SizedBox(width: 8),
-                _avatar(myAvatar),
+                _avatar(context, myAvatar, controller.session?.userId ?? 0),
               ],
             ],
           ),

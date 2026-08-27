@@ -68,6 +68,7 @@ class AppController extends ChangeNotifier {
 
   List<ContentPreview> _recommendations;
   List<ContentPreview> _searchResults;
+  List<UserProfile> _searchUserResults = const [];
   List<ContentPreview> _hotRankings;
   List<CategoryNode> _categories;
   List<ContentPreview> _categoryContents;
@@ -92,6 +93,7 @@ class AppController extends ChangeNotifier {
   NotifyCounts? _lastNotifyCounts;
   String? _homeError;
   String? _searchError;
+  String? _searchUserError;
   String? _hotRankingsError;
   String? _categoriesError;
   String? _categoryContentsError;
@@ -102,6 +104,7 @@ class AppController extends ChangeNotifier {
   String? _favoritesError;
   bool _isLoadingHome = false;
   bool _isSearching = false;
+  bool _isSearchingUser = false;
   bool _isLoggingIn = false;
   bool _isRestoringSession = false;
   bool _isLoadingHotRankings = false;
@@ -136,6 +139,7 @@ class AppController extends ChangeNotifier {
 
   List<ContentPreview> get recommendations => _recommendations;
   List<ContentPreview> get searchResults => _searchResults;
+  List<UserProfile> get searchUserResults => _searchUserResults;
   List<ContentPreview> get hotRankings => _hotRankings;
   List<CategoryNode> get categories => _categories;
   List<ContentPreview> get categoryContents => _categoryContents;
@@ -151,6 +155,7 @@ class AppController extends ChangeNotifier {
   UserSession? get session => _session;
   String? get homeError => _homeError;
   String? get searchError => _searchError;
+  String? get searchUserError => _searchUserError;
   String? get hotRankingsError => _hotRankingsError;
   String? get categoriesError => _categoriesError;
   String? get categoryContentsError => _categoryContentsError;
@@ -161,6 +166,7 @@ class AppController extends ChangeNotifier {
   String? get favoritesError => _favoritesError;
   bool get isLoadingHome => _isLoadingHome;
   bool get isSearching => _isSearching;
+  bool get isSearchingUser => _isSearchingUser;
   bool get isLoggingIn => _isLoggingIn;
   bool get isRestoringSession => _isRestoringSession;
   bool get isLoadingHotRankings => _isLoadingHotRankings;
@@ -393,6 +399,28 @@ class AppController extends ChangeNotifier {
       _searchError = error.message;
     } finally {
       _isSearching = false;
+      notifyListeners();
+    }
+  }
+
+  /// 搜索用户（搜索页「用户」标签）：状态存于 [searchUserResults]。
+  Future<void> searchUser(String text) async {
+    final query = text.trim();
+    if (query.isEmpty) {
+      _searchUserResults = const [];
+      _searchUserError = null;
+      notifyListeners();
+      return;
+    }
+    _isSearchingUser = true;
+    _searchUserError = null;
+    notifyListeners();
+    try {
+      _searchUserResults = await _home.searchUsers(query);
+    } on MfunsApiException catch (error) {
+      _searchUserError = error.message;
+    } finally {
+      _isSearchingUser = false;
       notifyListeners();
     }
   }

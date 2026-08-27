@@ -1993,8 +1993,15 @@ class _SearchPageState extends State<_SearchPage> {
   final _textController = TextEditingController();
   var _type = -1;
 
-  Future<void> _search([String? value]) =>
-      widget.controller.search(value ?? _textController.text, type: _type);
+  /// 用户搜索的类型标识（与内容搜索区分）。
+  static const _typeUser = 2;
+
+  Future<void> _search([String? value]) {
+    final query = value ?? _textController.text;
+    return _type == _typeUser
+        ? widget.controller.searchUser(query)
+        : widget.controller.search(query, type: _type);
+  }
 
   void _selectType(int type) {
     setState(() => _type = type);
@@ -2028,7 +2035,7 @@ class _SearchPageState extends State<_SearchPage> {
                   textInputAction: TextInputAction.search,
                   onSubmitted: _search,
                   decoration: InputDecoration(
-                    hintText: '搜索文章和视频',
+                    hintText: '搜索文章、视频和用户',
                     prefixIcon: const Icon(Icons.search_rounded, color: _muted),
                     suffixIcon: IconButton(
                       tooltip: '搜索',
@@ -2048,16 +2055,26 @@ class _SearchPageState extends State<_SearchPage> {
               ),
               const SizedBox(height: 6),
               Expanded(
-                child: AnimatedBuilder(
-                  animation: widget.controller,
-                  builder: (context, _) => _ContentGrid(
-                    controller: widget.controller,
-                    items: widget.controller.searchResults,
-                    isLoading: widget.controller.isSearching,
-                    error: widget.controller.searchError,
-                    emptyText: '输入关键词，寻找同好',
-                  ),
-                ),
+                child: _type == _typeUser
+                    ? AnimatedBuilder(
+                        animation: widget.controller,
+                        builder: (context, _) => _UserSearchResults(
+                          controller: widget.controller,
+                          users: widget.controller.searchUserResults,
+                          isLoading: widget.controller.isSearchingUser,
+                          error: widget.controller.searchUserError,
+                        ),
+                      )
+                    : AnimatedBuilder(
+                        animation: widget.controller,
+                        builder: (context, _) => _ContentGrid(
+                          controller: widget.controller,
+                          items: widget.controller.searchResults,
+                          isLoading: widget.controller.isSearching,
+                          error: widget.controller.searchError,
+                          emptyText: '输入关键词，寻找同好',
+                        ),
+                      ),
               ),
             ],
           ),
@@ -2077,6 +2094,7 @@ class _SearchTypeBar extends StatelessWidget {
           _SearchTypeItem(type: -1, label: '综合'),
           _SearchTypeItem(type: 0, label: '文章'),
           _SearchTypeItem(type: 1, label: '视频'),
+          _SearchTypeItem(type: 2, label: '用户'),
         ].map((item) {
           final selected = item.type == type;
           return Padding(
@@ -2102,6 +2120,66 @@ class _SearchTypeItem {
 
   final int type;
   final String label;
+}
+
+/// 搜索页「用户」标签的结果列表：头像 + 用户名，点击进入用户主页。
+class _UserSearchResults extends StatelessWidget {
+  const _UserSearchResults({
+    required this.controller,
+    required this.users,
+    required this.isLoading,
+    required this.error,
+  });
+
+  final AppController controller;
+  final List<UserProfile> users;
+  final bool isLoading;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading && users.isEmpty) return const _LoadingState();
+    if (error != null && users.isEmpty) {
+      return _MessageState(message: error!);
+    }
+    if (users.isEmpty) {
+      return const _MessageState(message: '输入用户名，寻找同好');
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      itemCount: users.length,
+      separatorBuilder: (_, __) => const Divider(height: 1, indent: 52),
+      itemBuilder: (context, index) {
+        final user = users[index];
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          leading: CircleAvatar(
+            radius: 20,
+            backgroundColor: _palette(context).primary.withOpacity(.12),
+            foregroundImage:
+                user.avatar.isEmpty ? null : NetworkImage(user.avatar),
+            foregroundColor: _palette(context).primary,
+            child: Text(user.name.isEmpty ? 'U' : user.name[0]),
+          ),
+          title: Text(user.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: _ink, fontWeight: FontWeight.w700, fontSize: 15)),
+          subtitle: user.bio.isEmpty
+              ? null
+              : Text(user.bio,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: _muted, fontSize: 12.5)),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) =>
+                UserProfilePage(controller: controller, userId: user.id),
+          )),
+        );
+      },
+    );
+  }
 }
 
 class _ProfilePage extends StatefulWidget {
