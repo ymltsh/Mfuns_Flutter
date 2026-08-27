@@ -902,6 +902,10 @@ class AppController extends ChangeNotifier {
   }) =>
       _home.getFollowList(userId: userId, type: type, lastId: lastId);
 
+  /// 搜索用户（@ 提及用）。
+  Future<List<UserProfile>> searchUsers(String keyword) =>
+      _home.searchUsers(keyword);
+
   Future<List<DanmakuItem>> danmaku(int videoId, int part) =>
       _home.getDanmaku(videoId, part);
 
@@ -911,8 +915,12 @@ class AppController extends ChangeNotifier {
   Future<List<MessageRecord>> messageRecord(int userId) =>
       _home.getMessageRecord(userId);
 
-  Future<void> sendMessage({required int toUid, required String text}) =>
-      _home.sendMessage(toUid: toUid, text: text);
+  Future<void> sendMessage({
+    required int toUid,
+    required List<CommentSpan> spans,
+    List<String> images = const [],
+  }) =>
+      _home.sendMessage(toUid: toUid, spans: spans, images: images);
 
   Future<NotifyCounts> notifyCounts() => _home.getNotifyCounts();
 

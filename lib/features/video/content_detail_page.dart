@@ -4263,6 +4263,147 @@ class _DanmakuCanvasState extends State<_DanmakuCanvas>
   }
 }
 
+/// 打开 @ 用户搜索弹窗，选择用户后返回带 id 的 mention span；取消返回 null。
+Future<CommentSpan?> _askMentionUser(BuildContext context, AppController controller) =>
+    showDialog<CommentSpan>(
+      context: context,
+      builder: (_) => _MentionUserDialog(controller: controller),
+    );
+
+class _MentionUserDialog extends StatefulWidget {
+  const _MentionUserDialog({required this.controller});
+
+  final AppController controller;
+
+  @override
+  State<_MentionUserDialog> createState() => _MentionUserDialogState();
+}
+
+class _MentionUserDialogState extends State<_MentionUserDialog> {
+  final _search = TextEditingController();
+  final _results = <UserProfile>[];
+  Timer? _debounce;
+  var _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _runSearch(String keyword) async {
+    final text = keyword.trim();
+    if (text.isEmpty) {
+      setState(() {
+        _results.clear();
+        _loading = false;
+        _error = null;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final users = await widget.controller.searchUsers(text);
+      if (!mounted) return;
+      setState(() {
+        _results
+          ..clear()
+          ..addAll(users);
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _results.clear();
+        _loading = false;
+        _error = '搜索失败：$error';
+      });
+    }
+  }
+
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () => _runSearch(value));
+  }
+
+  void _pick(UserProfile user) => Navigator.of(context)
+      .pop(CommentSpan.mention('${user.id}', user.name));
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('@ 用户'),
+        content: SizedBox(
+          width: 340,
+          height: 380,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _search,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: '搜索用户名',
+                  prefixIcon: Icon(Icons.search_rounded),
+                  isDense: true,
+                ),
+                textInputAction: TextInputAction.search,
+                onChanged: _onChanged,
+                onSubmitted: _runSearch,
+              ),
+              const SizedBox(height: 8),
+              Expanded(child: _buildResults()),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+        ],
+      );
+
+  Widget _buildResults() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(child: Text(_error!, textAlign: TextAlign.center));
+    }
+    if (_results.isEmpty) {
+      return Center(
+        child: Text(_search.text.trim().isEmpty ? '输入用户名开始搜索' : '没有找到相关用户'),
+      );
+    }
+    return ListView.builder(
+      shrinkWrap: true,
+      itemCount: _results.length,
+      itemBuilder: (context, index) {
+        final user = _results[index];
+        return ListTile(
+          dense: true,
+          leading: CircleAvatar(
+            radius: 16,
+            backgroundColor:
+                Theme.of(context).colorScheme.primary.withOpacity(.12),
+            foregroundImage:
+                user.avatar.isEmpty ? null : NetworkImage(user.avatar),
+            foregroundColor: Theme.of(context).colorScheme.primary,
+            child: Text(user.name.isEmpty ? 'U' : user.name[0]),
+          ),
+          title: Text(user.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          onTap: () => _pick(user),
+        );
+      },
+    );
+  }
+}
+
 class _CommentSection extends StatefulWidget {
   const _CommentSection({required this.controller, required this.areaId});
 
@@ -4286,6 +4427,14 @@ class _CommentSectionState extends State<_CommentSection> {
 
   void _reload() =>
       setState(() => _comments = widget.controller.comments(widget.areaId));
+
+  /// 点击 @ 弹出用户搜索弹窗，把选中的用户以 `[@id:用户名]` 标记插入输入框。
+  Future<void> _pickMention() async {
+    final mention = await _askMentionUser(context, widget.controller);
+    if (mention == null) return;
+    _inputKey.currentState
+        ?.addMention(mention.mentionName, id: mention.mentionId);
+  }
 
   Future<void> _submit() async {
     final input = _inputKey.currentState;
@@ -4332,22 +4481,29 @@ class _CommentSectionState extends State<_CommentSection> {
               ),
             ],
           ),
+          InlineEmojiInput(
+            key: _inputKey,
+            hintText: '说点什么…',
+            onUploadImage: widget.controller.uploadImage,
+            onSearchUser: widget.controller.searchUsers,
+          ),
+          const SizedBox(height: 6),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Expanded(
-                child: InlineEmojiInput(
-                  key: _inputKey,
-                  hintText: '说点什么…',
-                  onUploadImage: widget.controller.uploadImage,
-                ),
-              ),
-              const SizedBox(width: 4),
               IconButton(
                 tooltip: '添加图片',
                 onPressed: () => _inputKey.currentState?.pickImage(),
                 icon: Icon(
                   Icons.image_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 2),
+              IconButton(
+                tooltip: '@ 用户',
+                onPressed: _pickMention,
+                icon: Icon(
+                  Icons.alternate_email,
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ),
@@ -4360,7 +4516,7 @@ class _CommentSectionState extends State<_CommentSection> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ),
-              const SizedBox(width: 4),
+              const Spacer(),
               FilledButton(
                 onPressed: _isSending ? null : _submit,
                 child: _isSending
@@ -4427,11 +4583,13 @@ class _CommentCard extends StatefulWidget {
 
 class _CommentReplyDialog extends StatefulWidget {
   const _CommentReplyDialog({
+    required this.controller,
     required this.onSubmit,
     required this.onSuccess,
     this.initialText = '',
   });
 
+  final AppController controller;
   final Future<void> Function(List<CommentSpan> spans) onSubmit;
   final VoidCallback onSuccess;
 
@@ -4446,6 +4604,14 @@ class _CommentReplyDialogState extends State<_CommentReplyDialog> {
   final _inputKey = GlobalKey<InlineEmojiInputState>();
   var _isSending = false;
   String? _error;
+
+  /// 点击 @ 弹出用户搜索弹窗，把选中的用户以 `[@id:用户名]` 标记插入输入框。
+  Future<void> _pickMention() async {
+    final mention = await _askMentionUser(context, widget.controller);
+    if (mention == null) return;
+    _inputKey.currentState
+        ?.addMention(mention.mentionName, id: mention.mentionId);
+  }
 
   Future<void> _submit() async {
     final input = _inputKey.currentState;
@@ -4484,9 +4650,18 @@ class _CommentReplyDialogState extends State<_CommentReplyDialog> {
                     hintText: '友善交流，理性发言',
                     fontSize: 14,
                     initialText: widget.initialText,
+                    onSearchUser: widget.controller.searchUsers,
                   ),
                 ),
                 const SizedBox(width: 4),
+                IconButton(
+                  tooltip: '@ 用户',
+                  onPressed: _pickMention,
+                  icon: Icon(
+                    Icons.alternate_email,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
                 IconButton(
                   tooltip: '表情包',
                   onPressed: () => _inputKey.currentState?.pickEmoji(),
@@ -4635,6 +4810,7 @@ class _CommentCardState extends State<_CommentCard> {
       context: context,
       useRootNavigator: true,
       builder: (_) => _CommentReplyDialog(
+        controller: widget.controller,
         initialText: mention == null ? '' : '@$mention ',
         onSubmit: (spans) => widget.controller.createCommentReply(
           commentId: widget.comment.id,

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mfuns_flutter/features/home/home_repository.dart';
 
@@ -49,6 +51,79 @@ void main() {
     expect(record.spans[0].stickerKey, 's-1');
     expect(record.spans[1].text, '冲鸭');
     expect(record.message, '[表情]冲鸭');
+  });
+
+  test('parses images out of message records', () {
+    final record = MessageRecord.fromJson({
+      'uid': 7,
+      'data': {
+        'message': '{"ops":[{"insert":"\\n"}]}',
+        'images': '["/static/a.png","/static/b.jpg"]',
+        'time': 1720000003,
+      },
+    });
+    expect(record.images,
+        ['https://cdn2.mfuns.net/static/a.png', 'https://cdn2.mfuns.net/static/b.jpg']);
+    expect(record.message, isEmpty);
+
+    final plain = MessageRecord.fromJson({
+      'uid': 7,
+      'data': {'message': '纯文本消息'},
+    });
+    expect(plain.images, isEmpty);
+  });
+
+  test('extracts images embedded in quill content', () {
+    final record = MessageRecord.fromJson({
+      'uid': 7,
+      'data': {
+        'message': '{"ops":[{"insert":{"image":"/static/embed.png"}}]}',
+        'time': 1720000004,
+      },
+    });
+    expect(record.images, ['https://cdn2.mfuns.net/static/embed.png']);
+    expect(record.message, isEmpty);
+    expect(record.spans, isEmpty);
+  });
+
+  test('extracts images from html img tags and dedupes', () {
+    final record = MessageRecord.fromJson({
+      'uid': 7,
+      'data': {
+        'message': '<p><img src="/static/x.png"></p>',
+        'images': '["/static/x.png"]',
+      },
+    });
+    expect(record.images, ['https://cdn2.mfuns.net/static/x.png']);
+  });
+
+  test('embeds images into quill content when sending', () {
+    final json = messageQuillJson(
+        [CommentSpan.text('看图')], ['/static/a.png']);
+    final ops = (jsonDecode(json) as Map<String, dynamic>)['ops'] as List;
+    expect(ops[0], {'insert': '看图\n'});
+    expect(ops[1], {'insert': {'image': '/static/a.png'}});
+    expect(ops, hasLength(3));
+
+    final onlyImage = messageQuillJson(const [], ['/static/a.png']);
+    final onlyOps =
+        (jsonDecode(onlyImage) as Map<String, dynamic>)['ops'] as List;
+    expect(onlyOps, hasLength(2));
+    expect(onlyOps[0], {'insert': {'image': '/static/a.png'}});
+    expect(onlyOps[1], {'insert': '\n'});
+  });
+
+  test('previews image-only last message in conversation', () {
+    final conv = MessageConversation.fromJson({
+      'user': {'id': 7, 'name': '小明'},
+      'last_msg': {
+        'data': {
+          'message': '{"ops":[{"insert":"\\n"}]}',
+          'images': '["/static/a.png"]',
+        }
+      },
+    });
+    expect(conv.lastMessage, '[图片]');
   });
 
   test('reads referenced content info from notify params', () {

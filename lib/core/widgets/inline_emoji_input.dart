@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -16,6 +18,7 @@ class InlineEmojiInput extends StatefulWidget {
     this.hintText = '说点什么…',
     this.fontSize = 15,
     this.onUploadImage,
+    this.onSearchUser,
     this.initialText = '',
   });
 
@@ -29,6 +32,10 @@ class InlineEmojiInput extends StatefulWidget {
   final Future<String> Function(List<int> bytes, String filename)?
       onUploadImage;
 
+  /// 静默识别用：输入 `@用户名 `（空格结尾）时自动搜索并转为带 id 的
+  /// mention。为 null 时关闭该功能。
+  final Future<List<UserProfile>> Function(String keyword)? onSearchUser;
+
   @override
   State<InlineEmojiInput> createState() => InlineEmojiInputState();
 }
@@ -38,10 +45,61 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
   final List<String> _images = [];
   var _isUploading = false;
 
+  /// `@用户名 `（空格结尾）的静默识别正则：`@` 前不能是 `[`（避开
+  /// `[@id:名]` 标记），名字不含空格/@/`[`，末尾是空格。
+  static final RegExp _mentionPattern = RegExp(r'(?<!\[)@([^\s@\[]+)(?=\s)');
+
+  Timer? _mentionDebounce;
+  var _searchSeq = 0;
+  var _isReplacing = false;
+
   @override
   void initState() {
     super.initState();
     _input = TextEditingController(text: widget.initialText);
+    _input.addListener(_onInputChanged);
+  }
+
+  /// 输入变化时防抖触发静默识别。
+  void _onInputChanged() {
+    if (_isReplacing || widget.onSearchUser == null) return;
+    _mentionDebounce?.cancel();
+    _mentionDebounce =
+        Timer(const Duration(milliseconds: 250), _runSilentMention);
+  }
+
+  /// 静默搜索 `@用户名 ` 对应的用户，命中则替换为 `[@id:用户名]` 标记。
+  Future<void> _runSilentMention() async {
+    final match = _mentionPattern.allMatches(_input.text).lastOrNull;
+    if (match == null) return;
+    final name = match.group(1)!.trim();
+    if (name.isEmpty) return;
+    final seq = ++_searchSeq;
+    try {
+      final users = await widget.onSearchUser!(name);
+      if (!mounted || seq != _searchSeq || users.isEmpty) return;
+      // 确认期间文本未改动到该区域。
+      final text = _input.text;
+      if (match.start < 0 || match.end > text.length) return;
+      if (text.substring(match.start, match.end) != match.group(0)) return;
+      _replaceMention(match, users.first);
+    } catch (_) {
+      // 静默失败，不打扰输入。
+    }
+  }
+
+  void _replaceMention(Match match, UserProfile user) {
+    if (!mounted) return;
+    setState(() {
+      _isReplacing = true;
+      _mentionDebounce?.cancel();
+      final marker = '[@${user.id}:${user.name}]';
+      _input.text =
+          _input.text.replaceRange(match.start, match.end, marker);
+      _input.selection =
+          TextSelection.collapsed(offset: match.start + marker.length);
+      _isReplacing = false;
+    });
   }
 
   /// Text spans with `[pack-id]` markers converted to real stickers, ready
@@ -68,6 +126,25 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
         _input.selection =
             TextSelection.collapsed(offset: _input.text.length);
       });
+    });
+  }
+
+  /// 在光标处插入 `[@用户名]`（无 id）或 `[@id:用户名]`（带 id）标记，
+  /// 发送时由 commentSpansFromText 转换为 mention 富文本。
+  void addMention(String name, {String id = ''}) {
+    if (!mounted || name.trim().isEmpty) return;
+    setState(() {
+      _isReplacing = true;
+      _mentionDebounce?.cancel();
+      final trimmed = name.trim();
+      final marker = id.isEmpty ? '[@$trimmed]' : '[@$id:$trimmed]';
+      final text = _input.text;
+      final selection = _input.selection;
+      final start = selection.isValid ? selection.start : text.length;
+      _input.text = text.replaceRange(start, selection.end, marker);
+      _input.selection =
+          TextSelection.collapsed(offset: start + marker.length);
+      _isReplacing = false;
     });
   }
 
@@ -99,6 +176,7 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
 
   @override
   void dispose() {
+    _mentionDebounce?.cancel();
     _input.dispose();
     super.dispose();
   }

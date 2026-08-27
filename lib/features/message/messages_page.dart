@@ -4,7 +4,8 @@ import '../../app/app_controller.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_link_handler.dart';
 import '../../core/widgets/content_spans.dart';
-import '../../core/widgets/emoji_picker_sheet.dart';
+import '../../core/widgets/image_preview_page.dart';
+import '../../core/widgets/inline_emoji_input.dart';
 import '../home/home_repository.dart';
 
 class MessageListPage extends StatefulWidget {
@@ -208,7 +209,7 @@ class MessageDetailPage extends StatefulWidget {
 }
 
 class _MessageDetailPageState extends State<MessageDetailPage> {
-  final _input = TextEditingController();
+  final _inputKey = GlobalKey<InlineEmojiInputState>();
   List<MessageRecord>? _items;
   String? _error;
   var _isSending = false;
@@ -236,7 +237,6 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
-    _input.dispose();
     super.dispose();
   }
 
@@ -268,27 +268,20 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
 
   /// 打开表情选择面板：选中表情以 `[pack-id]` 标记插入输入框，
   /// 发送时由 commentQuillJson 转换为带 sticker 的富文本。
-  void _pickEmoji() {
-    EmojiPickerSheet.show(context, (span) {
-      if (!mounted) return;
-      setState(() {
-        _input.text = _input.text +
-            (span.isSticker ? '[${span.stickerKey}]' : span.text);
-        _input.selection =
-            TextSelection.collapsed(offset: _input.text.length);
-      });
-    });
-  }
+  void _pickEmoji() => _inputKey.currentState?.pickEmoji();
+
+  void _pickImage() => _inputKey.currentState?.pickImage();
 
   Future<void> _send() async {
-    final text = _input.text.trim();
-    if (text.isEmpty || _isSending) return;
+    final input = _inputKey.currentState;
+    if (input == null || input.isEmpty || _isSending) return;
     setState(() => _isSending = true);
     try {
-      final spans = commentSpansFromText(text);
-      final payload = commentQuillJson(spans);
-      await widget.controller.sendMessage(toUid: widget.peerId, text: payload);
-      _input.clear();
+      await widget.controller.sendMessage(
+          toUid: widget.peerId,
+          spans: input.spans,
+          images: input.images);
+      input.clear();
       await _reload();
     } catch (error) {
       if (mounted) {
@@ -348,21 +341,19 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _input,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      decoration: const InputDecoration(
-                        hintText: '说点什么…',
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                      ),
+                    child: InlineEmojiInput(
+                      key: _inputKey,
+                      hintText: '说点什么…',
+                      onUploadImage: widget.controller.uploadImage,
                     ),
+                  ),
+                  IconButton(
+                    tooltip: '图片',
+                    onPressed: _pickImage,
+                    icon: const Icon(Icons.image_outlined),
                   ),
                   IconButton(
                     tooltip: '表情',
@@ -410,6 +401,50 @@ class _MessageBubble extends StatelessWidget {
         child: const Icon(Icons.person_rounded, size: 18),
       );
 
+  /// 私信图片缩略图（横向滑动，点击进入全屏预览），参考评论区图片实现。
+  Widget _buildImages(BuildContext context) => SizedBox(
+        height: 76,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: record.images.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final uri = Uri.tryParse(record.images[index]);
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: GestureDetector(
+                onTap: uri == null
+                    ? null
+                    : () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => ImagePreviewPage(
+                              uri: uri,
+                              alt: '私信图片',
+                              heroTag: 'message-image-$index-$uri',
+                            ),
+                          ),
+                        ),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Hero(
+                    tag: 'message-image-$index-$uri',
+                    child: Image.network(
+                      record.images[index],
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const ColoredBox(
+                        color: Color(0xffefeff7),
+                        child: Icon(Icons.broken_image_outlined,
+                            color: Colors.blueGrey),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+
   @override
   Widget build(BuildContext context) => Align(
         alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -446,19 +481,14 @@ class _MessageBubble extends StatelessWidget {
                           bottomRight: Radius.circular(isMine ? 2 : 12),
                         ),
                       ),
-                      child: record.spans.isEmpty
-                          ? Text(
-                              record.message.isEmpty
-                                  ? '（空消息）'
-                                  : record.message,
-                              style: TextStyle(
-                                color: isMine
-                                    ? Colors.white
-                                    : Colors.blueGrey,
-                                height: 1.35,
-                              ),
-                            )
-                          : ContentSpans(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: isMine
+                            ? CrossAxisAlignment.end
+                            : CrossAxisAlignment.start,
+                        children: [
+                          if (record.spans.isNotEmpty)
+                            ContentSpans(
                               spans: record.spans,
                               stickerSize: 34,
                               onLinkTap: (url) =>
@@ -469,7 +499,33 @@ class _MessageBubble extends StatelessWidget {
                                     : Colors.blueGrey,
                                 height: 1.35,
                               ),
+                            )
+                          else if (record.message.isNotEmpty)
+                            Text(
+                              record.message,
+                              style: TextStyle(
+                                color: isMine
+                                    ? Colors.white
+                                    : Colors.blueGrey,
+                                height: 1.35,
+                              ),
+                            )
+                          else if (record.images.isEmpty)
+                            Text(
+                              '（空消息）',
+                              style: TextStyle(
+                                color: isMine
+                                    ? Colors.white
+                                    : Colors.blueGrey,
+                                height: 1.35,
+                              ),
                             ),
+                          if (record.images.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            _buildImages(context),
+                          ],
+                        ],
+                      ),
                     ),
                     if (record.time != null) ...[
                       const SizedBox(height: 3),

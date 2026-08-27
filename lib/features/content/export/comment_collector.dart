@@ -29,6 +29,8 @@ String commentContentMarkdown(CommunityComment comment) {
     if (span.isSticker) {
       // 贴纸不导出为图片，输出 [pack-id] 代号文本。
       buffer.write('[${span.stickerKey}]');
+    } else if (span.isMention) {
+      buffer.write('@${span.mentionName}');
     } else {
       final text = span.text.trimRight();
       if (text.isNotEmpty) buffer.write(text);

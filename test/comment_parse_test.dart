@@ -67,4 +67,51 @@ void main() {
     expect(notLiked.likes, 3);
     expect(notLiked.liked, isFalse);
   });
+
+  test('parses a mention out of quill content', () {
+    final comment = CommunityComment.fromJson({
+      'id': 106,
+      'content':
+          '{"ops":[{"insert":{"mention":{"id":"38461","value":"少女乌斯"}}},{"insert":"QWQ\\n"}]}',
+    });
+    expect(comment.spans, hasLength(2));
+    expect(comment.spans[0].isMention, isTrue);
+    expect(comment.spans[0].mentionId, '38461');
+    expect(comment.spans[0].mentionName, '少女乌斯');
+    expect(comment.spans[1].text, 'QWQ');
+    expect(comment.content, '@少女乌斯QWQ');
+  });
+
+  test('converts mention markers in text to mention spans', () {
+    final spans = commentSpansFromText('[@少女乌斯]来啦 [s-1]');
+    expect(spans, hasLength(3));
+    expect(spans[0].isMention, isTrue);
+    expect(spans[0].mentionName, '少女乌斯');
+    expect(spans[0].mentionId, '');
+    expect(spans[1].text, '来啦 ');
+    expect(spans[2].isSticker, isTrue);
+  });
+
+  test('carries mention id through the id-prefixed marker', () {
+    final spans = commentSpansFromText('[@38461:少女乌斯]QWQ');
+    expect(spans, hasLength(2));
+    expect(spans[0].isMention, isTrue);
+    expect(spans[0].mentionId, '38461');
+    expect(spans[0].mentionName, '少女乌斯');
+    expect(spans[1].text, 'QWQ');
+
+    final nameWithColon = commentSpansFromText('[@少女:乌斯]');
+    expect(nameWithColon.single.isMention, isTrue);
+    expect(nameWithColon.single.mentionId, '');
+    expect(nameWithColon.single.mentionName, '少女:乌斯');
+  });
+
+  test('serializes mentions into quill ops', () {
+    final payload = commentQuillJson([
+      CommentSpan.mention('38461', '少女乌斯'),
+      CommentSpan.text('QWQ'),
+    ]);
+    expect(payload,
+        '{"ops":[{"insert":{"mention":{"id":"38461","value":"少女乌斯"}}},{"insert":"QWQ\\n"}]}');
+  });
 }

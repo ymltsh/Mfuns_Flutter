@@ -586,7 +586,7 @@ class CommunityComment {
           json['user_avatar']),
       content: spans
           .where((span) => !span.isSticker)
-          .map((span) => span.text)
+          .map((span) => span.isMention ? '@${span.mentionName}' : span.text)
           .join()
           .trim(),
       spans: spans,
@@ -599,27 +599,43 @@ class CommunityComment {
   }
 }
 
-/// One piece of a comment: either plain text or a private-pack sticker.
+/// One piece of a comment: plain text, a private-pack sticker, or a user
+/// mention.
 ///
 /// Stickers are encoded by Mfuns as Quill inserts of the form
-/// `{"insert": {"sticker": "s-1"}}` where the key is `<pack>-<id>`.
+/// `{"insert": {"sticker": "s-1"}}` where the key is `<pack>-<id>`; mentions
+/// are `{"insert": {"mention": {"id": "38461", "value": "少女乌斯"}}}`.
 class CommentSpan {
-  const CommentSpan.text(this.text) : stickerKey = '';
-  const CommentSpan.sticker(this.stickerKey) : text = '';
+  const CommentSpan.text(this.text)
+      : stickerKey = '',
+        mentionId = '',
+        mentionName = '';
+  const CommentSpan.sticker(this.stickerKey)
+      : text = '',
+        mentionId = '',
+        mentionName = '';
+  const CommentSpan.mention(this.mentionId, this.mentionName)
+      : text = '',
+        stickerKey = '';
 
   final String text;
   final String stickerKey;
+  final String mentionId;
+  final String mentionName;
 
   bool get isSticker => stickerKey.isNotEmpty;
+  bool get isMention => mentionName.isNotEmpty;
 
   @override
   bool operator ==(Object other) =>
       other is CommentSpan &&
       other.text == text &&
-      other.stickerKey == stickerKey;
+      other.stickerKey == stickerKey &&
+      other.mentionId == mentionId &&
+      other.mentionName == mentionName;
 
   @override
-  int get hashCode => Object.hash(text, stickerKey);
+  int get hashCode => Object.hash(text, stickerKey, mentionId, mentionName);
 }
 
 List<CommentSpan> _commentSpans(String raw) {
@@ -639,6 +655,14 @@ List<CommentSpan> _commentSpans(String raw) {
               spans.add(CommentSpan.text(text));
             }
           } else if (insert is Map<String, dynamic>) {
+            final mention = insert['mention'];
+            if (mention is Map<String, dynamic>) {
+              final id = '${mention['id'] ?? ''}';
+              final value = '${mention['value'] ?? ''}';
+              if (value.isNotEmpty) {
+                spans.add(CommentSpan.mention(id, value));
+              }
+            }
             final sticker = insert['sticker'];
             if (sticker is String && sticker.isNotEmpty) {
               spans.add(CommentSpan.sticker(sticker));
@@ -712,27 +736,52 @@ String _htmlToText(String raw) {
 
 /// Converts plain text containing `[pack-id]` sticker markers (the format
 /// used in the official editor's alt tags) into spans so markers become
-/// real stickers when the comment is posted. Unmarked text stays as text.
+/// real stickers when the comment is posted. `[@用户名]` / `[@id:用户名]`
+/// markers become user mentions. Unmarked text stays as text.
 List<CommentSpan> commentSpansFromText(String raw) {
   final text = raw.trim();
   if (text.isEmpty) return const [];
   final spans = <CommentSpan>[];
-  final pattern = RegExp(r'\[([A-Za-z]+-\d+)\]');
+  final pattern = RegExp(r'\[@(\d*):?([^\]]+)\]|\[([A-Za-z]+-\d+)\]');
   var cursor = 0;
   for (final match in pattern.allMatches(text)) {
     final before = text.substring(cursor, match.start);
     cursor = match.end;
     if (before.isNotEmpty) spans.add(CommentSpan.text(before));
-    spans.add(CommentSpan.sticker(match.group(1)!));
+    final mentionId = match.group(1);
+    if (mentionId != null) {
+      spans.add(CommentSpan.mention(mentionId, match.group(2)!));
+    } else {
+      final key = match.group(3);
+      if (key != null && key.isNotEmpty) {
+        spans.add(CommentSpan.sticker(key));
+      }
+    }
   }
   final tail = text.substring(cursor);
   if (tail.isNotEmpty) spans.add(CommentSpan.text(tail));
   return spans;
 }
 
-String commentQuillJson(List<CommentSpan> spans) {
+String commentQuillJson(List<CommentSpan> spans) =>
+    _buildQuillJson(spans, const []);
+
+/// 私信用：把文本/表情 spans 与图片一起编码为 Quill JSON。图片以
+/// `{"insert":{"image":"path"}}` 内嵌在内容中（与接收端解析一致）。
+String messageQuillJson(List<CommentSpan> spans, List<String> images) =>
+    _buildQuillJson(spans, images);
+
+String _buildQuillJson(List<CommentSpan> spans, List<String> images) {
   final ops = <Map<String, Object?>>[];
   for (final span in spans) {
+    if (span.isMention) {
+      ops.add({
+        'insert': {
+          'mention': {'id': span.mentionId, 'value': span.mentionName}
+        }
+      });
+      continue;
+    }
     if (span.isSticker) {
       ops.add({'insert': {'sticker': span.stickerKey}});
       continue;
@@ -741,6 +790,9 @@ String commentQuillJson(List<CommentSpan> spans) {
     for (final line in lines) {
       ops.add({'insert': '$line\n'});
     }
+  }
+  for (final image in images) {
+    ops.add({'insert': {'image': image}});
   }
   if (ops.isEmpty || ops.last['insert'] is! String) {
     ops.add({'insert': '\n'});
@@ -768,12 +820,21 @@ class MessageConversation {
   factory MessageConversation.fromJson(Map<String, dynamic> json) {
     final user = _asMap(json['user']);
     final last = _asMap(_asMap(json['last_msg'] ?? json['last_message'])['data']);
+    final lastRaw = '${last['message'] ?? last['msg'] ?? ''}';
+    var lastMessage = _quillToText(lastRaw);
+    if (lastMessage.isEmpty &&
+        _uniqueImages([
+          ..._feedImages(last['images'] ?? '[]'),
+          ..._contentImages(lastRaw),
+        ]).isNotEmpty) {
+      lastMessage = '[图片]';
+    }
     return MessageConversation(
       userId: _asInt(user['id'] ?? user['user_id'] ?? json['user_id']) ?? 0,
       userName:
           '${user['name'] ?? user['username'] ?? '用户 ${json['user_id']}'}',
       userAvatar: _coverUrl(user['avatar'] ?? user['face']),
-      lastMessage: _quillToText('${last['message'] ?? last['msg'] ?? ''}'),
+      lastMessage: lastMessage,
       unread: _asInt(json['no_read'] ?? json['unread']) ?? 0,
       lastTime:
           _asDateTime(last['time'] ?? json['updated_at'] ?? json['time']),
@@ -786,12 +847,14 @@ class MessageRecord {
     required this.uid,
     required this.message,
     required this.spans,
+    required this.images,
     required this.time,
   });
 
   final int uid;
   final String message;
   final List<CommentSpan> spans;
+  final List<String> images;
   final DateTime? time;
 
   factory MessageRecord.fromJson(Map<String, dynamic> json) {
@@ -801,6 +864,10 @@ class MessageRecord {
       uid: _asInt(json['uid'] ?? data['uid'] ?? data['user_id']) ?? 0,
       message: _quillToText(raw),
       spans: _commentSpans(raw),
+      images: _uniqueImages([
+        ..._feedImages(data['images'] ?? json['images'] ?? '[]'),
+        ..._contentImages(raw),
+      ]),
       time: _asDateTime(data['time'] ?? json['created_at']),
     );
   }
@@ -1026,6 +1093,26 @@ class HomeRepository {
   Future<List<ContentPreview>> getHotRankings() async {
     final response = await _client.get('/v1/leaderboards/hot');
     return _toPreviewList(response.data);
+  }
+
+  /// 搜索用户（@ 提及用）：`GET /v1/search/user`。
+  Future<List<UserProfile>> searchUsers(
+    String keyword, {
+    int page = 1,
+    int size = 10,
+  }) async {
+    final response = await _client.get(
+      '/v1/search/user',
+      query: {'user': keyword, 'page': page, 'size': size},
+    );
+    final root = _asMap(response.data);
+    final rawList = response.data is List ? response.data : root['list'];
+    if (rawList is! List) return const [];
+    return rawList
+        .whereType<Map<String, dynamic>>()
+        .map(UserProfile.fromJson)
+        .where((user) => user.id != 0)
+        .toList(growable: false);
   }
 
   Future<List<CategoryNode>> getCategories() async {
@@ -1477,11 +1564,12 @@ class HomeRepository {
 
   Future<void> sendMessage({
     required int toUid,
-    required String text,
+    required List<CommentSpan> spans,
+    List<String> images = const [],
   }) async {
     await _client.postForm('/v1/message/send', {
       'to_uid': '$toUid',
-      'msg': text,
+      'msg': messageQuillJson(spans, images),
     });
   }
 
@@ -2151,6 +2239,53 @@ List<String> _feedImages(Object? value) {
       .toList(growable: false);
 }
 
+/// 从消息/评论内容本身提取图片地址，兜底服务端未单独返回 `images` 字段、
+/// 而是把图片嵌在 Quill 内容（`{"insert":{"image":"..."}}`）或 HTML
+/// `<img src="...">` 中的情况。返回绝对 CDN URL。
+List<String> _contentImages(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty) return const [];
+  if (value.startsWith('{')) {
+    try {
+      final ops = _asMap(jsonDecode(value))['ops'];
+      if (ops is List) {
+        return ops
+            .whereType<Map<String, dynamic>>()
+            .map((op) {
+              final insert = op['insert'];
+              if (insert is Map<String, dynamic>) {
+                final image = insert['image'];
+                if (image is String && image.isNotEmpty) return image;
+              }
+              return null;
+            })
+            .whereType<String>()
+            .map(_coverUrl)
+            .where((url) => url.isNotEmpty)
+            .toList(growable: false);
+      }
+    } on FormatException {
+      // Fall through to the HTML handling below.
+    }
+  }
+  final imgPattern = RegExp(
+      r'''<img[^>]*\bsrc=['"]([^'"]+)['"]''', caseSensitive: false);
+  return imgPattern
+      .allMatches(value)
+      .map((match) => _coverUrl(match.group(1) ?? ''))
+      .where((url) => url.isNotEmpty)
+      .toList(growable: false);
+}
+
+List<String> _uniqueImages(List<String> urls) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final url in urls) {
+    if (url.isNotEmpty && seen.add(url)) result.add(url);
+  }
+  return result;
+}
+
 String _mimeTypeFor(String filename) {
   final lower = filename.toLowerCase();
   if (lower.endsWith('.png')) return 'image/png';
@@ -2171,8 +2306,12 @@ String _quillToText(String raw) {
       final parts = ops.whereType<Map<String, dynamic>>().map((item) {
         final insert = item['insert'];
         if (insert is String) return insert;
-        if (insert is Map<String, dynamic> && insert['sticker'] is String) {
-          return '[表情]';
+        if (insert is Map<String, dynamic>) {
+          if (insert['sticker'] is String) return '[表情]';
+          final mention = insert['mention'];
+          if (mention is Map<String, dynamic>) {
+            return '@${mention['value'] ?? ''}';
+          }
         }
         return '';
       });

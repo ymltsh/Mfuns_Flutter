@@ -86,33 +86,48 @@ class ContentSpans extends StatelessWidget {
   final void Function(String url)? onLinkTap;
 
   @override
-  Widget build(BuildContext context) => Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 2,
-        runSpacing: 4,
-        children: [
-          for (final span in spans)
-            if (span.isSticker)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 1),
-                child: StickerImage(
-                    stickerKey: span.stickerKey, size: stickerSize),
-              )
-            else
-              ..._textSegments(
-                span.text,
-                baseStyle: textStyle ??
-                    const TextStyle(color: Colors.blueGrey, height: 1.4),
-                linkStyle: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  decoration: TextDecoration.underline,
-                  decorationColor:
-                      Theme.of(context).colorScheme.primary.withOpacity(.5),
-                  height: 1.4,
-                ),
+  Widget build(BuildContext context) {
+    final baseStyle = textStyle ??
+        const TextStyle(color: Colors.blueGrey, height: 1.4);
+    final mentionStyle = TextStyle(
+      color: baseStyle.color == Colors.white
+          ? Colors.white
+          : Theme.of(context).colorScheme.primary,
+      fontWeight: FontWeight.w700,
+      height: baseStyle.height,
+    );
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 2,
+      runSpacing: 4,
+      children: [
+        for (final span in spans)
+          if (span.isSticker)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1),
+              child: StickerImage(
+                  stickerKey: span.stickerKey, size: stickerSize),
+            )
+          else if (span.isMention)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1),
+              child: Text('@${span.mentionName}', style: mentionStyle),
+            )
+          else
+            ..._textSegments(
+              span.text,
+              baseStyle: baseStyle,
+              linkStyle: TextStyle(
+                color: Theme.of(context).colorScheme.primary,
+                decoration: TextDecoration.underline,
+                decorationColor:
+                    Theme.of(context).colorScheme.primary.withOpacity(.5),
+                height: 1.4,
               ),
-        ],
-      );
+            ),
+      ],
+    );
+  }
 
   List<Widget> _textSegments(String text, {
     required TextStyle baseStyle,
