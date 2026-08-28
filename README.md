@@ -10,7 +10,7 @@
 - Linux
 - Harmony OS
 
-- Android与Windows可直接在[Release](https://github.com/ymltsh/Mfuns_Flutter/releases/latest)下载最新版本，Linux与Harmony OS版本需自行编译
+- Android与Windows可直接在[Releases](https://github.com/ymltsh/Mfuns_Flutter/releases/latest)下载最新版本，Linux与Harmony OS版本需自行编译
 
 **浏览**
 - 首页推荐流 / 热榜 / 分区（分类树与分区内容）
