@@ -1,0 +1,271 @@
+{
+  "latest": {
+    "version": "1.4.0",
+    "build": 37,
+    "name": "Mfuns Flutter v1.4.0c",
+    "date": "2026-08-28",
+    "notes": "修复\n- 修复进入相关视频后返回，视频无法再次播放的问题：新增全局播放器路由恢复绑定（reclaim），返回原视频页后自动重新成为当前播放器，点击播放即可继续；返回后保持暂停，不会自动播放",
+    "urls": {
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.0c/mfuns-flutter-1.4.0c.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.0c/mfuns-flutter-windows-1.4.0c.zip"
+    },
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.4.0c"
+  },
+  "history": [
+    {
+      "version": "1.4.0",
+      "build": 36,
+      "name": "Mfuns Flutter v1.4.0",
+      "date": "2026-08-28",
+      "notes": "新增\n- 视频缓存下载：视频详情页新增「下载」按钮，可选择清晰度（多分P一并缓存），支持断点续传、后台下载、仅 Wi-Fi 下载与并发数设置\n- 下载管理：我的页新增「下载管理」，查看/暂停/继续/删除已缓存视频，已完成下载本地文件直接播放（不消耗流量）\n- 下载设置：设置页新增「下载设置」，可配置仅 Wi-Fi 下载、最大并发数（1~5）\n- 标签直达：视频/文章/投稿详情页点击标签，进入该标签下的文章列表\n- 已下载视频保存至系统 Movies（Android）/ Videos（桌面）目录，支持导出分享\n优化\n- 竖屏播放页点踩按钮改为默认隐藏，可在「播放器配置」中开启\n- 最新页被标记（折叠）的内容本地持久化，重启后仍过滤不再出现\n- 视频/文章详情页评论数取值修正（视频 floor_count / 文章 floor_num）\n修复\n- 修复视频详情评论数与评论区不一致的问题",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.0/mfuns-flutter-1.4.0.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.0/mfuns-flutter-windows-1.4.0.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.4.0"
+    },
+    {
+      "version": "1.3.1",
+      "build": 35,
+      "name": "Mfuns Flutter v1.3.1",
+      "date": "2026-08-27",
+      "notes": "新增\n- 文章阅读进度滑块：长文右侧进度条，可拖拽拇指/点击轨道跳转阅读位置，无操作自动隐藏；「设置 → 文章阅读设置」可开关（默认关闭）\n- 文章正文长按支持跨段落复制（桌面端可拖拽选区）\n- 文章代码块新增一键「复制」按钮\n- 私信支持图片：可发送与接收图片，图片消息以缩略图展示，点击全屏预览；会话列表显示「[图片]」\n- 评论区支持 @ 用户：@ 按钮 + 用户搜索，发布为富文本，评论内高亮渲染\n- 评论输入静默识别：输入「@用户名 + 空格」自动识别为 @ 用户\n- 搜索页新增「用户」检索，点击直达用户主页\n- 私信消息头像可点击进入对应主页\n- Android 后台播放正式版：退后台/锁屏视频声音不中断，通知栏播放/暂停/进度真实生效\n优化\n- 修复文章滚动概率性卡住：滑块命中区收窄、仅拇指可拖动、轨道点击跳转，正文滑动不再被滑块抢走\n- 滑块拖动更跟手：拖拽期间冻结滚动范围、跳转按帧合并，消除进度条抽动\n- 评论区输入框与「图片 / @ / 表情包」按钮拆分为两行\n修复\n- 修复文章滑块首帧构建时位置未完成布局导致整页发灰不可操作\n- 修复 A 视频播放中进入相关视频 B 后两个视频同时出声（全局单播放器仲裁）\n- 修复后台播放开关关闭时通知栏状态与实际不一致\n- 新增播放链路日志（adb logcat -s MfunsPlayback:D）",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.3.1/mfuns-flutter-1.3.1.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.3.1/mfuns-flutter-windows-1.3.1.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.3.1"
+    },
+    {
+      "version": "1.2.9",
+      "build": 34,
+      "name": "Mfuns Flutter v1.2.9",
+      "date": "2026-08-27",
+      "notes": "新增\n- 搜索页新增「用户」检索：支持按用户名搜索用户，结果列表展示头像与简介，点击直达用户主页\n- 私信消息头像可点击：点击对方或自己的头像直接进入对应主页",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.9/mfuns-flutter-1.2.9.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.9/mfuns-flutter-windows-1.2.9.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.9"
+    },
+    {
+      "version": "1.2.8",
+      "build": 33,
+      "name": "Mfuns Flutter v1.2.8",
+      "date": "2026-08-27",
+      "notes": "新增\n- 私信支持图片：可发送与接收图片，图片消息以缩略图展示，点击全屏预览；图片消息在会话列表显示「[图片]」\n- 评论区支持 @ 用户：@ 按钮 + 用户搜索（/v1/search/user），发布为 Quill mention 富文本，评论内以高亮 @用户名 渲染\n- 评论输入静默识别：输入「@用户名 + 空格」自动识别为 @ 用户\n优化\n- 评论区输入框与「图片 / @ / 表情包」按钮拆分为两行",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.8/mfuns-flutter-1.2.8.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.8/mfuns-flutter-windows-1.2.8.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.8"
+    },
+    {
+      "version": "1.2.7",
+      "build": 32,
+      "name": "Mfuns Flutter v1.2.7",
+      "date": "2026-08-26",
+      "notes": "新增\n- Android 后台播放正式版：修复退后台/锁屏后视频声音停止的问题（Android 14 / 小米 HyperOS）\n- 后台播放重构为「前台视频 + 后台音频」双引擎：退后台时音频无缝交接给系统前台媒体服务（audio_service + just_audio），回前台自动恢复视频画面与播放进度，进度无缝衔接\n- 通知栏播放/暂停/进度拖拽在后台真实生效，状态与实际播放一致（不再出现「显示播放中但实际无声」）\n修复\n- 修复 A 视频播放中进入相关视频 B 后两个视频同时出声的问题：全局单播放器仲裁，同一时刻只有一个视频/音频在播放；暂停 B 后 A 不会自动恢复\n- 修复后台播放开关关闭时通知栏状态与实际播放不一致的问题\n优化\n- 新增播放链路日志（adb logcat -s MfunsPlayback:D），便于排查播放问题",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.7/mfuns-flutter-1.2.7.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.7/mfuns-flutter-windows-1.2.7.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.7"
+    },
+    {
+      "version": "1.2.6",
+      "build": 31,
+      "name": "Mfuns Flutter v1.2.6 Beta 2",
+      "date": "2026-08-26",
+      "notes": "修复\n- 长图导出：去除链接的黄色下划线，文章标题、用户名等以链接形式出现的内容不再显示下划线（保留主题色，不影响 Markdown 导出）",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta2/mfuns-flutter-1.2.6-beta2.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta2/mfuns-flutter-windows-1.2.6-beta2.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.6-beta2"
+    },
+    {
+      "version": "1.2.6",
+      "build": 30,
+      "name": "Mfuns Flutter v1.2.6 Beta",
+      "date": "2026-08-26",
+      "notes": "修复\n- 彻底修复长图导出中标题、用户名、页脚、来源等文字出现黄色双下划线的问题：导出内容渲染在应用根 Overlay 且无 Material 祖先，纯文本会继承 MaterialApp 根默认样式（Flutter fallback 的红字+黄色双下划线）；现已在导出部件内显式提供基础文本样式，不再被污染\n- 长图导出中的链接不再显示下划线（保留主题色）",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta/mfuns-flutter-1.2.6-beta.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.6-beta/mfuns-flutter-windows-1.2.6-beta.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.6-beta"
+    },
+    {
+      "version": "1.2.5",
+      "build": 29,
+      "name": "Mfuns Flutter v1.2.5",
+      "date": "2026-08-26",
+      "notes": "新增\n- 文章导出：分享 → 更多 → 导出文章，支持长图与 Markdown 两种格式\n- 导出配置：格式（长图/Markdown）、是否带评论、开源页脚开关（默认长图、不勾页脚、内容 ×2.0）\n- Markdown 导出保留标题/粗体/链接/引用/列表/代码/图片，图片本地化保存，UTF-8 编码\n- 长图导出：分片渲染拼接一张 1080px 宽长图，超长自动降低密度防止内存溢出\n- 带评论导出：分页拉取全部评论（含二级回复），数量与实际一致，评论失败也可继续导出\n- 内容字号比例可调（0.5x~2x），分辨率固定 1080px，插图不变\n- 主题色跟随：长图中引用块/代码块/链接/回复框使用界面主题色\n- 贴纸导出为 [s-2] 代号，评论长图只显示文本\n优化\n- 导出保存到公共目录：Android 内部存储 Pictures|Documents/Mfuns Flutter（MediaStore）、Windows 用户目录\n- 导出完成后询问是否分享；进度弹窗防重复触发、可取消",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.5/mfuns-flutter-1.2.5.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.5/mfuns-flutter-windows-1.2.5.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.5"
+    },
+    {
+      "version": "1.2.4",
+      "build": 28,
+      "name": "Mfuns Flutter v1.2.4",
+      "date": "2026-08-25",
+      "notes": "新增\n- 私信支持表情包，界面显示双方头像\n- 消息/通知未读小红点，查看后自动消失\n- 新私信/赞/评论/提及系统通知，点击直达对应页面\n- Android 后台播放（Beta）开关\n- 横屏长按 2 倍速播放\n优化\n- 首页刷新回到最新内容顶部，交界提示「刚刚看到这里」\n- 拖动视频进度显示加载动画\n- 消息会话预览最新私信，后台定期接收新消息",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.4/mfuns-flutter-1.2.4.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.4/mfuns-flutter-windows-1.2.4.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.4"
+    },
+    {
+      "version": "1.2.3",
+      "build": 27,
+      "name": "Mfuns Flutter v1.2.3 Beta",
+      "date": "2026-08-25",
+      "notes": "新增\n- 后台播放（Beta）：Android 退到后台时视频继续播放声音，可在「设置 → 播放器配置」中开关\n- 横屏播放支持长按 2 倍速播放\n- 视频拖动 / 切换进度时显示加载动画，不再显示暂停\n修复\n- 修复关于页 Logo 显示异常大的问题\n- 修复关于页项目链接超出卡片的问题\n- 关于页 Logo 更换为项目 logo\n- 视频播放器时长超过 1 小时只显示分钟，现显示为 H:MM:SS\n- 最新页被标记折叠的内容在刷新后重新出现，已在本地按资源 ID 过滤\n新增\n- 设置页新增「意见反馈」，点击直达反馈帖，在评论区留言即可\n- 关于弹窗新增 GitHub 项目链接，欢迎点个 Star\n优化\n- 首页 ❤ 图标跟随文字颜色\n- 我的页「退出当前账号」不再固定红色，跟随主题色",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.3-beta/mfuns-flutter-1.2.3-beta.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.3-beta/mfuns-flutter-windows-1.2.3-beta.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.3-beta"
+    },
+    {
+      "version": "1.2.3",
+      "build": 26,
+      "name": "Mfuns Flutter v1.2.3",
+      "date": "2026-08-25",
+      "notes": "修复\n- 缩小关于页 Logo 尺寸\n- 修复关于页 Logo 显示异常大的问题\n新增\n- 设置页新增「意见反馈」，点击直达反馈帖，在评论区留言即可\n- 关于弹窗新增 GitHub 项目链接，欢迎点个 Star\n修复\n- 视频播放器时长超过 1 小时只显示分钟，现显示为 H:MM:SS\n- 最新页被标记折叠的内容在刷新后重新出现，已在本地按资源 ID 过滤\n- 关于页 Logo 更换为项目 logo\n- 修复关于页项目链接超出卡片的问题\n优化\n- 首页 ❤ 图标跟随文字颜色\n- 我的页「退出当前账号」不再固定红色，跟随主题色",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.3/mfuns-flutter-1.2.3.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.3/mfuns-flutter-windows-1.2.3.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.3"
+    },
+    {
+      "version": "1.2.2",
+      "build": 25,
+      "name": "Mfuns Flutter v1.2.2",
+      "date": "2026-08-25",
+      "notes": "新增\n- 设置页新增「意见反馈」，点击直达反馈帖，在评论区留言即可\n- 关于弹窗新增 GitHub 项目链接，欢迎点个 Star\n修复\n- 视频播放器时长超过 1 小时只显示分钟，现显示为 H:MM:SS\n- 最新页被标记折叠的内容在刷新后重新出现，已在本地按资源 ID 过滤\n- 关于页 Logo 更换为项目 logo\n- 修复关于页项目链接超出卡片的问题\n优化\n- 首页 ❤ 图标跟随文字颜色\n- 我的页「退出当前账号」不再固定红色，跟随主题色",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.2/mfuns-flutter-1.2.2.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.2/mfuns-flutter-windows-1.2.2.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.2"
+    },
+    {
+      "version": "1.2.1",
+      "build": 24,
+      "name": "Mfuns Flutter v1.2.1",
+      "date": "2026-08-25",
+      "notes": "修复\n- 视频播放器时长超过 1 小时只显示分钟，现显示为 H:MM:SS\n- 最新页被标记折叠的内容在刷新后重新出现，已在本地按资源 ID 过滤\n优化\n- 首页 ❤ 图标跟随文字颜色\n- 我的页「退出当前账号」不再固定红色，跟随主题色",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.1/mfuns-flutter-1.2.1.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.1/mfuns-flutter-windows-1.2.1.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.1"
+    },
+    {
+      "version": "1.2.0",
+      "build": 23,
+      "name": "Mfuns Flutter v1.2.0",
+      "date": "2026-08-19",
+      "notes": "新增\n- 媒体播放通知：播放视频后系统通知栏提供播放/暂停/进度控制（Android MediaSession）\n- 深链唤醒：m.mfuns.net / mfuns.wgen.top 链接可直接打开对应视频/文章/动态\n- 评论区：二级评论重新设计，支持回复、点赞、删除\n- 消息通知：评论通知显示收到的评论内容\n- 用户主页：新增发起私信、关注/粉丝列表入口\n- 多分P：切换分P从头播放，结束后自动连播下一P\n- 播放器：竖屏新增返回首页按钮\n- 自动签到：启动时检查并自动签到\n优化\n- 登录/主题弹层自动避让键盘\n- 退出登录增加二次确认",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.0/mfuns-flutter-1.2.0.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.2.0/mfuns-flutter-windows-1.2.0.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.2.0"
+    },
+    {
+      "version": "1.1.7",
+      "build": 22,
+      "name": "Mfuns Flutter v1.1.7",
+      "date": "2026-08-16",
+      "notes": "修复：表情包列表请求补上 with_vip=1，VIP 专属表情包（simplevip）不再缺失。\n新增：单文件一键发布工具 release.py（引导模式 + CLI 参数，自动完成构建/发布/更新清单/推送）。",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.7/mfuns-flutter-1.1.7.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.7/mfuns-flutter-windows-1.1.7.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.7"
+    },
+    {
+      "version": "1.1.6",
+      "build": 19,
+      "name": "Mfuns Flutter v1.1.6",
+      "date": "2026-08-15",
+      "notes": "正式版（Beta 测试期结束）：应用启动图标（Android 自适应图标 + Windows 图标）；文章封面作为阅读页头图显示在标题上方（点击查看大图）；修复多图文章/动态打开图片查看器后返回的界面闪动。",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.6/mfuns-flutter-1.1.6.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.1.6/mfuns-flutter-windows-1.1.6.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.1.6"
+    },
+    {
+      "version": "1.1.6-beta",
+      "build": 18,
+      "notes": "应用启动图标生成（Android 自适应图标 + Windows 图标）；修复多图文章/动态打开图片查看器后返回的界面闪动。",
+      "date": "2026-08-15",
+      "name": "Mfuns Flutter v1.1.6 Beta 2"
+    },
+    {
+      "name": "Mfuns Flutter v1.1.5",
+      "notes": "新增：站内链接识别（文章/动态/评论/简介中的 mfuns.net 链接与 mv 号点击直达对应页面）、网页唤醒（mfuns:// 深链与 mfuns.wgen.top 域名唤醒 App）、图片查看器左右滑动切换（帖子多图）。优化：首页分区选择条只在分区标签页显示。",
+      "version": "1.1.5",
+      "date": "2026-08-15",
+      "build": 17
+    },
+    {
+      "version": "1.1.4",
+      "build": 16,
+      "name": "Mfuns Flutter v1.1.4",
+      "date": "2026-08-15",
+      "notes": "正式版（Beta 测试期结束）：修复签到日历日期偏移；新增用户主页动态/文章/视频分页加载、我的资产（喵币+背包道具）、历史记录分页、自动同步动态识别（类型标识显示在被引用资源卡片上）、视频播放保持屏幕唤醒、竖屏视频缩放 16:9 播放框、各标签页滑动切换；修复个人主页刷新。"
+    },
+    {
+      "version": "1.1.4-beta",
+      "build": 15,
+      "name": "Mfuns Flutter v1.1.4 Beta 2",
+      "date": "2026-08-15",
+      "notes": "我的资产（喵币+背包道具）、标签页滑动切换（首页/动态/消息/视频详情）、自动同步动态类型标识与点赞浏览同行、个人主页刷新修复。"
+    },
+    {
+      "version": "1.1.3",
+      "build": 13,
+      "name": "Mfuns Flutter v1.1.3",
+      "date": "2026-08-14",
+      "notes": "新增：视频播放时保持屏幕唤醒（播放中不自动锁屏，暂停/退出后恢复）；最新页「不友好标记」支持取消（屏蔽前可取消，服务端按 UID 删除记录）。优化：视频详情页标签栏固定在播放器下方不随页面滚动；登录失效时标记提示明确化。需同步更新 latest-mfuns 服务端。"
+    },
+    {
+      "version": "1.1.2",
+      "build": 12,
+      "name": "Mfuns Flutter v1.1.2",
+      "date": "2026-08-14",
+      "notes": "最新页「不友好标记」需登录后使用：标记时仅上传登录用户的 UID，不包含任何其他信息（不会上传设备信息、位置、通讯录等敏感数据）；服务端按 UID 记录并去重，同一用户每帖只计一次，达到 5 人标记后帖子自动屏蔽。需同步更新 latest-mfuns 服务端。"
+    },
+    {
+      "version": "1.1.1",
+      "build": 11,
+      "name": "Mfuns Flutter v1.1.1",
+      "date": "2026-08-14",
+      "notes": "新增：最新页帖子「不友好标记」——长按帖子可选择标记为不友好内容，同一用户对同一帖子只计一次；达到 5 人标记后帖子自动屏蔽并从列表移除；已标记帖子显示「已有 X/5 位喵友标记此帖子」。需同步更新 latest-mfuns 服务端。"
+    },
+    {
+      "version": "1.1.0",
+      "build": 10,
+      "name": "Mfuns Flutter v1.1.0",
+      "date": "2026-08-14",
+      "notes": "合并 1.0.5 ~ 1.0.9 的全部更新：每日签到（本月日历/补签/累计奖励/今日排行）、自动签到（00:00）、投币、评论长按菜单与链接识别、等级段位与经验进度条、检查更新与下载加速配置、首页累计刷新、播放器固定顶部与拖动调进度、全屏播放修复、Windows 真全屏。"
+    },
+    {
+      "version": "1.0.5 - 1.0.9",
+      "build": null,
+      "name": "Mfuns Flutter v1.0.5 - v1.0.9",
+      "date": "2026-08-14",
+      "notes": "1.0.5：每日签到（本月日历/补签/累计奖励/今日签到排行）、文章与视频投币、评论长按菜单（复制/删除）与链接识别、我的页面等级段位与经验进度条、个人主页等级显示；首页刷新累计追加、卡片高度自适应、全屏播放修复、签到日历修复、Windows 真全屏。\n1.0.6：设置页检查更新（加速站读取更新清单，最新/历史版本双字段）。\n1.0.7：自动签到（应用打开时每天 00:00 自动签到）。\n1.0.8：竖屏播放器固定顶部不随页面滚动；左右拖动调整进度（竖屏与横屏全屏）。\n1.0.9：下载加速配置（自定义 GitHub 加速地址，默认 https://hub.wgen.top/）。"
+    }
+  ]
+}

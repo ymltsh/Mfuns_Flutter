@@ -1,0 +1,56 @@
+# ===== Flutter / Dart / Pub =====
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# ===== Android build artifacts =====
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ===== IDE / Editor =====
+.idea/
+*.iml
+*.ipr
+*.iws
+# The .vscode folder contains launch configuration and tasks you configure
+# in VS Code, which you may wish to include in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+
+# ===== OS / Misc =====
+.DS_Store
+Thumbs.db
+*.class
+*.log
+*.swp
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# ===== Flutter release symbols / obfuscation =====
+app.*.symbols
+app.*.map.json
+
+# ===== Network captures (may contain session cookies) =====
+*.har
+
+# ===== Local / project-specific =====
+release.py
+update.md
+MFUNS_FLUTTER_PLAN.md
+mfuns_api_docs.md
+PROJECT_UPGRADE_PROPOSAL.md
+latest-mfuns-2/
