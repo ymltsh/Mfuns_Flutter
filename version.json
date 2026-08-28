@@ -1,17 +1,29 @@
 {
   "latest": {
     "version": "1.4.0",
-    "build": 37,
-    "name": "Mfuns Flutter v1.4.0c",
+    "build": 38,
+    "name": "Mfuns Flutter v1.4.0 英仙座",
     "date": "2026-08-28",
-    "notes": "修复\n- 修复进入相关视频后返回，视频无法再次播放的问题：新增全局播放器路由恢复绑定（reclaim），返回原视频页后自动重新成为当前播放器，点击播放即可继续；返回后保持暂停，不会自动播放",
+    "notes": "新增\n- 文章/视频/动态显示发布时间：文章正文结尾点赞操作栏上方显示「发布于 …」，顶部信息卡保留原时间；视频简介元信息行（分类 · 播放 · 弹幕）追加发布时间；动态在时间线 / 详情 / 个人主页均已展示",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.0c/mfuns-flutter-1.4.0c.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.0c/mfuns-flutter-windows-1.4.0c.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.0per/mfuns-flutter-1.4.0per.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.0per/mfuns-flutter-windows-1.4.0per.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.4.0c"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.4.0per"
   },
   "history": [
+    {
+      "version": "1.4.0",
+      "build": 37,
+      "name": "Mfuns Flutter v1.4.0c",
+      "date": "2026-08-28",
+      "notes": "修复\n- 修复进入相关视频后返回，视频无法再次播放的问题：新增全局播放器路由恢复绑定（reclaim），返回原视频页后自动重新成为当前播放器，点击播放即可继续；返回后保持暂停，不会自动播放",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.0c/mfuns-flutter-1.4.0c.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.0c/mfuns-flutter-windows-1.4.0c.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.4.0c"
+    },
     {
       "version": "1.4.0",
       "build": 36,
