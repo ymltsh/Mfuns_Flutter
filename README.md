@@ -10,7 +10,7 @@
 - Linux
 - Harmony OS
 
-- Android与Windows可直接在`https://github.com/ymltsh/Mfuns_Flutter/releases/latest`下载最新版本，Linux与Harmony OS版本需自行编译
+- Android与Windows可直接在[Release](https://github.com/ymltsh/Mfuns_Flutter/releases/latest)下载最新版本，Linux与Harmony OS版本需自行编译
 
 **浏览**
 - 首页推荐流 / 热榜 / 分区（分类树与分区内容）
@@ -101,7 +101,7 @@ lib/
 
 ## 参考
 
-- 接口抓包与文档：`mfuns_api_docs.md`、`*.har`
+- 官方openapi
 - 服务端接口参考实现：[Mfuns-MCP](https://github.com/)（`latest-mfuns/` 为聚合服务）
 
 ## 免责声明
