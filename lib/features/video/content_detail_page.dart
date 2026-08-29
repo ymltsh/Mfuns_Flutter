@@ -661,6 +661,15 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                     onLinkTap: (url) =>
                         openContentLink(context, widget.controller, url),
                   ),
+                  if (detail.preview.createdAt != null) ...[
+                    const SizedBox(height: 14),
+                    Center(
+                      child: Text(
+                        '发布于 ${formatExportDate(detail.preview.createdAt!)}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _VideoActions(
                     controller: widget.controller,
@@ -776,7 +785,8 @@ class _ArticleInfoCard extends StatelessWidget {
                   controller: controller,
                   preview: preview,
                   subtitle:
-                      '${preview.category.isEmpty ? 'Mfuns' : preview.category} · ${preview.views} 阅读 · ${preview.comments} 评论',
+                      '${preview.category.isEmpty ? 'Mfuns' : preview.category} · ${preview.views} 阅读 · ${preview.comments} 评论'
+                      '${preview.createdAt == null ? '' : ' · ${formatExportDate(preview.createdAt!)}'}',
                 ),
               ],
             ),
@@ -1321,7 +1331,8 @@ class _VideoDetailPane extends StatelessWidget {
                 style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              '${detail.preview.category.isEmpty ? 'Mfuns' : detail.preview.category} · ${detail.preview.views} 播放 · ${detail.preview.comments} 弹幕',
+              '${detail.preview.category.isEmpty ? 'Mfuns' : detail.preview.category} · ${detail.preview.views} 播放 · ${detail.preview.comments} 弹幕'
+              '${detail.preview.createdAt == null ? '' : ' · ${formatExportDate(detail.preview.createdAt!)}'}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),

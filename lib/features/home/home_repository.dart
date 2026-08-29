@@ -18,6 +18,7 @@ class ContentPreview {
     required this.views,
     this.authorId,
     this.authorAvatar = '',
+    this.createdAt,
   });
 
   final int id;
@@ -32,6 +33,7 @@ class ContentPreview {
   final int views;
   final int? authorId;
   final String authorAvatar;
+  final DateTime? createdAt;
 
   bool get isVideo => type == 1;
 
@@ -55,6 +57,8 @@ class ContentPreview {
       likes: _asInt(source['like_count']) ?? 0,
       comments: _asInt(source['comment_count']) ?? 0,
       views: _asInt(source['view_count']) ?? 0,
+      createdAt: _asDateTime(
+          source['created_at'] ?? source['time'] ?? source['createdAt']),
     );
   }
 }
@@ -1931,6 +1935,11 @@ class HomeRepository {
           _asInt(root['view_count'] ?? resource['view_count']) ?? preview.views,
       authorId: _asInt(user['id'] ?? user['user_id']) ?? preview.authorId,
       authorAvatar: avatar.isEmpty ? preview.authorAvatar : avatar,
+      createdAt: _asDateTime(root['created_at'] ??
+              resource['created_at'] ??
+              root['time'] ??
+              resource['time']) ??
+          preview.createdAt,
     );
   }
 
