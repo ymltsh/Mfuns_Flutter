@@ -6,10 +6,10 @@
     "date": "2026-09-01",
     "notes": "新增\n- 深色模式：主题外观支持「跟随系统 / 浅色 / 深色」三档切换（默认跟随系统），深色配色由主题色自动生成，卡片、文字、输入框、弹层等全界面适配\n- 系统通知：消息中心通知页新增「系统」标签，展示站点公告，独立卡片样式\n- 下载管理：默认进入「已下载」标签，查看已缓存视频更方便\n- 下载选择增强：已加入下载队列或已下载完成的清晰度自动识别并锁定，避免重复下载",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/vper/mfuns-flutter-per.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/vper/mfuns-flutter-windows-per.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.2per/mfuns-flutter-1.4.2per.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.2per/mfuns-flutter-windows-1.4.2per.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/vper"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.4.2per"
   },
   "history": [
     {
