@@ -78,6 +78,7 @@ class _VideoDetailPageState extends State<VideoDetailPage>
   VideoQuality? _selectedQuality;
   List<VideoQuality> _availableQualities = const [];
   var _qualitiesLoading = true;
+  double _sideRatio = UserPreferences.defaultLandscapeSideRatio;
 
   @override
   void initState() {
@@ -99,6 +100,11 @@ class _VideoDetailPageState extends State<VideoDetailPage>
       setState(() => _qualitiesLoading = false);
     });
     _related = widget.controller.relatedContent(widget.preview);
+    // 读取横屏简介/评论栏宽度设置，加载后按新比例重排布局。
+    UserPreferences.loadLandscapeSideRatio().then((ratio) {
+      if (!mounted) return;
+      setState(() => _sideRatio = ratio);
+    });
   }
 
   /// 滑动切换简介/评论时同步高亮标签。
@@ -211,21 +217,22 @@ class _VideoDetailPageState extends State<VideoDetailPage>
               controller: _tabController,
               children: [introTab, commentTab],
             );
-            // 横屏自动分栏：左侧播放器（黑底），右侧信息与评论独立滚动。
+            // 横屏自动分栏：左侧播放器（黑底，占剩余宽度），右侧简介/评论
+            // 栏宽度按设置占整屏 1/2、1/3、1/4 或 1/5（默认 1/3）。
             final isLandscape =
                 MediaQuery.orientationOf(context) == Orientation.landscape;
             if (isLandscape) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(
-                    width: MediaQuery.sizeOf(context).width * 0.42,
+                  Expanded(
                     child: ColoredBox(
                       color: Colors.black,
                       child: player,
                     ),
                   ),
-                  Expanded(
+                  SizedBox(
+                    width: MediaQuery.sizeOf(context).width * _sideRatio,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -358,58 +365,58 @@ class _FeedDetailPageState extends State<FeedDetailPage> {
                 key: PageStorageKey<String>('feed-detail-${feed.id}'),
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
                 children: [
-                _FeedAuthorCard(
-                  feed: feed,
-                  controller: widget.controller,
-                ),
-                const SizedBox(height: 12),
-                RichContentCard(
-                    source: detail.rawContent.isEmpty
-                        ? feed.content
-                        : detail.rawContent,
-                    onLinkTap: (url) =>
-                        openContentLink(context, widget.controller, url)),
-                if (feed.images.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _FeedImageGrid(images: feed.images, feedId: feed.id),
-                ],
-                if (feed.resource != null) ...[
-                  const SizedBox(height: 12),
-                  _FeedResourceCard(
-                    item: feed.resource!,
+                  _FeedAuthorCard(
+                    feed: feed,
                     controller: widget.controller,
                   ),
-                ],
-                const SizedBox(height: 12),
-                _VideoActions(
-                  controller: widget.controller,
-                  preview: preview,
-                  resourceType: 3,
-                  linkPath: 'feed',
-                ),
-                if (detail.tags.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: detail.tags
-                        .map((tag) => ActionChip(
-                              label: Text('#$tag'),
-                              onPressed: () => _openTagList(
-                                  context, widget.controller, tag),
-                            ))
-                        .toList(growable: false),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                if (detail.commentAreaId != null)
-                  _CommentSection(
+                  const SizedBox(height: 12),
+                  RichContentCard(
+                      source: detail.rawContent.isEmpty
+                          ? feed.content
+                          : detail.rawContent,
+                      onLinkTap: (url) =>
+                          openContentLink(context, widget.controller, url)),
+                  if (feed.images.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _FeedImageGrid(images: feed.images, feedId: feed.id),
+                  ],
+                  if (feed.resource != null) ...[
+                    const SizedBox(height: 12),
+                    _FeedResourceCard(
+                      item: feed.resource!,
+                      controller: widget.controller,
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  _VideoActions(
                     controller: widget.controller,
-                    areaId: detail.commentAreaId!,
-                  )
-                else
-                  const _ArticleCommentUnavailable(),
-              ],
+                    preview: preview,
+                    resourceType: 3,
+                    linkPath: 'feed',
+                  ),
+                  if (detail.tags.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: detail.tags
+                          .map((tag) => ActionChip(
+                                label: Text('#$tag'),
+                                onPressed: () => _openTagList(
+                                    context, widget.controller, tag),
+                              ))
+                          .toList(growable: false),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  if (detail.commentAreaId != null)
+                    _CommentSection(
+                      controller: widget.controller,
+                      areaId: detail.commentAreaId!,
+                    )
+                  else
+                    const _ArticleCommentUnavailable(),
+                ],
               ),
             );
           },
@@ -441,10 +448,12 @@ class _FeedAuthorCard extends StatelessWidget {
             children: [
               InkWell(
                 customBorder: const CircleBorder(),
-                onTap: feed.authorId == null ? null : () => _openProfile(context),
+                onTap:
+                    feed.authorId == null ? null : () => _openProfile(context),
                 child: CircleAvatar(
                   radius: 22,
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.primaryContainer,
                   foregroundImage:
                       feed.avatar.isEmpty ? null : NetworkImage(feed.avatar),
                   child: Text(feed.author.isEmpty ? 'M' : feed.author[0]),
@@ -462,10 +471,9 @@ class _FeedAuthorCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                            feed.author.isEmpty ? 'Mfuns 用户' : feed.author,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w800)),
+                        Text(feed.author.isEmpty ? 'Mfuns 用户' : feed.author,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 3),
                         Text(_formatDateTime(feed.createdAt),
                             style: Theme.of(context).textTheme.bodySmall),
@@ -515,9 +523,7 @@ class _FeedImageGrid extends StatelessWidget {
                           uri: uri,
                           alt: '动态图片',
                           heroTag: 'feed-image-$feedId-$index-$uri',
-                          uris: images
-                              .map(Uri.parse)
-                              .toList(growable: false),
+                          uris: images.map(Uri.parse).toList(growable: false),
                           initialIndex: index,
                         ),
                       )),
@@ -526,9 +532,9 @@ class _FeedImageGrid extends StatelessWidget {
                 child: Image.network(
                   images[index],
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const ColoredBox(
-                    color: Color(0xffefeff7),
-                    child: Icon(Icons.broken_image_outlined),
+                  errorBuilder: (_, __, ___) => ColoredBox(
+                    color: AppPalette.of(context).placeholder,
+                    child: const Icon(Icons.broken_image_outlined),
                   ),
                 ),
               ),
@@ -765,10 +771,10 @@ class _ArticleInfoCard extends StatelessWidget {
                   child: Image.network(
                     preview.cover,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const ColoredBox(
-                      color: Color(0xffececf5),
+                    errorBuilder: (_, __, ___) => ColoredBox(
+                      color: AppPalette.of(context).placeholder,
                       child: Icon(Icons.image_outlined,
-                          color: Color(0xff8a8a94)),
+                          color: AppPalette.of(context).muted),
                     ),
                   ),
                 ),
@@ -916,13 +922,11 @@ class _ArticleProgressSliderState extends State<_ArticleProgressSlider> {
     if (!_dragging) return;
     final usable = height - _edgeInset * 2;
     if (usable <= 0) return;
-    final thumbTop =
-        (_edgeInset + _progress * usable) - _thumbHeight / 2;
+    final thumbTop = (_edgeInset + _progress * usable) - _thumbHeight / 2;
     final fingerY = thumbTop + localY;
-    final progress =
-        ((fingerY - _grabOffsetY - _edgeInset) / usable)
-            .clamp(0.0, 1.0)
-            .toDouble();
+    final progress = ((fingerY - _grabOffsetY - _edgeInset) / usable)
+        .clamp(0.0, 1.0)
+        .toDouble();
     _setProgress(progress);
     _scheduleJump(progress * _dragExtent);
   }
@@ -987,8 +991,9 @@ class _ArticleProgressSliderState extends State<_ArticleProgressSlider> {
               final thumbCenterY = (_edgeInset + _progress * usable)
                   .clamp(0.0, usable)
                   .toDouble();
-              final thumbTop =
-                  (thumbCenterY - _thumbHeight / 2).clamp(0.0, usable).toDouble();
+              final thumbTop = (thumbCenterY - _thumbHeight / 2)
+                  .clamp(0.0, usable)
+                  .toDouble();
               final labelTop =
                   (thumbCenterY - 18).clamp(2.0, height - 38).toDouble();
               const thumbHitHeight = _thumbHeight + 8;
@@ -1278,8 +1283,7 @@ class _ExpandableDescriptionState extends State<_ExpandableDescription> {
           text: text,
           onLinkTap: widget.onLinkTap,
           maxLines: _expanded ? null : 3,
-          overflow:
-              _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+          overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
         ),
         if (_needsToggle)
           Align(
@@ -1338,8 +1342,7 @@ class _VideoDetailPane extends StatelessWidget {
             const SizedBox(height: 8),
             _ExpandableDescription(
               text: detail.content,
-              onLinkTap: (url) =>
-                  openContentLink(context, controller, url),
+              onLinkTap: (url) => openContentLink(context, controller, url),
             ),
             const SizedBox(height: 8),
             _VideoActions(
@@ -1431,8 +1434,7 @@ class _DownloadEntryState extends State<_DownloadEntry> {
   StreamSubscription<List<DownloadTask>>? _subscription;
 
   String get _qualityKey => DownloadTask.normalizeQualityKey(
-      _qualityDisplayLabel(
-          widget.selectedQuality ?? widget.qualities.first));
+      _qualityDisplayLabel(widget.selectedQuality ?? widget.qualities.first));
 
   @override
   void initState() {
@@ -1458,7 +1460,8 @@ class _DownloadEntryState extends State<_DownloadEntry> {
   Future<void> _listen() async {
     if (_listening) return;
     _listening = true;
-    _subscription = DownloadManager.instance.watchTasks().listen((_) => _refresh());
+    _subscription =
+        DownloadManager.instance.watchTasks().listen((_) => _refresh());
     await _refresh();
   }
 
@@ -1642,17 +1645,15 @@ class _VideoActionsState extends State<_VideoActions> {
 
   Future<void> _toggleFavorite() async {
     if (!_ensureSignedIn() || _busy) return;
-    if (_favorite) {
-      _notice('已收藏，可在“我的收藏”中管理');
-      return;
-    }
     setState(() => _busy = true);
     try {
+      // 已收藏：选择要移出的收藏夹；未收藏：选择要加入的收藏夹。
+      final removing = _favorite;
       await widget.controller.loadFavoriteFolders();
       if (!mounted) return;
       final folders = widget.controller.favoriteFolders;
       if (folders.isEmpty) {
-        _notice('请先在“我的收藏”创建收藏夹');
+        _notice(removing ? '没有可移出的收藏夹' : '请先在“我的收藏”创建收藏夹');
         return;
       }
       final folder = await showModalBottomSheet<FavoriteFolder>(
@@ -1662,10 +1663,20 @@ class _VideoActionsState extends State<_VideoActions> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const ListTile(title: Text('选择收藏夹')),
+              ListTile(
+                title: Text(removing ? '取消收藏：选择要移出的收藏夹' : '选择收藏夹'),
+                subtitle: Text(
+                  removing ? '仅从所选收藏夹移除，其他收藏夹中的收藏不受影响'
+                      : '收藏后可在“我的收藏”中查看',
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted, fontSize: 12),
+                ),
+              ),
               for (final item in folders)
                 ListTile(
-                  leading: const Icon(Icons.folder_outlined),
+                  leading: Icon(removing
+                      ? Icons.bookmark_remove_outlined
+                      : Icons.folder_outlined),
                   title: Text(item.name),
                   subtitle: Text('${item.count} 个内容'),
                   onTap: () => Navigator.of(sheetContext).pop(item),
@@ -1675,17 +1686,27 @@ class _VideoActionsState extends State<_VideoActions> {
         ),
       );
       if (folder == null) return;
-      await widget.controller.addFavorite(
-        listId: folder.id,
-        resourceId: widget.preview.id,
-        resourceType: _resourceType,
-      );
-      if (mounted) {
-        setState(() => _favorite = true);
-        _notice('已收藏到 ${folder.name}');
+      if (removing) {
+        await widget.controller.removeFavorite(
+          listId: folder.id,
+          resourceId: widget.preview.id,
+          resourceType: _resourceType,
+        );
+      } else {
+        await widget.controller.addFavorite(
+          listId: folder.id,
+          resourceId: widget.preview.id,
+          resourceType: _resourceType,
+        );
       }
+      // 刷新星标状态（内容还在其他收藏夹时星标保持点亮）与收藏夹计数。
+      await _loadStatus();
+      await widget.controller.loadFavoriteFolders();
+      if (!mounted) return;
+      _notice(
+          removing ? '已从「${folder.name}」取消收藏' : '已收藏到「${folder.name}」');
     } catch (error) {
-      _notice('收藏失败：$error');
+      _notice(_favorite ? '取消收藏失败：$error' : '收藏失败：$error');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1694,7 +1715,8 @@ class _VideoActionsState extends State<_VideoActions> {
   String get _linkPath =>
       widget.linkPath ?? (widget.preview.isVideo ? 'video' : 'article');
 
-  String get _articleLink => 'https://m.mfuns.net/$_linkPath/${widget.preview.id}';
+  String get _articleLink =>
+      'https://m.mfuns.net/$_linkPath/${widget.preview.id}';
 
   Future<void> _copyLink() async {
     await Clipboard.setData(ClipboardData(text: _articleLink));
@@ -1720,8 +1742,9 @@ class _VideoActionsState extends State<_VideoActions> {
               ListTile(
                 leading: const Icon(Icons.ios_share_rounded),
                 title: const Text('导出文章（Markdown、图片）'),
-                subtitle: const Text('导出为 Markdown 或长图，可附带评论',
-                    style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                subtitle: Text('导出为 Markdown 或长图，可附带评论',
+                    style: TextStyle(
+                        color: AppPalette.of(context).muted, fontSize: 12)),
                 onTap: () => Navigator.of(sheetContext).pop('export_article'),
               ),
               const Divider(height: 1),
@@ -1741,8 +1764,8 @@ class _VideoActionsState extends State<_VideoActions> {
                 leading: Icon(Icons.delete_outline_rounded,
                     color: Theme.of(context).colorScheme.error),
                 title: Text('删除动态',
-                    style: TextStyle(
-                        color: Theme.of(context).colorScheme.error)),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
                 onTap: () => Navigator.of(sheetContext).pop('delete'),
               ),
           ],
@@ -1841,8 +1864,8 @@ class _VideoActionsState extends State<_VideoActions> {
     // 已保存到本地：询问是否进入系统分享。
     final share = await _confirmShare(completed);
     if (!mounted) return;
-    final failed = completed.fold<int>(
-        0, (sum, result) => sum + result.failedImageCount);
+    final failed =
+        completed.fold<int>(0, (sum, result) => sum + result.failedImageCount);
     if (share != true) {
       _notice(failed > 0 ? '文章已导出，但部分图片下载失败' : '导出成功，文件已保存到本地');
       return;
@@ -1875,8 +1898,10 @@ class _VideoActionsState extends State<_VideoActions> {
               paths,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: Colors.blueGrey, fontSize: 12, height: 1.5),
+              style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontSize: 12,
+                  height: 1.5),
             ),
           ],
         ),
@@ -1971,8 +1996,7 @@ class _VideoActionsState extends State<_VideoActions> {
             busy: _rewarding,
             onTap: _reward,
           ),
-        if (widget.preview.isVideo &&
-            (widget.qualities?.isNotEmpty ?? false))
+        if (widget.preview.isVideo && (widget.qualities?.isNotEmpty ?? false))
           _DownloadEntry(
             videoId: widget.preview.id,
             title: widget.preview.title,
@@ -2005,15 +2029,16 @@ class _PortraitPartSelector extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
         decoration: BoxDecoration(
-          color: const Color(0xfff5f4f9),
+          color: AppPalette.of(context).chip,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('分 P',
+            Text('分 P',
                 style: TextStyle(
-                    color: Colors.blueGrey, fontWeight: FontWeight.w800)),
+                    color: AppPalette.of(context).muted,
+                    fontWeight: FontWeight.w800)),
             const SizedBox(height: 7),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -2032,12 +2057,14 @@ class _PortraitPartSelector extends StatelessWidget {
                       selected: selected,
                       selectedColor: Theme.of(context).colorScheme.primary,
                       labelStyle: TextStyle(
-                        color: selected ? Colors.white : Colors.blueGrey,
+                        color: selected
+                            ? Colors.white
+                            : AppPalette.of(context).muted,
                         fontWeight:
                             selected ? FontWeight.w700 : FontWeight.w500,
                       ),
                       side: BorderSide.none,
-                      backgroundColor: Colors.white,
+                      backgroundColor: AppPalette.of(context).chip,
                       onSelected: selected
                           ? null
                           : (_) {
@@ -2194,31 +2221,35 @@ class _ExportArticleDialogState extends State<_ExportArticleDialog> {
               onChanged: (value) => _toggleComments(value ?? false),
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('带评论导出',
+              title: Text('带评论导出',
                   style: TextStyle(
-                      color: Colors.blueGrey, fontWeight: FontWeight.w700)),
+                      color: AppPalette.of(context).muted,
+                      fontWeight: FontWeight.w700)),
               subtitle: _includeComments
                   ? Text(_commentSubtitle,
-                      style: const TextStyle(
-                          color: Colors.blueGrey, fontSize: 12))
+                      style: TextStyle(
+                          color: AppPalette.of(context).muted, fontSize: 12))
                   : null,
             ),
             const SizedBox(height: 6),
             CheckboxListTile(
               value: _includeFooter,
-              onChanged: (value) => setState(() => _includeFooter = value ?? true),
+              onChanged: (value) =>
+                  setState(() => _includeFooter = value ?? true),
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('在导出底部加入Mfuns Flutter开源项目说明',
+              title: Text('在导出底部加入Mfuns Flutter开源项目说明',
                   style: TextStyle(
-                      color: Colors.blueGrey, fontWeight: FontWeight.w700)),
-              subtitle: const Text('正文之后附加项目介绍与 GitHub 地址',
-                  style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                      color: AppPalette.of(context).muted,
+                      fontWeight: FontWeight.w700)),
+              subtitle: Text('正文之后附加项目介绍与 GitHub 地址',
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted, fontSize: 12)),
             ),
             const SizedBox(height: 14),
-            const Text('导出格式',
+            Text('导出格式',
                 style: TextStyle(
-                    color: Colors.blueGrey,
+                    color: AppPalette.of(context).muted,
                     fontSize: 13,
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
@@ -2243,9 +2274,9 @@ class _ExportArticleDialogState extends State<_ExportArticleDialog> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  const Text('内容大小',
+                  Text('内容大小',
                       style: TextStyle(
-                          color: Colors.blueGrey,
+                          color: AppPalette.of(context).muted,
                           fontSize: 13,
                           fontWeight: FontWeight.w800)),
                   const Spacer(),
@@ -2263,8 +2294,9 @@ class _ExportArticleDialogState extends State<_ExportArticleDialog> {
                 label: '×${_imageScale.toStringAsFixed(1)}',
                 onChanged: (value) => setState(() => _imageScale = value),
               ),
-              const Text('调整字号相对图片的大小，输出分辨率固定为 1080px',
-                  style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+              Text('调整字号相对图片的大小，输出分辨率固定为 1080px',
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted, fontSize: 12)),
             ],
           ],
         ),
@@ -2313,8 +2345,8 @@ class _ExportProgressDialog extends StatelessWidget {
                 builder: (context, value, _) => Text(
                   value.isEmpty ? message : value,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: Colors.blueGrey,
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted,
                       fontSize: 13,
                       height: 1.4),
                 ),
@@ -2523,11 +2555,11 @@ class _RelatedContentTile extends StatelessWidget {
                   width: 130,
                   height: 90,
                   child: item.cover.isEmpty
-                      ? const ColoredBox(color: Color(0xffd9d9d9))
+                      ? ColoredBox(color: AppPalette.of(context).placeholder)
                       : Image.network(item.cover,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              const ColoredBox(color: Color(0xffd9d9d9))),
+                          errorBuilder: (_, __, ___) => ColoredBox(
+                              color: AppPalette.of(context).placeholder)),
                 ),
               ),
               const SizedBox(width: 10),
@@ -2606,10 +2638,7 @@ class MfunsVideoPlayer extends StatefulWidget {
 }
 
 class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
-    with
-        AutomaticKeepAliveClientMixin,
-        WidgetsBindingObserver,
-        RouteAware {
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver, RouteAware {
   VideoPlayerController? _player;
   VideoQuality? _selected;
   List<DanmakuItem> _danmaku = const [];
@@ -2828,9 +2857,9 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     }
     final player = _player;
     if (player != null) {
-      final wasBound =
-          MfunsPlaybackCoordinator.instance.unbindVideo(player);
-      PlaybackLog.d('player dispose id=${identityHashCode(player)} bound=$wasBound');
+      final wasBound = MfunsPlaybackCoordinator.instance.unbindVideo(player);
+      PlaybackLog.d(
+          'player dispose id=${identityHashCode(player)} bound=$wasBound');
       player.dispose();
       if (wasBound) {
         MfunsAudioHandler.instance.detach();
@@ -2892,11 +2921,8 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
         'create player id=${identityHashCode(nextPlayer)} url=${quality.url} '
         'local=${source is LocalPlaybackSource}');
     try {
-      await nextPlayer
-          .initialize()
-          .timeout(videoInitTimeout);
-      PlaybackLog.d(
-          'initialize ok id=${identityHashCode(nextPlayer)} '
+      await nextPlayer.initialize().timeout(videoInitTimeout);
+      PlaybackLog.d('initialize ok id=${identityHashCode(nextPlayer)} '
           'duration=${nextPlayer.value.duration}');
       await nextPlayer.setVolume(_volume);
       await nextPlayer.setPlaybackSpeed(_playbackSpeed);
@@ -2970,7 +2996,8 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
   }
 
   /// 绑定媒体通知：在系统通知栏展示当前视频并同步播放/暂停/进度。
-  void _attachMediaNotification(VideoPlayerController player, VideoQuality quality) {
+  void _attachMediaNotification(
+      VideoPlayerController player, VideoQuality quality) {
     MfunsAudioHandler.instance.attach(
       player: player,
       title: widget.title,
@@ -3149,8 +3176,7 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     final deltaDx = details.globalPosition.dx - _dragSeekStartDx;
     final target = _dragSeekBase +
         Duration(
-            milliseconds:
-                (deltaDx / width * duration.inMilliseconds).round());
+            milliseconds: (deltaDx / width * duration.inMilliseconds).round());
     var clamped = target;
     if (clamped < Duration.zero) clamped = Duration.zero;
     if (clamped > duration) clamped = duration;
@@ -3256,266 +3282,269 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
               width: double.infinity,
               height: surfaceHeight,
               child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _toggleControls,
-        onDoubleTapDown: (details) => _doubleTapX = details.localPosition.dx,
-        onDoubleTap: () {
-          final width = MediaQuery.sizeOf(context).width;
-          _seekBy(_doubleTapX < width / 2 ? -10 : 10);
-        },
-        onLongPressStart: (_) => _setLongPressSpeed(true),
-        onLongPressEnd: (_) => _setLongPressSpeed(false),
-        onLongPressCancel: () => _setLongPressSpeed(false),
-        onHorizontalDragStart: _startDragSeek,
-        onHorizontalDragUpdate: _updateDragSeek,
-        onHorizontalDragEnd: (_) => _finishDragSeek(),
-        onHorizontalDragCancel: _finishDragSeek,
-        onVerticalDragUpdate: (details) => _handleVerticalSlide(
-            details, MediaQuery.sizeOf(context).width, videoHeight),
-        onVerticalDragEnd: (_) => _clearSlideFeedback(),
-        onVerticalDragCancel: _clearSlideFeedback,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Center(
-              child: SizedBox(
-                width: videoWidth,
-                height: videoHeight,
-                child: player == null
-                      ? Center(
-                          child: _error == null
-                              ? const CircularProgressIndicator(
-                                  color: Colors.white)
-                              : Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 24),
-                                      child: Text(
-                                        _error!,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 13,
-                                            height: 1.4),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    FilledButton.icon(
-                                      style: FilledButton.styleFrom(
-                                          backgroundColor: Colors.white24,
-                                          foregroundColor: Colors.white),
-                                      onPressed: selected == null
-                                          ? null
-                                          : () => _select(selected),
-                                      icon: const Icon(Icons.refresh_rounded),
-                                      label: const Text('点击重试'),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    TextButton.icon(
-                                      style: TextButton.styleFrom(
-                                          foregroundColor: Colors.white70),
-                                      onPressed: () => Navigator.of(context)
-                                          .push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) =>
-                                              const NetworkDiagnosticsPage(),
-                                        ),
-                                      ),
-                                      icon: const Icon(
-                                          Icons.network_check_rounded,
-                                          size: 18),
-                                      label: const Text('网络诊断'),
-                                    ),
-                                  ],
-                                ),
-                        )
-                      : Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (!_hasStarted && widget.coverUrl.isNotEmpty)
-                              Image.network(widget.coverUrl,
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                  height: double.infinity,
-                                  errorBuilder: (_, __, ___) =>
-                                      VideoPlayer(player))
-                            else
-                              VideoPlayer(player),
-                            _DanmakuCanvas(
-                              items: visibleDanmaku,
-                              opacity: _danmakuOpacity,
-                              size: _danmakuSize,
-                            ),
-                          ],
-                        ),
-              ),
-            ),
-            if (player != null)
-              AnimatedOpacity(
-                      opacity: _controlsVisible ? 1 : 0,
-                      duration: const Duration(milliseconds: 180),
-                      child: IgnorePointer(
-                        ignoring: !_controlsVisible,
-                        child: DecoratedBox(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Color(0x99000000),
-                                Colors.transparent,
-                                Color(0xaa000000)
-                              ],
-                            ),
-                          ),
-                          child: Stack(
-                            children: [
-                              Positioned(
-                                top: 4,
-                                left: 0,
-                                right: 0,
-                                child: Row(
-                                  children: [
-                                    IconButton(
-                                      color: Colors.white,
-                                      tooltip: '返回',
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(),
-                                      icon: const Icon(
-                                          Icons.arrow_back_rounded),
-                                    ),
-                                    // 仅竖屏显示：一键回到首页，
-                                    // 避免连续打开多个详情页时需要反复返回。
-                                    if (MediaQuery.orientationOf(context) ==
-                                        Orientation.portrait)
-                                      IconButton(
-                                        color: Colors.white,
-                                        tooltip: '返回首页',
-                                        onPressed: () => Navigator.of(context,
-                                                rootNavigator: true)
-                                            .popUntil(
-                                                (route) => route.isFirst),
-                                        icon: const Icon(
-                                            Icons.home_rounded),
-                                      ),
-                                    Expanded(
-                                      child: Text(
-                                        selected == null
-                                            ? widget.title
-                                            : '${widget.title} · P${selected.part}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600),
-                                      ),
-                                    ),
-                                    PopupMenuButton<VideoQuality>(
-                                      tooltip: '清晰度',
-                                      initialValue: selected,
-                                      onSelected: _select,
-                                      itemBuilder: (context) => widget
-                                          .qualities
-                                          .where((quality) =>
-                                              quality.part == selected?.part)
-                                          .map((quality) => PopupMenuItem(
-                                                value: quality,
-                                                child: Text(
-                                                    _qualityDisplayLabel(
-                                                        quality)),
-                                              ))
-                                          .toList(),
-                                      icon: const Icon(Icons.hd_rounded,
-                                          color: Colors.white),
-                                    ),
-                                    IconButton(
-                                      color: Colors.white,
-                                      tooltip: '播放器设置',
-                                      onPressed: () => setState(() =>
-                                          _showPlaybackOptions =
-                                              !_showPlaybackOptions),
-                                      icon:
-                                          const Icon(Icons.settings_rounded),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Center(
-                                child: _isSeeking || player.value.isBuffering
+                behavior: HitTestBehavior.opaque,
+                onTap: _toggleControls,
+                onDoubleTapDown: (details) =>
+                    _doubleTapX = details.localPosition.dx,
+                onDoubleTap: () {
+                  final width = MediaQuery.sizeOf(context).width;
+                  _seekBy(_doubleTapX < width / 2 ? -10 : 10);
+                },
+                onLongPressStart: (_) => _setLongPressSpeed(true),
+                onLongPressEnd: (_) => _setLongPressSpeed(false),
+                onLongPressCancel: () => _setLongPressSpeed(false),
+                onHorizontalDragStart: _startDragSeek,
+                onHorizontalDragUpdate: _updateDragSeek,
+                onHorizontalDragEnd: (_) => _finishDragSeek(),
+                onHorizontalDragCancel: _finishDragSeek,
+                onVerticalDragUpdate: (details) => _handleVerticalSlide(
+                    details, MediaQuery.sizeOf(context).width, videoHeight),
+                onVerticalDragEnd: (_) => _clearSlideFeedback(),
+                onVerticalDragCancel: _clearSlideFeedback,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Center(
+                      child: SizedBox(
+                        width: videoWidth,
+                        height: videoHeight,
+                        child: player == null
+                            ? Center(
+                                child: _error == null
                                     ? const CircularProgressIndicator(
                                         color: Colors.white)
-                                    : IconButton.filledTonal(
-                                        style: IconButton.styleFrom(
-                                          backgroundColor: Colors.black54,
-                                          foregroundColor: Colors.white,
-                                        ),
-                                        iconSize: 48,
-                                        onPressed: () async {
-                                          if (!_hasStarted) {
-                                            setState(() => _hasStarted = true);
-                                          }
-                                          if (player.value.isPlaying) {
-                                            await MfunsPlaybackCoordinator
-                                                .instance
-                                                .requestPause();
-                                          } else {
-                                            await MfunsPlaybackCoordinator
-                                                .instance
-                                                .requestPlay();
-                                          }
-                                          if (mounted) setState(() {});
-                                          _scheduleControlsHide();
-                                        },
-                                        icon: Icon(player.value.isPlaying
-                                            ? Icons.pause_rounded
-                                            : Icons.play_arrow_rounded),
+                                    : Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 24),
+                                            child: Text(
+                                              _error!,
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 13,
+                                                  height: 1.4),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 14),
+                                          FilledButton.icon(
+                                            style: FilledButton.styleFrom(
+                                                backgroundColor: Colors.white24,
+                                                foregroundColor: Colors.white),
+                                            onPressed: selected == null
+                                                ? null
+                                                : () => _select(selected),
+                                            icon: const Icon(
+                                                Icons.refresh_rounded),
+                                            label: const Text('点击重试'),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          TextButton.icon(
+                                            style: TextButton.styleFrom(
+                                                foregroundColor:
+                                                    Colors.white70),
+                                            onPressed: () =>
+                                                Navigator.of(context).push(
+                                              MaterialPageRoute<void>(
+                                                builder: (_) =>
+                                                    const NetworkDiagnosticsPage(),
+                                              ),
+                                            ),
+                                            icon: const Icon(
+                                                Icons.network_check_rounded,
+                                                size: 18),
+                                            label: const Text('网络诊断'),
+                                          ),
+                                        ],
                                       ),
+                              )
+                            : Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (!_hasStarted &&
+                                      widget.coverUrl.isNotEmpty)
+                                    Image.network(widget.coverUrl,
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        errorBuilder: (_, __, ___) =>
+                                            VideoPlayer(player))
+                                  else
+                                    VideoPlayer(player),
+                                  _DanmakuCanvas(
+                                    items: visibleDanmaku,
+                                    opacity: _danmakuOpacity,
+                                    size: _danmakuSize,
+                                  ),
+                                ],
                               ),
-                              if (_showPlaybackOptions)
+                      ),
+                    ),
+                    if (player != null)
+                      AnimatedOpacity(
+                        opacity: _controlsVisible ? 1 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        child: IgnorePointer(
+                          ignoring: !_controlsVisible,
+                          child: DecoratedBox(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Color(0x99000000),
+                                  Colors.transparent,
+                                  Color(0xaa000000)
+                                ],
+                              ),
+                            ),
+                            child: Stack(
+                              children: [
                                 Positioned(
-                                  right: 12,
-                                  bottom: 48 + bottomInset,
-                                  child: _FullscreenOptionsPanel(
-                                    volume: _volume,
-                                    speed: _playbackSpeed,
-                                    onVolumeChanged: (next) async {
-                                      setState(() => _volume = next);
-                                      await _player?.setVolume(next);
-                                    },
-                                    onSpeedChanged: (next) async {
-                                      setState(() => _playbackSpeed = next);
-                                      await _player
-                                          ?.setPlaybackSpeed(next);
-                                    },
-                                    defaultQuality: _qualityPreference,
-                                    availableQualities: widget.qualities
-                                        .map(_qualityDisplayLabel)
-                                        .toSet()
-                                        .toList(growable: false),
-                                    onDefaultQualityChanged: (label) {
-                                      setState(
-                                          () => _qualityPreference = label);
-                                      UserPreferences
-                                          .saveDefaultQuality(label);
-                                    },
-                                    autoPlay: _autoPlay,
-                                    onAutoPlayChanged: (value) {
-                                      setState(() => _autoPlay = value);
-                                      UserPreferences.saveAutoPlay(value);
-                                    },
+                                  top: 4,
+                                  left: 0,
+                                  right: 0,
+                                  child: Row(
+                                    children: [
+                                      IconButton(
+                                        color: Colors.white,
+                                        tooltip: '返回',
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(),
+                                        icon: const Icon(
+                                            Icons.arrow_back_rounded),
+                                      ),
+                                      // 仅竖屏显示：一键回到首页，
+                                      // 避免连续打开多个详情页时需要反复返回。
+                                      if (MediaQuery.orientationOf(context) ==
+                                          Orientation.portrait)
+                                        IconButton(
+                                          color: Colors.white,
+                                          tooltip: '返回首页',
+                                          onPressed: () => Navigator.of(context,
+                                                  rootNavigator: true)
+                                              .popUntil(
+                                                  (route) => route.isFirst),
+                                          icon: const Icon(Icons.home_rounded),
+                                        ),
+                                      Expanded(
+                                        child: Text(
+                                          selected == null
+                                              ? widget.title
+                                              : '${widget.title} · P${selected.part}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                      PopupMenuButton<VideoQuality>(
+                                        tooltip: '清晰度',
+                                        initialValue: selected,
+                                        onSelected: _select,
+                                        itemBuilder: (context) => widget
+                                            .qualities
+                                            .where((quality) =>
+                                                quality.part == selected?.part)
+                                            .map((quality) => PopupMenuItem(
+                                                  value: quality,
+                                                  child: Text(
+                                                      _qualityDisplayLabel(
+                                                          quality)),
+                                                ))
+                                            .toList(),
+                                        icon: const Icon(Icons.hd_rounded,
+                                            color: Colors.white),
+                                      ),
+                                      IconButton(
+                                        color: Colors.white,
+                                        tooltip: '播放器设置',
+                                        onPressed: () => setState(() =>
+                                            _showPlaybackOptions =
+                                                !_showPlaybackOptions),
+                                        icon:
+                                            const Icon(Icons.settings_rounded),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              Positioned(
-                                left: 8,
-                                right: 8,
-                                bottom: 3 + bottomInset,
-                                child: Row(
-                                  children: [
-                                    Text(_formatDuration(position),
-                                        style: const TextStyle(
-                                            color: Colors.white,
+                                Center(
+                                  child: _isSeeking || player.value.isBuffering
+                                      ? const CircularProgressIndicator(
+                                          color: Colors.white)
+                                      : IconButton.filledTonal(
+                                          style: IconButton.styleFrom(
+                                            backgroundColor: Colors.black54,
+                                            foregroundColor: Colors.white,
+                                          ),
+                                          iconSize: 48,
+                                          onPressed: () async {
+                                            if (!_hasStarted) {
+                                              setState(
+                                                  () => _hasStarted = true);
+                                            }
+                                            if (player.value.isPlaying) {
+                                              await MfunsPlaybackCoordinator
+                                                  .instance
+                                                  .requestPause();
+                                            } else {
+                                              await MfunsPlaybackCoordinator
+                                                  .instance
+                                                  .requestPlay();
+                                            }
+                                            if (mounted) setState(() {});
+                                            _scheduleControlsHide();
+                                          },
+                                          icon: Icon(player.value.isPlaying
+                                              ? Icons.pause_rounded
+                                              : Icons.play_arrow_rounded),
+                                        ),
+                                ),
+                                if (_showPlaybackOptions)
+                                  Positioned(
+                                    right: 12,
+                                    bottom: 48 + bottomInset,
+                                    child: _FullscreenOptionsPanel(
+                                      volume: _volume,
+                                      speed: _playbackSpeed,
+                                      onVolumeChanged: (next) async {
+                                        setState(() => _volume = next);
+                                        await _player?.setVolume(next);
+                                      },
+                                      onSpeedChanged: (next) async {
+                                        setState(() => _playbackSpeed = next);
+                                        await _player?.setPlaybackSpeed(next);
+                                      },
+                                      defaultQuality: _qualityPreference,
+                                      availableQualities: widget.qualities
+                                          .map(_qualityDisplayLabel)
+                                          .toSet()
+                                          .toList(growable: false),
+                                      onDefaultQualityChanged: (label) {
+                                        setState(
+                                            () => _qualityPreference = label);
+                                        UserPreferences.saveDefaultQuality(
+                                            label);
+                                      },
+                                      autoPlay: _autoPlay,
+                                      onAutoPlayChanged: (value) {
+                                        setState(() => _autoPlay = value);
+                                        UserPreferences.saveAutoPlay(value);
+                                      },
+                                    ),
+                                  ),
+                                Positioned(
+                                  left: 8,
+                                  right: 8,
+                                  bottom: 3 + bottomInset,
+                                  child: Row(
+                                    children: [
+                                      Text(_formatDuration(position),
+                                          style: const TextStyle(
+                                              color: Colors.white,
                                               fontSize: 11)),
                                       Expanded(
                                         child: SliderTheme(
@@ -3547,10 +3576,10 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                                                       milliseconds.round()));
                                               _scheduleControlsHide();
                                             },
-                                            onChangeStart: (_) =>
-                                                setState(() => _isSeeking = true),
-                                            onChangeEnd: (_) =>
-                                                setState(() => _isSeeking = false),
+                                            onChangeStart: (_) => setState(
+                                                () => _isSeeking = true),
+                                            onChangeEnd: (_) => setState(
+                                                () => _isSeeking = false),
                                           ),
                                         ),
                                       ),
@@ -3567,12 +3596,12 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                                       ),
                                     ],
                                   ),
-                              ),
-                            ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
                     if (_seekNotice != null && _controlsVisible)
                       // 位于中央播放/暂停按钮下方，避免重叠。
                       Align(
@@ -3587,8 +3616,7 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 14, vertical: 8),
                               child: Text(_seekNotice!,
-                                  style:
-                                      const TextStyle(color: Colors.white)),
+                                  style: const TextStyle(color: Colors.white)),
                             ),
                           ),
                         ),
@@ -3616,9 +3644,9 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                   ],
                 ),
               ),
-        ),
-      ),
-      );
+            ),
+          ),
+        );
       },
     );
   }
@@ -3673,8 +3701,8 @@ class _FullscreenVideoOverlay extends StatefulWidget {
 }
 
 /// 桌面端支持窗口级全屏（Windows/macOS/Linux），移动端与 Web 不适用。
-final bool _isDesktop = !kIsWeb &&
-    (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+final bool _isDesktop =
+    !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
 class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
   var _controlsVisible = true;
@@ -3881,8 +3909,7 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
     if (mounted) {
       setState(() {
         _controlsVisible = true;
-        _seekNotice =
-            '${seconds > 0 ? '+' : ''}$seconds 秒';
+        _seekNotice = '${seconds > 0 ? '+' : ''}$seconds 秒';
       });
       _scheduleHide();
     }
@@ -3904,8 +3931,7 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
     final deltaDx = details.globalPosition.dx - _dragSeekStartDx;
     final target = _dragSeekBase +
         Duration(
-            milliseconds:
-                (deltaDx / width * duration.inMilliseconds).round());
+            milliseconds: (deltaDx / width * duration.inMilliseconds).round());
     var clamped = target;
     if (clamped < Duration.zero) clamped = Duration.zero;
     if (clamped > duration) clamped = duration;
@@ -4141,22 +4167,19 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                         },
                                         onSpeedChanged: (next) async {
                                           setState(() => _playbackSpeed = next);
-                                          await _player
-                                              .setPlaybackSpeed(next);
+                                          await _player.setPlaybackSpeed(next);
                                         },
-                                        defaultQuality:
-                                            widget.defaultQuality,
+                                        defaultQuality: widget.defaultQuality,
                                         availableQualities: widget.qualities
                                             .map(_qualityDisplayLabel)
                                             .toSet()
                                             .toList(growable: false),
                                         onDefaultQualityChanged: (label) =>
-                                            UserPreferences
-                                                .saveDefaultQuality(label),
+                                            UserPreferences.saveDefaultQuality(
+                                                label),
                                         autoPlay: widget.autoPlay,
                                         onAutoPlayChanged: (value) =>
-                                            UserPreferences
-                                                .saveAutoPlay(value),
+                                            UserPreferences.saveAutoPlay(value),
                                       ),
                                     ),
                                   if (_showDanmakuComposer)
@@ -4315,8 +4338,8 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 14, vertical: 8),
                                   child: Text(_seekNotice!,
-                                      style: const TextStyle(
-                                          color: Colors.white)),
+                                      style:
+                                          const TextStyle(color: Colors.white)),
                                 ),
                               ),
                             ),
@@ -4496,8 +4519,7 @@ class _FullscreenOptionsPanel extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Text('${speed}x',
                         style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700)),
+                            color: Colors.white, fontWeight: FontWeight.w700)),
                   ),
                 ),
               ],
@@ -4617,8 +4639,7 @@ class _DanmakuCanvasState extends State<_DanmakuCanvas>
     final duration = isFixed
         ? const Duration(milliseconds: 4000)
         : Duration(
-            milliseconds:
-                ((textWidth + 400) / _pixelsPerSecond * 1000).round(),
+            milliseconds: ((textWidth + 400) / _pixelsPerSecond * 1000).round(),
           );
     final controller = AnimationController(vsync: this, duration: duration);
     final entry = _DanmakuEntry(
@@ -4677,8 +4698,8 @@ class _DanmakuCanvasState extends State<_DanmakuCanvas>
 
     Widget textOf(_DanmakuEntry entry) {
       final item = entry.item;
-      final color =
-          Color(0xff000000 | (item.color & 0xffffff)).withOpacity(widget.opacity);
+      final color = Color(0xff000000 | (item.color & 0xffffff))
+          .withOpacity(widget.opacity);
       return Text(
         item.content,
         maxLines: 1,
@@ -4729,8 +4750,7 @@ class _DanmakuCanvasState extends State<_DanmakuCanvas>
                     builder: (context, _) => Align(
                       alignment: Alignment.bottomCenter,
                       child: Padding(
-                        padding:
-                            EdgeInsets.only(bottom: 8.0 + i * _laneHeight),
+                        padding: EdgeInsets.only(bottom: 8.0 + i * _laneHeight),
                         child: textOf(bottomEntries[i]),
                       ),
                     ),
@@ -4745,7 +4765,8 @@ class _DanmakuCanvasState extends State<_DanmakuCanvas>
 }
 
 /// 打开 @ 用户搜索弹窗，选择用户后返回带 id 的 mention span；取消返回 null。
-Future<CommentSpan?> _askMentionUser(BuildContext context, AppController controller) =>
+Future<CommentSpan?> _askMentionUser(
+        BuildContext context, AppController controller) =>
     showDialog<CommentSpan>(
       context: context,
       builder: (_) => _MentionUserDialog(controller: controller),
@@ -4809,11 +4830,12 @@ class _MentionUserDialogState extends State<_MentionUserDialog> {
 
   void _onChanged(String value) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () => _runSearch(value));
+    _debounce =
+        Timer(const Duration(milliseconds: 400), () => _runSearch(value));
   }
 
-  void _pick(UserProfile user) => Navigator.of(context)
-      .pop(CommentSpan.mention('${user.id}', user.name));
+  void _pick(UserProfile user) =>
+      Navigator.of(context).pop(CommentSpan.mention('${user.id}', user.name));
 
   @override
   Widget build(BuildContext context) => AlertDialog(
@@ -4929,8 +4951,8 @@ class _CommentSectionState extends State<_CommentSection> {
     final images = input.images;
     setState(() => _isSending = true);
     try {
-      await widget.controller.createComment(
-          areaId: widget.areaId, spans: spans, images: images);
+      await widget.controller
+          .createComment(areaId: widget.areaId, spans: spans, images: images);
       input.clear();
       _reload();
       if (mounted) {
@@ -5203,9 +5225,8 @@ class _CommentCardState extends State<_CommentCard> {
     _liked = comment.liked;
     if (comment.authorName.isEmpty && comment.userId != 0) {
       final cached = _userCache[comment.userId];
-      _profile = cached != null
-          ? Future.value(cached)
-          : _loadProfile(comment.userId);
+      _profile =
+          cached != null ? Future.value(cached) : _loadProfile(comment.userId);
     }
   }
 
@@ -5325,8 +5346,7 @@ class _CommentCardState extends State<_CommentCard> {
               title: const Text('复制评论'),
               onTap: () async {
                 Navigator.of(sheetContext).pop();
-                await Clipboard.setData(
-                    ClipboardData(text: comment.content));
+                await Clipboard.setData(ClipboardData(text: comment.content));
                 if (mounted) {
                   ScaffoldMessenger.of(context)
                       .showSnackBar(const SnackBar(content: Text('评论已复制')));
@@ -5396,7 +5416,8 @@ class _CommentCardState extends State<_CommentCard> {
     }
   }
 
-  Widget _userRow(BuildContext context, {
+  Widget _userRow(
+    BuildContext context, {
     required int userId,
     required String name,
     required String avatar,
@@ -5418,7 +5439,8 @@ class _CommentCardState extends State<_CommentCard> {
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             foregroundImage: avatar.isEmpty ? null : NetworkImage(avatar),
             child: Text(letter,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                style:
+                    const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
           ),
         ),
         const SizedBox(width: 8),
@@ -5476,153 +5498,152 @@ class _CommentCardState extends State<_CommentCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildUserHeader(context),
-            const SizedBox(height: 6),
-            comment.spans.isEmpty
-                ? Text(comment.content.isEmpty
-                    ? '（该评论没有文本内容）'
-                    : comment.content)
-                : _CommentSpans(
-                    spans: comment.spans,
-                    onLinkTap: (url) => openContentLink(
-                        context, widget.controller, url),
-                  ),
-            if (comment.images.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 76,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: comment.images.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final uri = Uri.tryParse(comment.images[index]);
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: GestureDetector(
-                        onTap: uri == null
-                            ? null
-                            : () => Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => ImagePreviewPage(
-                                      uri: uri,
-                                      alt: '评论图片',
-                                      heroTag:
-                                          'comment-image-${comment.id}-$index-$uri',
+              const SizedBox(height: 6),
+              comment.spans.isEmpty
+                  ? Text(
+                      comment.content.isEmpty ? '（该评论没有文本内容）' : comment.content)
+                  : _CommentSpans(
+                      spans: comment.spans,
+                      onLinkTap: (url) =>
+                          openContentLink(context, widget.controller, url),
+                    ),
+              if (comment.images.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 76,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: comment.images.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final uri = Uri.tryParse(comment.images[index]);
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: GestureDetector(
+                          onTap: uri == null
+                              ? null
+                              : () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => ImagePreviewPage(
+                                        uri: uri,
+                                        alt: '评论图片',
+                                        heroTag:
+                                            'comment-image-${comment.id}-$index-$uri',
+                                      ),
                                     ),
                                   ),
+                          child: AspectRatio(
+                            aspectRatio: 1,
+                            child: Hero(
+                              tag: 'comment-image-${comment.id}-$index-$uri',
+                              child: Image.network(
+                                comment.images[index],
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => ColoredBox(
+                                  color: AppPalette.of(context).placeholder,
+                                  child: Icon(Icons.broken_image_outlined,
+                                      color: AppPalette.of(context).muted),
                                 ),
-                        child: AspectRatio(
-                          aspectRatio: 1,
-                          child: Hero(
-                            tag:
-                                'comment-image-${comment.id}-$index-$uri',
-                            child: Image.network(
-                              comment.images[index],
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  const ColoredBox(
-                                color: Color(0xffefeff7),
-                                child: Icon(Icons.broken_image_outlined,
-                                    color: Colors.blueGrey),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                InkWell(
-                  borderRadius: BorderRadius.circular(6),
-                  onTap: _toggleLike,
-                  child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _liked
-                              ? Icons.thumb_up_alt_rounded
-                              : Icons.thumb_up_alt_outlined,
-                          size: 15,
-                          color: _liked
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.blueGrey,
-                        ),
-                        const SizedBox(width: 4),
-                        Text('$_likes 赞',
-                            style: Theme.of(context).textTheme.bodySmall),
-                      ],
+              ],
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: _toggleLike,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _liked
+                                ? Icons.thumb_up_alt_rounded
+                                : Icons.thumb_up_alt_outlined,
+                            size: 15,
+                            color: _liked
+                                ? Theme.of(context).colorScheme.primary
+                                : AppPalette.of(context).muted,
+                          ),
+                          const SizedBox(width: 4),
+                          Text('$_likes 赞',
+                              style: Theme.of(context).textTheme.bodySmall),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 14),
-                if (comment.replyCount + _replyDelta > 0)
+                  const SizedBox(width: 14),
+                  if (comment.replyCount + _replyDelta > 0)
+                    TextButton(
+                      onPressed: _toggleReplies,
+                      child: Text('${comment.replyCount + _replyDelta} 条回复'),
+                    ),
                   TextButton(
-                    onPressed: _toggleReplies,
-                    child: Text('${comment.replyCount + _replyDelta} 条回复'),
+                    onPressed: _showReplyComposer,
+                    child: const Text('回复'),
                   ),
-                TextButton(
-                  onPressed: _showReplyComposer,
-                  child: const Text('回复'),
-                ),
-                const Spacer(),
-                if (comment.createdAt != null)
-                  Text(_formatDate(comment.createdAt!),
-                      style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-            if (_replies != null)
-              Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xfff4f5fa),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: [
-                    if (_repliesLoading)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 6),
-                        child: LinearProgressIndicator(),
-                      ),
-                    if (_replies!.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text('暂无回复',
-                            style: TextStyle(
-                                color: Colors.blueGrey, fontSize: 12.5)),
-                      )
-                    else
-                      ..._replies!.map((reply) => _CommentReplyTile(
-                            controller: widget.controller,
-                            rootCommentId: widget.comment.id,
-                            reply: reply,
-                            onReply: (name) =>
-                                _showReplyComposer(mention: name),
-                            onDeleted: () {
-                              if (!mounted) return;
-                              setState(() {
-                                _replies?.removeWhere(
-                                    (item) => item.id == reply.id);
-                                _replyDelta--;
-                              });
-                            },
-                          )),
-                  ],
-                ),
+                  const Spacer(),
+                  if (comment.createdAt != null)
+                    Text(_formatDate(comment.createdAt!),
+                        style: Theme.of(context).textTheme.bodySmall),
+                ],
               ),
-          ],
+              if (_replies != null)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppPalette.of(context).chip,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      if (_repliesLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 6),
+                          child: LinearProgressIndicator(),
+                        ),
+                      if (_replies!.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text('暂无回复',
+                              style: TextStyle(
+                                  color: AppPalette.of(context).muted,
+                                  fontSize: 12.5)),
+                        )
+                      else
+                        ..._replies!.map((reply) => _CommentReplyTile(
+                              controller: widget.controller,
+                              rootCommentId: widget.comment.id,
+                              reply: reply,
+                              onReply: (name) =>
+                                  _showReplyComposer(mention: name),
+                              onDeleted: () {
+                                if (!mounted) return;
+                                setState(() {
+                                  _replies?.removeWhere(
+                                      (item) => item.id == reply.id);
+                                  _replyDelta--;
+                                });
+                              },
+                            )),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }
@@ -5697,8 +5718,8 @@ class _CommentReplyTileState extends State<_CommentReplyTile> {
     final userId = widget.reply.userId;
     if (userId == 0) return;
     Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => UserProfilePage(
-            controller: widget.controller, userId: userId)));
+        builder: (_) =>
+            UserProfilePage(controller: widget.controller, userId: userId)));
   }
 
   /// 长按菜单：复制回复（所有人可用）、删除回复（仅自己）。
@@ -5718,8 +5739,7 @@ class _CommentReplyTileState extends State<_CommentReplyTile> {
               title: const Text('复制回复'),
               onTap: () async {
                 Navigator.of(sheetContext).pop();
-                await Clipboard.setData(
-                    ClipboardData(text: reply.content));
+                await Clipboard.setData(ClipboardData(text: reply.content));
                 if (mounted) {
                   ScaffoldMessenger.of(context)
                       .showSnackBar(const SnackBar(content: Text('回复已复制')));
@@ -5809,8 +5829,7 @@ class _CommentReplyTileState extends State<_CommentReplyTile> {
               onTap: reply.userId == 0 ? null : _openUser,
               child: CircleAvatar(
                 radius: 13,
-                backgroundColor:
-                    Theme.of(context).colorScheme.primaryContainer,
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                 foregroundImage:
                     reply.avatar.isEmpty ? null : NetworkImage(reply.avatar),
                 child: Text(letter,
@@ -5849,16 +5868,18 @@ class _CommentReplyTileState extends State<_CommentReplyTile> {
                   if (reply.spans.isEmpty)
                     Text(
                       reply.content.isEmpty ? '（该回复没有文本内容）' : reply.content,
-                      style: const TextStyle(
-                          color: Colors.blueGrey,
+                      style: TextStyle(
+                          color: AppPalette.of(context).muted,
                           fontSize: 13.5,
                           height: 1.4),
                     )
                   else
                     ContentSpans(
                       spans: reply.spans,
-                      textStyle: const TextStyle(
-                          color: Colors.blueGrey, fontSize: 13.5, height: 1.4),
+                      textStyle: TextStyle(
+                          color: AppPalette.of(context).muted,
+                          fontSize: 13.5,
+                          height: 1.4),
                       stickerSize: 26,
                       onLinkTap: (url) =>
                           openContentLink(context, widget.controller, url),
@@ -5882,7 +5903,7 @@ class _CommentReplyTileState extends State<_CommentReplyTile> {
                                 size: 13,
                                 color: _liked
                                     ? Theme.of(context).colorScheme.primary
-                                    : Colors.blueGrey,
+                                    : AppPalette.of(context).muted,
                               ),
                               const SizedBox(width: 3),
                               Text('$_likes',

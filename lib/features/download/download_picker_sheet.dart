@@ -136,9 +136,8 @@ class _DownloadPickerSheetState extends State<DownloadPickerSheet> {
   }
 
   /// 勾选中、且不在现有任务中的分P数（可新增下载的分P）。
-  int get _newlySelectedCount => _selectedParts
-      .where((part) => _taskPartOf(part) == null)
-      .length;
+  int get _newlySelectedCount =>
+      _selectedParts.where((part) => _taskPartOf(part) == null).length;
 
   /// 勾选的分P数。
   int get _selectedPartCount => _selectedParts.length;
@@ -219,14 +218,14 @@ class _DownloadPickerSheetState extends State<DownloadPickerSheet> {
       if (task.status.isActive) {
         // 已在下载队列中。
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('该清晰度已在下载队列中')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('该清晰度已在下载队列中')));
         return;
       }
       if (task.status == DownloadStatus.completed && newCount == 0) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('该清晰度已下载完成')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('该清晰度已下载完成')));
         return;
       }
       if (task.status == DownloadStatus.paused && newCount == 0) {
@@ -344,140 +343,141 @@ class _DownloadPickerSheetState extends State<DownloadPickerSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            Row(
-              children: [
-                Icon(Icons.download_rounded, color: palette.primary),
-                const SizedBox(width: 8),
-                const Text('下载视频',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (_) => const DownloadPage()),
-                  ),
-                  child: const Text('下载管理'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text('清晰度',
-                style: TextStyle(
-                    color: palette.onSurfaceVariant,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: qualities
-                  .map((quality) => ChoiceChip(
-                        label: Text(_labelOf(quality)),
-                        selected: _keyOf(quality) == _qualityKey,
-                        onSelected: _keyOf(quality) == _qualityKey
-                            ? null
-                            : (_) => _selectQuality(quality),
-                      ))
-                  .toList(),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Text('选择分P',
-                    style: TextStyle(
-                        color: palette.onSurfaceVariant,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700)),
-                const Spacer(),
-                if (_task == null && _allParts.length > 1)
+              Row(
+                children: [
+                  Icon(Icons.download_rounded, color: palette.primary),
+                  const SizedBox(width: 8),
+                  const Text('下载视频',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
+                  const Spacer(),
                   TextButton(
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => const DownloadPage()),
                     ),
-                    onPressed: () => setState(() {
-                      if (_selectedParts.length == _allParts.length) {
-                        _selectedParts.clear();
-                      } else {
-                        _selectedParts = {..._allParts};
-                      }
-                    }),
-                    child: Text(_selectedParts.length == _allParts.length
-                        ? '全不选'
-                        : '全选'),
+                    child: const Text('下载管理'),
                   ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _allParts.map((part) {
-                final taskPart = _taskPartOf(part);
-                if (taskPart != null) {
-                  // 已存在于任务中：按状态锁定显示。
-                  return Chip(
-                    label: Text(_partStatusLabel(taskPart)),
-                    labelStyle: TextStyle(
-                      fontSize: 12,
-                      color: taskPart.isPlayable
-                          ? const Color(0xFF4FA36C)
-                          : palette.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    side: BorderSide.none,
-                    backgroundColor: taskPart.isPlayable
-                        ? const Color(0xFF4FA36C).withOpacity(.1)
-                        : palette.surfaceContainerHighest,
-                  );
-                }
-                final selected = _selectedParts.contains(part);
-                return FilterChip(
-                  label: Text('P$part'),
-                  selected: selected,
-                  onSelected: (value) => _togglePart(part, value),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.straighten_rounded,
-                    size: 16, color: palette.onSurfaceVariant),
-                const SizedBox(width: 6),
-                Text(
-                  '预计大小：$sizeText',
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text('清晰度',
                   style: TextStyle(
-                    color: palette.onSurfaceVariant,
-                    fontSize: 13,
+                      color: palette.onSurfaceVariant,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: qualities
+                    .map((quality) => ChoiceChip(
+                          label: Text(_labelOf(quality)),
+                          selected: _keyOf(quality) == _qualityKey,
+                          onSelected: _keyOf(quality) == _qualityKey
+                              ? null
+                              : (_) => _selectQuality(quality),
+                        ))
+                    .toList(),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text('选择分P',
+                      style: TextStyle(
+                          color: palette.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  if (_task == null && _allParts.length > 1)
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      onPressed: () => setState(() {
+                        if (_selectedParts.length == _allParts.length) {
+                          _selectedParts.clear();
+                        } else {
+                          _selectedParts = {..._allParts};
+                        }
+                      }),
+                      child: Text(_selectedParts.length == _allParts.length
+                          ? '全不选'
+                          : '全选'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _allParts.map((part) {
+                  final taskPart = _taskPartOf(part);
+                  if (taskPart != null) {
+                    // 已存在于任务中：按状态锁定显示。
+                    return Chip(
+                      label: Text(_partStatusLabel(taskPart)),
+                      labelStyle: TextStyle(
+                        fontSize: 12,
+                        color: taskPart.isPlayable
+                            ? const Color(0xFF4FA36C)
+                            : palette.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      side: BorderSide.none,
+                      backgroundColor: taskPart.isPlayable
+                          ? const Color(0xFF4FA36C).withOpacity(.1)
+                          : palette.surfaceContainerHighest,
+                    );
+                  }
+                  final selected = _selectedParts.contains(part);
+                  return FilterChip(
+                    label: Text('P$part'),
+                    selected: selected,
+                    onSelected: (value) => _togglePart(part, value),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(Icons.straighten_rounded,
+                      size: 16, color: palette.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text(
+                    '预计大小：$sizeText',
+                    style: TextStyle(
+                      color: palette.onSurfaceVariant,
+                      fontSize: 13,
+                    ),
                   ),
+                ],
+              ),
+              if (_notice != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _notice!,
+                  style: TextStyle(color: palette.error, fontSize: 13),
                 ),
               ],
-            ),
-            if (_notice != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _notice!,
-                style: TextStyle(color: palette.error, fontSize: 13),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _creating ? null : _submit,
+                  icon: _creating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.download_rounded),
+                  label: Text(_buttonLabel),
+                ),
               ),
             ],
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _creating ? null : _submit,
-                icon: _creating
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.download_rounded),
-                label: Text(_buttonLabel),
-              ),
-            ),
-          ],
-        ),
+          ),
         ),
       ),
     );

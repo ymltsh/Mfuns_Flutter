@@ -149,12 +149,14 @@ class _ConversationCard extends StatelessWidget {
               child: Text(item.userName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.blueGrey, fontWeight: FontWeight.w800)),
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted,
+                      fontWeight: FontWeight.w800)),
             ),
             if (item.lastTime != null)
               Text(_msgTime(item.lastTime!),
-                  style: const TextStyle(color: Colors.blueGrey, fontSize: 11)),
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted, fontSize: 11)),
           ],
         ),
         subtitle: Padding(
@@ -166,7 +168,8 @@ class _ConversationCard extends StatelessWidget {
                   item.lastMessage.isEmpty ? '暂无消息' : item.lastMessage,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.blueGrey, fontSize: 12.5),
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted, fontSize: 12.5),
                 ),
               ),
               if (item.unread > 0) ...[
@@ -279,9 +282,7 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
     setState(() => _isSending = true);
     try {
       await widget.controller.sendMessage(
-          toUid: widget.peerId,
-          spans: input.spans,
-          images: input.images);
+          toUid: widget.peerId, spans: input.spans, images: input.images);
       input.clear();
       await _reload();
     } catch (error) {
@@ -399,8 +400,8 @@ class _MessageBubble extends StatelessWidget {
         onTap: userId <= 0
             ? null
             : () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => UserProfilePage(
-                      controller: controller, userId: userId),
+                  builder: (_) =>
+                      UserProfilePage(controller: controller, userId: userId),
                 )),
         customBorder: const CircleBorder(),
         child: CircleAvatar(
@@ -442,10 +443,10 @@ class _MessageBubble extends StatelessWidget {
                     child: Image.network(
                       record.images[index],
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const ColoredBox(
-                        color: Color(0xffefeff7),
+                      errorBuilder: (_, __, ___) => ColoredBox(
+                        color: AppPalette.of(context).placeholder,
                         child: Icon(Icons.broken_image_outlined,
-                            color: Colors.blueGrey),
+                            color: AppPalette.of(context).muted),
                       ),
                     ),
                   ),
@@ -473,12 +474,13 @@ class _MessageBubble extends StatelessWidget {
               ],
               Flexible(
                 child: Column(
-                  crossAxisAlignment:
-                      isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  crossAxisAlignment: isMine
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         color: isMine
                             ? palette.primary
@@ -507,7 +509,7 @@ class _MessageBubble extends StatelessWidget {
                               textStyle: TextStyle(
                                 color: isMine
                                     ? Colors.white
-                                    : Colors.blueGrey,
+                                    : AppPalette.of(context).muted,
                                 height: 1.35,
                               ),
                             )
@@ -517,7 +519,7 @@ class _MessageBubble extends StatelessWidget {
                               style: TextStyle(
                                 color: isMine
                                     ? Colors.white
-                                    : Colors.blueGrey,
+                                    : AppPalette.of(context).muted,
                                 height: 1.35,
                               ),
                             )
@@ -527,7 +529,7 @@ class _MessageBubble extends StatelessWidget {
                               style: TextStyle(
                                 color: isMine
                                     ? Colors.white
-                                    : Colors.blueGrey,
+                                    : AppPalette.of(context).muted,
                                 height: 1.35,
                               ),
                             ),
@@ -541,8 +543,9 @@ class _MessageBubble extends StatelessWidget {
                     if (record.time != null) ...[
                       const SizedBox(height: 3),
                       Text(_msgTime(record.time!),
-                          style: const TextStyle(
-                              color: Colors.blueGrey, fontSize: 10.5)),
+                          style: TextStyle(
+                              color: AppPalette.of(context).muted,
+                              fontSize: 10.5)),
                     ],
                   ],
                 ),
@@ -572,7 +575,7 @@ class _MessageState extends StatelessWidget {
             children: [
               Text(message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.blueGrey)),
+                  style: TextStyle(color: AppPalette.of(context).muted)),
               if (onRetry != null) ...[
                 const SizedBox(height: 10),
                 TextButton.icon(

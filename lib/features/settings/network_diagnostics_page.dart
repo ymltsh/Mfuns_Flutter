@@ -89,13 +89,14 @@ class _NetworkDiagnosticsPageState extends State<NetworkDiagnosticsPage> {
   String get _summaryText {
     if (!_started) return '共 ${_entries.length} 项检测';
     final done = _entries
-        .where((e) =>
-            e.phase == _EntryPhase.pass || e.phase == _EntryPhase.fail)
+        .where(
+            (e) => e.phase == _EntryPhase.pass || e.phase == _EntryPhase.fail)
         .length;
-    final failed =
-        _entries.where((e) => e.phase == _EntryPhase.fail).length;
+    final failed = _entries.where((e) => e.phase == _EntryPhase.fail).length;
     if (_running) return '正在检测… $done/${_entries.length}';
-    return failed == 0 ? '全部通过（$done 项）' : '$failed 项异常（$done/${_entries.length}）';
+    return failed == 0
+        ? '全部通过（$done 项）'
+        : '$failed 项异常（$done/${_entries.length}）';
   }
 
   Color _phaseColor(_EntryPhase phase) {
@@ -178,17 +179,17 @@ class _NetworkDiagnosticsPageState extends State<NetworkDiagnosticsPage> {
                       Icon(Icons.network_check_rounded,
                           color: palette.primary, size: 22),
                       const SizedBox(width: 8),
-                      const Expanded(
+                      Expanded(
                         child: Text('检测结果总览',
                             style: TextStyle(
-                                color: Colors.blueGrey,
+                                color: AppPalette.of(context).muted,
                                 fontWeight: FontWeight.w800)),
                       ),
                       Text(_summaryText,
                           style: TextStyle(
                               color: _running
                                   ? palette.primary
-                                  : Colors.blueGrey,
+                                  : AppPalette.of(context).muted,
                               fontSize: 13,
                               fontWeight: FontWeight.w700)),
                     ],
@@ -199,8 +200,8 @@ class _NetworkDiagnosticsPageState extends State<NetworkDiagnosticsPage> {
                   Text(
                     '${NetworkDiagnostics.deviceInfoSummary()}\n'
                     'App v${AppConfig.appVersion} · 检测时间 ${_now()}',
-                    style: const TextStyle(
-                        color: Colors.blueGrey,
+                    style: TextStyle(
+                        color: AppPalette.of(context).muted,
                         fontSize: 12,
                         height: 1.6),
                   ),
@@ -239,8 +240,9 @@ class _NetworkDiagnosticsPageState extends State<NetworkDiagnosticsPage> {
             if (entry != _entries.last) const SizedBox(height: 10),
           ],
           const SizedBox(height: 16),
-          const Text('诊断均为只读探测，不收集任何数据；结果仅用于排查网络问题。',
-              style: TextStyle(color: Colors.blueGrey, fontSize: 12)),
+          Text('诊断均为只读探测，不收集任何数据；结果仅用于排查网络问题。',
+              style:
+                  TextStyle(color: AppPalette.of(context).muted, fontSize: 12)),
         ],
       ),
     );
@@ -277,14 +279,15 @@ class _EntryCard extends StatelessWidget {
           child: iconOf(entry.phase, color),
         ),
         title: Text(entry.title,
-            style: const TextStyle(
-                color: Colors.blueGrey, fontWeight: FontWeight.w700)),
+            style: TextStyle(
+                color: AppPalette.of(context).muted,
+                fontWeight: FontWeight.w700)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(entry.subtitle,
-                style:
-                    const TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                style: TextStyle(
+                    color: AppPalette.of(context).muted, fontSize: 12)),
             if (entry.detail.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(
@@ -292,7 +295,7 @@ class _EntryCard extends StatelessWidget {
                 style: TextStyle(
                   color: entry.phase == _EntryPhase.fail
                       ? Colors.red.shade700
-                      : Colors.blueGrey,
+                      : AppPalette.of(context).muted,
                   fontSize: 12,
                   height: 1.4,
                 ),
@@ -305,9 +308,7 @@ class _EntryCard extends StatelessWidget {
             : Text(
                 formatDuration(entry.latency!),
                 style: TextStyle(
-                    color: color,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700),
+                    color: color, fontSize: 12, fontWeight: FontWeight.w700),
               ),
       ),
     );

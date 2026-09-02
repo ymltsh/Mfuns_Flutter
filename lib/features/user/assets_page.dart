@@ -4,9 +4,6 @@ import '../../app/app_controller.dart';
 import '../../core/theme/app_theme.dart';
 import '../home/home_repository.dart';
 
-const _ink = Color(0xff3a3a45);
-const _muted = Color(0xff8a8a94);
-
 AppPalette _palette(BuildContext context) => AppPalette.of(context);
 
 /// 我的资产：喵币余额与背包道具（改名卡、补签卡等）。
@@ -82,14 +79,15 @@ class _CoinCard extends StatelessWidget {
                 children: [
                   Text(
                     coin == null ? '—' : _formatCoin(coin!),
-                    style: const TextStyle(
-                        color: _ink,
+                    style: TextStyle(
+                        color: AppPalette.of(context).ink,
                         fontSize: 22,
                         fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 2),
-                  const Text('喵币余额',
-                      style: TextStyle(color: _muted, fontSize: 12.5)),
+                  Text('喵币余额',
+                      style: TextStyle(
+                          color: AppPalette.of(context).muted, fontSize: 12.5)),
                 ],
               ),
             ),
@@ -125,11 +123,13 @@ class _BackpackCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(15, 13, 15, 6),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(15, 13, 15, 6),
             child: Text('背包道具',
                 style: TextStyle(
-                    color: _ink, fontSize: 14.5, fontWeight: FontWeight.w800)),
+                    color: AppPalette.of(context).ink,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800)),
           ),
           if (loading && items.isEmpty)
             const Padding(
@@ -148,24 +148,27 @@ class _BackpackCard extends StatelessWidget {
                 child: Column(
                   children: [
                     Text(error!,
-                        style:
-                            const TextStyle(color: _muted, fontSize: 12.5)),
+                        style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontSize: 12.5)),
                     TextButton(onPressed: onRetry, child: const Text('重试')),
                   ],
                 ),
               ),
             )
           else if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
               child: Center(
                 child: Text('背包里还没有道具',
-                    style: TextStyle(color: _muted, fontSize: 12.5)),
+                    style: TextStyle(
+                        color: AppPalette.of(context).muted, fontSize: 12.5)),
               ),
             )
           else
             for (final (index, item) in items.indexed) ...[
-              if (index > 0) const Divider(height: 1, indent: 15, endIndent: 15),
+              if (index > 0)
+                const Divider(height: 1, indent: 15, endIndent: 15),
               _BackpackRow(item: item, accent: palette.primary),
             ],
         ],
@@ -203,15 +206,14 @@ class _BackpackRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(item.name,
-                    style: const TextStyle(
-                        color: _ink,
+                    style: TextStyle(
+                        color: AppPalette.of(context).ink,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                Text(
-                    item.description.isEmpty ? item.tag : item.description,
-                    style:
-                        const TextStyle(color: _muted, fontSize: 11.5)),
+                Text(item.description.isEmpty ? item.tag : item.description,
+                    style: TextStyle(
+                        color: AppPalette.of(context).muted, fontSize: 11.5)),
               ],
             ),
           ),
@@ -223,9 +225,7 @@ class _BackpackRow extends StatelessWidget {
             ),
             child: Text('×${item.count}',
                 style: TextStyle(
-                    color: accent,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800)),
+                    color: accent, fontSize: 13, fontWeight: FontWeight.w800)),
           ),
         ],
       ),

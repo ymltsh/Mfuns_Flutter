@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../app/app_controller.dart';
 import '../../core/network/vod_uploader.dart';
+import '../../core/theme/app_theme.dart';
 import '../home/home_repository.dart';
 
 /// 投稿编辑器：发布/编辑文章投稿，发布/编辑视频投稿。
@@ -77,8 +78,8 @@ class _SubmissionEditorPageState extends State<SubmissionEditorPage> {
 
   Future<void> _loadDetail() async {
     try {
-      final detail = await widget.controller
-          .submissionDetail(widget.contributeId!);
+      final detail =
+          await widget.controller.submissionDetail(widget.contributeId!);
       if (!mounted) return;
       setState(() {
         _title.text = detail.title;
@@ -130,7 +131,8 @@ class _SubmissionEditorPageState extends State<SubmissionEditorPage> {
         if (!mounted) return;
         setState(() => _uploadProgress = total == 0 ? 0 : sent / total);
       });
-      final libraryId = await widget.controller.completeVideoUpload(auth.videoId);
+      final libraryId =
+          await widget.controller.completeVideoUpload(auth.videoId);
       if (!mounted) return;
       setState(() {
         _videoLibraryId = libraryId;
@@ -310,16 +312,16 @@ class _SubmissionEditorPageState extends State<SubmissionEditorPage> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.video_file_outlined,
-                            color: Colors.blueGrey),
+                        Icon(Icons.video_file_outlined,
+                            color: AppPalette.of(context).muted),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             _videoName ?? '选择本地视频文件上传',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: Colors.blueGrey,
+                            style: TextStyle(
+                                color: AppPalette.of(context).muted,
                                 fontWeight: FontWeight.w700),
                           ),
                         ),
@@ -345,8 +347,9 @@ class _SubmissionEditorPageState extends State<SubmissionEditorPage> {
                             : _videoLibraryId != null
                                 ? '上传完成，可以发布'
                                 : '',
-                        style: const TextStyle(
-                            color: Colors.blueGrey, fontSize: 11.5),
+                        style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontSize: 11.5),
                       ),
                     ],
                   ],
@@ -372,8 +375,7 @@ class _SubmissionEditorPageState extends State<SubmissionEditorPage> {
               items: _leafCategories
                   .map((node) => DropdownMenuItem<int>(
                         value: node.id,
-                        child: Text(node.name,
-                            overflow: TextOverflow.ellipsis),
+                        child: Text(node.name, overflow: TextOverflow.ellipsis),
                       ))
                   .toList(growable: false),
               onChanged: (value) => setState(() => _categoryId = value),
@@ -387,9 +389,7 @@ class _SubmissionEditorPageState extends State<SubmissionEditorPage> {
             maxLines: isVideo ? 6 : 20,
             decoration: InputDecoration(
               labelText: isVideo ? '简介' : '正文',
-              hintText: isVideo
-                  ? '视频简介（纯文本）'
-                  : '支持 Markdown 格式的正文内容',
+              hintText: isVideo ? '视频简介（纯文本）' : '支持 Markdown 格式的正文内容',
               alignLabelWithHint: true,
             ),
           ),
@@ -416,7 +416,7 @@ class _SubmissionEditorPageState extends State<SubmissionEditorPage> {
                     errorBuilder: (_, __, ___) => Container(
                       width: 64,
                       height: 64,
-                      color: const Color(0xffefeff7),
+                      color: AppPalette.of(context).placeholder,
                       child: const Icon(Icons.image_outlined),
                     ),
                   ),

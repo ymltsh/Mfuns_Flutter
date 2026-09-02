@@ -65,8 +65,8 @@ class _SubmissionDetailPageState extends State<SubmissionDetailPage> {
     );
     if (confirmed != true || !mounted) return;
     try {
-      await widget.controller
-          .deleteSubmission(type: widget.type, contributeId: widget.contributeId);
+      await widget.controller.deleteSubmission(
+          type: widget.type, contributeId: widget.contributeId);
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -128,7 +128,7 @@ class _SubmissionDetailPageState extends State<SubmissionDetailPage> {
                   children: [
                     Text('加载失败：${snapshot.error}',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.blueGrey)),
+                        style: TextStyle(color: AppPalette.of(context).muted)),
                     const SizedBox(height: 10),
                     TextButton.icon(
                         onPressed: _reload,
@@ -153,21 +153,20 @@ class _SubmissionDetailPageState extends State<SubmissionDetailPage> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(detail.statusLabel,
-                        style:
-                            TextStyle(color: palette.primary, fontSize: 12)),
+                        style: TextStyle(color: palette.primary, fontSize: 12)),
                   ),
                   if (detail.resourceId != null) ...[
                     const SizedBox(width: 8),
                     Text('资源 ID ${detail.resourceId}',
-                        style: const TextStyle(
-                            color: Colors.blueGrey, fontSize: 12)),
+                        style: TextStyle(
+                            color: AppPalette.of(context).muted, fontSize: 12)),
                   ],
                 ],
               ),
               const SizedBox(height: 10),
               Text(detail.title.isEmpty ? '未命名投稿' : detail.title,
-                  style: const TextStyle(
-                      color: Colors.blueGrey,
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted,
                       fontSize: 20,
                       fontWeight: FontWeight.w800)),
               if (detail.tags.isNotEmpty) ...[
@@ -202,19 +201,21 @@ class _SubmissionDetailPageState extends State<SubmissionDetailPage> {
                     aspectRatio: 16 / 9,
                     child: Image.network(detail.cover,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const ColoredBox(
-                          color: Color(0xffefeff7),
-                          child: Icon(Icons.image_outlined,
-                              color: Colors.blueGrey),
-                        )),
+                        errorBuilder: (_, __, ___) => ColoredBox(
+                              color: AppPalette.of(context).placeholder,
+                              child: Icon(Icons.image_outlined,
+                                  color: AppPalette.of(context).muted),
+                            )),
                   ),
                 ),
               ],
               const SizedBox(height: 16),
               Text(
                 detail.content.isEmpty ? '（暂无简介内容）' : detail.content,
-                style: const TextStyle(
-                    color: Colors.blueGrey, height: 1.6, fontSize: 15),
+                style: TextStyle(
+                    color: AppPalette.of(context).muted,
+                    height: 1.6,
+                    fontSize: 15),
               ),
             ],
           );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../emoji/emoji_pack_store.dart';
+import '../theme/app_theme.dart';
 
 /// Renders a private-pack sticker by its Quill key (e.g. `s-1`).
 ///
@@ -28,11 +29,11 @@ class StickerImage extends StatelessWidget {
               height: size,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xfff0f0f6),
+                color: AppPalette.of(context).chip,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Icon(Icons.emoji_emotions_outlined,
-                  size: 18, color: Color(0xff999aa6)),
+              child: Icon(Icons.emoji_emotions_outlined,
+                  size: 18, color: AppPalette.of(context).muted),
             ),
           );
         }
@@ -46,11 +47,11 @@ class StickerImage extends StatelessWidget {
             height: size,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: const Color(0xfff0f0f6),
+              color: AppPalette.of(context).chip,
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Icon(Icons.emoji_emotions_outlined,
-                size: 18, color: Color(0xff999aa6)),
+            child: Icon(Icons.emoji_emotions_outlined,
+                size: 18, color: AppPalette.of(context).muted),
           ),
         );
       },

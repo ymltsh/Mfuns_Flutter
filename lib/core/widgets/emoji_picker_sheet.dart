@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../emoji/emoji_pack_store.dart';
+import '../theme/app_theme.dart';
 import '../../features/home/home_repository.dart';
 import 'sticker_image.dart';
 
@@ -40,7 +41,7 @@ class EmojiPickerSheet extends StatelessWidget {
               if (snapshot.hasError) {
                 return Center(
                   child: Text('表情包加载失败：${snapshot.error}',
-                      style: const TextStyle(color: Colors.blueGrey)),
+                      style: TextStyle(color: AppPalette.of(context).muted)),
                 );
               }
               final data = snapshot.requireData;
@@ -57,10 +58,10 @@ class EmojiPickerSheet extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
                       child: Row(
                         children: [
-                          const Expanded(
+                          Expanded(
                             child: Text('选择表情',
                                 style: TextStyle(
-                                    color: Colors.blueGrey,
+                                    color: AppPalette.of(context).muted,
                                     fontWeight: FontWeight.w800,
                                     fontSize: 16)),
                           ),
@@ -75,16 +76,18 @@ class EmojiPickerSheet extends StatelessWidget {
                       isScrollable: true,
                       tabAlignment: TabAlignment.start,
                       labelColor: Theme.of(context).colorScheme.primary,
-                      unselectedLabelColor: Colors.blueGrey,
+                      unselectedLabelColor: AppPalette.of(context).muted,
                       dividerColor: Colors.transparent,
                       tabs: tabLabels.map((label) => Tab(text: label)).toList(),
                     ),
                     Expanded(
                       child: TabBarView(
                         children: [
-                          for (final pack in packTabs) _StickerPackGrid(pack: pack, onPick: onPick),
+                          for (final pack in packTabs)
+                            _StickerPackGrid(pack: pack, onPick: onPick),
                           if (data.faceTexts.isNotEmpty)
-                            _FaceTextGrid(faces: data.faceTexts, onPick: onPick),
+                            _FaceTextGrid(
+                                faces: data.faceTexts, onPick: onPick),
                         ],
                       ),
                     ),
@@ -146,11 +149,12 @@ class _FaceTextGrid extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: const Color(0xfff3f3f8),
+              color: AppPalette.of(context).chip,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(faces[index],
-                style: const TextStyle(color: Colors.blueGrey, fontSize: 14)),
+                style: TextStyle(
+                    color: AppPalette.of(context).muted, fontSize: 14)),
           ),
         ),
       );

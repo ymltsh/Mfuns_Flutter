@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import '../../core/download/download_task.dart';
+import '../../core/theme/app_theme.dart';
 import '../content/export/article_exporter.dart' show ExportResult;
 import 'download_controller.dart';
 import 'local_video_player.dart';
@@ -32,7 +33,7 @@ class _DownloadPageState extends State<DownloadPage>
     super.initState();
     _controller = widget._controller ?? DownloadController();
     _controller.initialize();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 2, vsync: this, initialIndex: 1);
   }
 
   @override
@@ -67,9 +68,8 @@ class _DownloadPageState extends State<DownloadPage>
         useRootNavigator: true,
         builder: (dialogContext) => AlertDialog(
           title: Text(count > 1 ? '删除 $count 个下载' : '删除下载'),
-          content: Text(count > 1
-              ? '将删除这些下载任务与本地文件，确定删除吗？'
-              : '将删除该下载任务与本地文件，确定删除吗？'),
+          content: Text(
+              count > 1 ? '将删除这些下载任务与本地文件，确定删除吗？' : '将删除该下载任务与本地文件，确定删除吗？'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -200,8 +200,8 @@ class _DownloadPageState extends State<DownloadPage>
     } on Exception {
       // 分享面板不可用（如旧版 Windows / 测试环境）：提示文件位置。
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('已保存到本地：${completed.first.path}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('已保存到本地：${completed.first.path}')));
       }
     }
   }
@@ -211,7 +211,8 @@ class _DownloadPageState extends State<DownloadPage>
     final palette = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('下载管理', style: TextStyle(fontWeight: FontWeight.w700)),
+        title:
+            const Text('下载管理', style: TextStyle(fontWeight: FontWeight.w700)),
         centerTitle: true,
         actions: [
           if (_selectionMode)
@@ -432,8 +433,7 @@ class _ExportPartPickerSheetState extends State<_ExportPartPickerSheet> {
                     '导出视频',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w800, fontSize: 17),
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
                   ),
                 ),
                 TextButton(
@@ -450,9 +450,8 @@ class _ExportPartPickerSheetState extends State<_ExportPartPickerSheet> {
                         ..addAll(widget.parts.map((part) => part.part));
                     }
                   }),
-                  child: Text(_selected.length == widget.parts.length
-                      ? '全不选'
-                      : '全选'),
+                  child: Text(
+                      _selected.length == widget.parts.length ? '全不选' : '全选'),
                 ),
               ],
             ),
@@ -488,8 +487,9 @@ class _ExportPartPickerSheetState extends State<_ExportPartPickerSheet> {
                     ? null
                     : () => Navigator.of(context).pop({..._selected}),
                 icon: const Icon(Icons.ios_share_rounded),
-                label: Text(
-                    _selected.isEmpty ? '请选择分P' : '导出选中的 ${_selected.length} 个分P'),
+                label: Text(_selected.isEmpty
+                    ? '请选择分P'
+                    : '导出选中的 ${_selected.length} 个分P'),
               ),
             ),
           ],
@@ -527,8 +527,8 @@ class _ExportProgressDialog extends StatelessWidget {
                 builder: (context, value, _) => Text(
                   value.isEmpty ? message : value,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: Colors.blueGrey,
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted,
                       fontSize: 13,
                       height: 1.4),
                 ),

@@ -144,7 +144,7 @@ class _FeedComposePageState extends State<FeedComposePage> {
                           errorBuilder: (_, __, ___) => Container(
                             width: 72,
                             height: 72,
-                            color: const Color(0xffefeff7),
+                            color: AppPalette.of(context).placeholder,
                             child: const Icon(Icons.image_outlined),
                           ),
                         ),
@@ -157,8 +157,8 @@ class _FeedComposePageState extends State<FeedComposePage> {
                           child: Container(
                             width: 16,
                             height: 16,
-                            decoration: const BoxDecoration(
-                              color: Color(0xff9a9aa6),
+                            decoration: BoxDecoration(
+                              color: AppPalette.of(context).muted,
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.close_rounded,

@@ -40,11 +40,11 @@ class AppController extends ChangeNotifier {
   /// 消息中心子标签请求：0 私信 / 1 通知。
   final ValueNotifier<int> messageSubTabRequest = ValueNotifier<int>(0);
 
-  /// 通知页子标签请求：0 赞 / 1 评论 / 2 提及。
+  /// 通知页子标签请求：0 赞 / 1 评论 / 2 提及 / 3 系统。
   final ValueNotifier<int> notifySubTabRequest = ValueNotifier<int>(0);
 
   /// 请求切换到消息中心对应页面（通知点击跳转用）。
-  /// [subTab] 0 私信 / 1 通知；[notifyTab] 通知页子标签 0 赞 / 1 评论 / 2 提及。
+  /// [subTab] 0 私信 / 1 通知；[notifyTab] 通知页子标签 0 赞 / 1 评论 / 2 提及 / 3 系统。
   void openMessagesTab({int subTab = 0, int? notifyTab}) {
     homeTabRequest.value = 2;
     messageSubTabRequest.value = subTab;
@@ -63,6 +63,7 @@ class AppController extends ChangeNotifier {
     _notifyTabConsumed = true;
     return true;
   }
+
   late final HomeRepository _home;
   late final LatestMfunsRepository _latest;
 
@@ -87,6 +88,13 @@ class AppController extends ChangeNotifier {
   bool _isLoadingMoreFavorites = false;
   int _submissionTotal = 0;
   UserSession? _session;
+
+  /// 本机保存的全部登录账号（含当前账号），按最近使用时间排序。
+  List<StoredAccount> _accounts = const [];
+
+  /// 服务端校验已失效（过期/被顶下线）的账号 key，用于界面提示重新登录。
+  final Set<String> _expiredAccountKeys = <String>{};
+  bool _isSwitchingAccount = false;
   Timer? _unreadTimer;
   int _unreadCount = 0;
   int _notifyUnread = 0;
@@ -153,6 +161,21 @@ class AppController extends ChangeNotifier {
   bool get hasMoreFavoriteItems => _hasMoreFavoriteItems;
   int get submissionTotal => _submissionTotal;
   UserSession? get session => _session;
+
+  /// 本机已保存的账号（按最近使用时间倒序），用于切换与管理。
+  List<StoredAccount> get accounts => _accounts;
+
+  bool get isSwitchingAccount => _isSwitchingAccount;
+
+  /// 指定账号的登录凭证是否已被服务端判定失效（需重新登录）。
+  bool isAccountExpired(StoredAccount account) =>
+      _expiredAccountKeys.contains(account.key);
+
+  /// 当前已登录账号在本机存储中的 key；未登录返回 null。
+  String? get activeAccountKey => _session == null
+      ? null
+      : StoredAccount.keyFor(_session!.userId, _session!.accessToken);
+
   String? get homeError => _homeError;
   String? get searchError => _searchError;
   String? get searchUserError => _searchUserError;
@@ -204,11 +227,7 @@ class AppController extends ChangeNotifier {
     _isRestoringSession = true;
     notifyListeners();
     try {
-      final token = await _sessionStore.readToken();
-      if (token != null && token.isNotEmpty) {
-        _session = await _auth.restore(token);
-        if (_session == null) await _sessionStore.clear();
-      }
+      await _restoreAccounts();
     } catch (_) {
       // Storage availability must not block public content browsing.
     } finally {
@@ -219,6 +238,46 @@ class AppController extends ChangeNotifier {
     await Future.wait([refreshHome(), loadCategories(), loadLevelSections()]);
     if (_session != null) _startUnreadPolling();
     await _initAutoSign();
+  }
+
+  /// 从安全存储恢复多账号列表并自动登录最近使用且仍然有效的账号。
+  /// 兼容旧版本的单账号 token：首次发现时迁移为账号列表。
+  Future<void> _restoreAccounts() async {
+    var accounts = await _sessionStore.readAccounts();
+    if (accounts.isEmpty) {
+      final legacy = await _sessionStore.readLegacyToken();
+      if (legacy != null && legacy.isNotEmpty) {
+        try {
+          final restored = await _auth.restore(legacy);
+          if (restored != null) {
+            accounts = [StoredAccount.fromSession(restored)];
+            _session = restored;
+            await _sessionStore.writeAccounts(accounts);
+          }
+        } finally {
+          await _sessionStore.clearLegacy();
+        }
+      }
+    }
+    if (accounts.isEmpty) {
+      _accounts = const [];
+      return;
+    }
+    accounts = [...accounts]..sort((a, b) =>
+        (b.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(a.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    _accounts = accounts;
+    if (_session != null) return;
+    // 从最近使用的账号开始逐个校验，跳过已失效的，保证启动即登录可用账号。
+    for (final account in accounts) {
+      final restored = await _auth.restore(account.accessToken);
+      if (restored != null) {
+        _session = restored;
+        await _persistAccounts();
+        return;
+      }
+      _expiredAccountKeys.add(account.key);
+    }
   }
 
   /// 开启自动签到：应用打开状态下每天零点尝试签到。
@@ -565,8 +624,7 @@ class AppController extends ChangeNotifier {
     );
     _latestMarkedIds.add(item.stableId);
     UserPreferences.saveLatestMarkedIds(_latestMarkedIds);
-    final marked =
-        item.copyWith(markCount: result.markCount, markedByMe: true);
+    final marked = item.copyWith(markCount: result.markCount, markedByMe: true);
     final updated = <LatestMfunsItem>[];
     for (final existing in _latestItems) {
       if (existing.stableId != item.stableId) {
@@ -597,8 +655,7 @@ class AppController extends ChangeNotifier {
         item.copyWith(markCount: result.markCount, markedByMe: false);
     final updated = <LatestMfunsItem>[];
     for (final existing in _latestItems) {
-      updated.add(
-          existing.stableId == item.stableId ? unmarked : existing);
+      updated.add(existing.stableId == item.stableId ? unmarked : existing);
     }
     _latestItems = updated;
     notifyListeners();
@@ -798,7 +855,8 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadFavoriteItems(int favoriteId, {bool loadMore = false}) async {
+  Future<void> loadFavoriteItems(int favoriteId,
+      {bool loadMore = false}) async {
     if (loadMore) {
       if (_isLoadingMoreFavorites || !_hasMoreFavoriteItems) return;
       _isLoadingMoreFavorites = true;
@@ -850,8 +908,11 @@ class AppController extends ChangeNotifier {
     _isLoggingIn = true;
     notifyListeners();
     try {
-      _session = await _auth.login(account: account.trim(), password: password);
-      await _sessionStore.saveToken(_session!.accessToken);
+      final session =
+          await _auth.login(account: account.trim(), password: password);
+      _session = session;
+      // 同一账号重复登录时更新已有快照与凭证，其余账号保持不变。
+      await _commitActiveSession();
       await loadFavoriteFolders();
       _startUnreadPolling();
       return null;
@@ -863,12 +924,146 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> clearLocalSession() async {
-    _api.clearAccessToken();
-    _session = null;
-    _stopUnreadPolling();
+  /// 切换登录到本机已保存的另一个账号；凭证失效时返回错误文案并标记该账号。
+  Future<String?> switchToAccount(StoredAccount account) async {
+    final activeKey = activeAccountKey;
+    if (_isSwitchingAccount) return '正在切换账号，请稍候…';
+    if (account.key == activeKey) return null;
+    final previousSession = _session;
+    _isSwitchingAccount = true;
     notifyListeners();
-    await _sessionStore.clear();
+    try {
+      final restored = await _auth.restore(account.accessToken);
+      if (restored == null) {
+        _expiredAccountKeys.add(account.key);
+        // 校验失败会清空客户端 token，需恢复上一个账号的凭证。
+        if (previousSession != null) {
+          _api.setAccessToken(previousSession.accessToken);
+        }
+        return '该账号的登录状态已失效，请重新登录';
+      }
+      _expiredAccountKeys.remove(account.key);
+      _session = restored;
+      await _commitActiveSession();
+      _clearUserData();
+      notifyListeners();
+      _startUnreadPolling();
+      return null;
+    } finally {
+      _isSwitchingAccount = false;
+      notifyListeners();
+    }
+  }
+
+  /// 退出当前账号登录：删除其在本机保存的凭证，并自动切换到最近使用的
+  /// 其他有效账号（找不到则保持游客状态）。返回切换后登录的账号；为
+  /// null 表示已完全退出。
+  Future<StoredAccount?> logoutCurrent() async {
+    final activeKey = activeAccountKey;
+    _stopUnreadPolling();
+    _session = null;
+    _api.clearAccessToken();
+    if (activeKey != null) {
+      _accounts = _accounts
+          .where((account) => account.key != activeKey)
+          .toList(growable: false);
+      _expiredAccountKeys.remove(activeKey);
+    }
+    _clearUserData();
+    var next = await _activateBestAccount();
+    await _persistAccounts();
+    notifyListeners();
+    return next;
+  }
+
+  /// 删除本机保存的某个非当前账号；删除当前账号请使用 [logoutCurrent]。
+  Future<void> removeSavedAccount(StoredAccount account) async {
+    if (account.key == activeAccountKey) return;
+    _accounts = _accounts
+        .where((candidate) => candidate.key != account.key)
+        .toList(growable: false);
+    _expiredAccountKeys.remove(account.key);
+    await _persistAccounts();
+    notifyListeners();
+  }
+
+  /// 按最近使用顺序尝试恢复一个有效账号为当前会话（失败自动跳过），
+  /// 返回成功登录的账号，全部失效时返回 null。
+  Future<StoredAccount?> _activateBestAccount() async {
+    final ordered = [..._accounts]..sort((a, b) =>
+        (b.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(a.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    for (final account in ordered) {
+      final restored = await _auth.restore(account.accessToken);
+      if (restored == null) {
+        _expiredAccountKeys.add(account.key);
+        continue;
+      }
+      _expiredAccountKeys.remove(account.key);
+      _session = restored;
+      _startUnreadPolling();
+      return account;
+    }
+    return null;
+  }
+
+  /// 把当前会话写入账号列表（按 key 去重替换）并持久化，touch 最近使用时间。
+  Future<void> _commitActiveSession() async {
+    final session = _session;
+    if (session == null) return;
+    final updated = <StoredAccount>[];
+    var replaced = false;
+    for (final existing in _accounts) {
+      if (existing.key ==
+          StoredAccount.keyFor(session.userId, session.accessToken)) {
+        updated.add(StoredAccount.fromSession(session));
+        replaced = true;
+      } else {
+        updated.add(existing);
+      }
+    }
+    if (!replaced) updated.add(StoredAccount.fromSession(session));
+    _accounts = updated;
+    await _persistAccounts();
+  }
+
+  /// 持久化账号列表（界面排序仍由 accounts 承担，写入顺序保持原样即可）。
+  Future<void> _persistAccounts() async {
+    try {
+      await _sessionStore.writeAccounts(_accounts);
+    } catch (_) {
+      // 安全存储不可用（插件缺失等）时仅保持内存状态，不影响登录/切换。
+    }
+  }
+
+  /// 账号切换/退出后清空上个账号的用户级数据，避免串号展示。
+  /// 关注动态、历史、收藏、投稿统计等在下次进入相关页面时重新拉取。
+  void _clearUserData() {
+    _followingFeeds = const [];
+    _followingFeedsError = null;
+    _hasMoreFollowingFeeds = true;
+    _history = const [];
+    _historyError = null;
+    _historyCursor = null;
+    _hasMoreHistory = false;
+    _favoriteFolders = const [];
+    _favoriteItems = const [];
+    _favoritesError = null;
+    _favoriteItemsLastId = 0;
+    _hasMoreFavoriteItems = true;
+    _submissionTotal = 0;
+    _backpack = const [];
+    _backpackError = null;
+    _latestItems = const [];
+    _latestItemsError = null;
+    _latestBefore = null;
+    _hasMoreLatestItems = true;
+    _signInfo = null;
+    _signInfoError = null;
+    _signRank = const [];
+    _signRankError = null;
+    _signAwards = const {};
+    _autoSignAttemptedDay = 0;
   }
 
   Future<ContentDetail> contentDetail(ContentPreview preview) =>
@@ -984,8 +1179,7 @@ class AppController extends ChangeNotifier {
               .showDm(counts.message - previous.message);
         }
         if (counts.like > previous.like) {
-          LocalMessageNotifier.instance
-              .showLikes(counts.like - previous.like);
+          LocalMessageNotifier.instance.showLikes(counts.like - previous.like);
         }
         if (counts.comment > previous.comment) {
           LocalMessageNotifier.instance
@@ -1001,10 +1195,8 @@ class AppController extends ChangeNotifier {
         }
       }
       _lastNotifyCounts = counts;
-      final notifyTotal = counts.like +
-          counts.comment +
-          counts.mention +
-          counts.system;
+      final notifyTotal =
+          counts.like + counts.comment + counts.mention + counts.system;
       final total = notifyTotal + counts.message;
       if (total != _unreadCount || notifyTotal != _notifyUnread) {
         _unreadCount = total;
@@ -1034,6 +1226,10 @@ class AppController extends ChangeNotifier {
 
   Future<List<NotifyItem>> notifications({required int type, int page = 1}) =>
       _home.getNotifications(type: type, page: page);
+
+  /// 系统通知（站点公告等），独立接口 `/v1/notify/site`。
+  Future<List<NotifyItem>> siteNotifications({int page = 1}) =>
+      _home.getSiteNotifications(page: page);
 
   Future<int?> commentAreaId(int commentId) =>
       _home.getCommentAreaId(commentId);
@@ -1170,22 +1366,36 @@ class AppController extends ChangeNotifier {
 
   Future<void> updateUserGender(int gender) => _home.updateUserGender(gender);
 
-  Future<void> updateUserAvatar(String path) =>
-      _home.updateUserAvatar(path);
+  Future<void> updateUserAvatar(String path) => _home.updateUserAvatar(path);
 
   /// Re-fetches the current session so profile edits (name/avatar) show up
   /// everywhere immediately.
   Future<void> refreshSession() async {
     final session = _session;
     if (session == null) return;
-    try {
-      final restored = await _auth.restore(session.accessToken);
-      if (restored != null) {
-        _session = restored;
-        notifyListeners();
+    final restored = await _auth.restore(session.accessToken);
+    if (restored != null) {
+      _session = restored;
+      // 同步更新已保存账号的用户信息快照（昵称/头像/喵币等），保留最近使用时间。
+      final snapshot = StoredAccount.fromSession(restored);
+      final updated = <StoredAccount>[];
+      var found = false;
+      for (final item in _accounts) {
+        if (item.key == snapshot.key) {
+          updated.add(snapshot.copyWith(lastUsedAt: item.lastUsedAt));
+          found = true;
+        } else {
+          updated.add(item);
+        }
       }
-    } on MfunsApiException {
-      // 会话失效时保持现状，由其它入口处理。
+      if (!found) updated.add(snapshot);
+      _accounts = updated;
+      await _persistAccounts();
+      notifyListeners();
+    } else {
+      // 校验失败（会话过期或网络异常）都会清空客户端 token：恢复凭证
+      // 保持当前会话可用，具体失效由登录入口/账号管理重新处理。
+      _api.setAccessToken(session.accessToken);
     }
   }
 

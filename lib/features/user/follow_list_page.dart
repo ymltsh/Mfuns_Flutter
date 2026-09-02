@@ -89,8 +89,8 @@ class _FollowListPageState extends State<FollowListPage> {
 
   void _openUser(UserProfile user) {
     Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => UserProfilePage(
-            controller: widget.controller, userId: user.id)));
+        builder: (_) =>
+            UserProfilePage(controller: widget.controller, userId: user.id)));
   }
 
   @override
@@ -116,7 +116,7 @@ class _FollowListPageState extends State<FollowListPage> {
             children: [
               Text(_error!,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.blueGrey)),
+                  style: TextStyle(color: AppPalette.of(context).muted)),
               const SizedBox(height: 10),
               TextButton.icon(
                   onPressed: _reload,
@@ -136,11 +136,12 @@ class _FollowListPageState extends State<FollowListPage> {
               widget.type == 'follow'
                   ? Icons.person_outline_rounded
                   : Icons.favorite_outline_rounded,
-              color: Colors.blueGrey,
+              color: AppPalette.of(context).muted,
               size: 42,
             ),
             const SizedBox(height: 10),
-            Text('还没有$_title', style: const TextStyle(color: Colors.blueGrey)),
+            Text('还没有$_title',
+                style: TextStyle(color: AppPalette.of(context).muted)),
           ],
         ),
       );
@@ -181,8 +182,8 @@ class _FollowListPageState extends State<FollowListPage> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   child: Text(
                     _hasMore ? '上拉加载更多' : '没有更多了',
-                    style: const TextStyle(
-                        color: Colors.blueGrey, fontSize: 12),
+                    style: TextStyle(
+                        color: AppPalette.of(context).muted, fontSize: 12),
                   ),
                 ),
               );
@@ -230,15 +231,18 @@ class _FollowUserCard extends StatelessWidget {
         title: Text(user.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-                color: Colors.blueGrey, fontWeight: FontWeight.w800)),
+            style: TextStyle(
+                color: AppPalette.of(context).muted,
+                fontWeight: FontWeight.w800)),
         subtitle: bio.isEmpty
-            ? const Text('暂无简介',
-                style: TextStyle(color: Colors.blueGrey, fontSize: 12.5))
+            ? Text('暂无简介',
+                style: TextStyle(
+                    color: AppPalette.of(context).muted, fontSize: 12.5))
             : Text(bio,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.blueGrey, fontSize: 12.5)),
+                style: TextStyle(
+                    color: AppPalette.of(context).muted, fontSize: 12.5)),
         trailing: const Icon(Icons.chevron_right_rounded),
       ),
     );

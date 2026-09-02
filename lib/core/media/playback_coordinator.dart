@@ -553,7 +553,24 @@ class MfunsPlaybackCoordinator {
   /// 才能恢复播放，因此 seek/play 带重试。
   Future<void> onAppForegrounded() async {
     PlaybackLog.d('foreground enter phase=${_machine.phase}');
-    if (!_machine.backgroundHandoffActive) return;
+
+    // 没有发生后台音频 handoff：
+    // 说明进入后台时视频本来就是暂停状态，或者后台播放被关闭。
+    // 这种情况下只需要把状态机从 backgroundPaused 切回 foregroundPaused，
+    // 不能直接 return，否则后续 requestPlay() 会一直把播放请求吞掉。
+    if (!_machine.backgroundHandoffActive) {
+      final handle = _bound;
+      _machine.foregroundEnter(
+        videoPlaying: handle?.isPlaying ?? false,
+      );
+      PlaybackLog.d(
+        'foreground enter without handoff '
+        'phase=${_machine.phase} '
+        'videoPlaying=${handle?.isPlaying ?? false}',
+      );
+      return;
+    }
+
     final wasPlaying = _bg.playing;
     final position = _bg.position;
     try {

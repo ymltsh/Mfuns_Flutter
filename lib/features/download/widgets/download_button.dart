@@ -22,8 +22,10 @@ class DownloadButton extends StatelessWidget {
     if (task == null) return (Icons.download_rounded, '下载');
     switch (task.status) {
       case DownloadStatus.downloading:
-        return (Icons.downloading_rounded,
-            '下载中 ${(task.progress * 100).round()}%');
+        return (
+          Icons.downloading_rounded,
+          '下载中 ${(task.progress * 100).round()}%'
+        );
       case DownloadStatus.paused:
         return (Icons.pause_circle_outline_rounded, '已暂停');
       case DownloadStatus.failed:

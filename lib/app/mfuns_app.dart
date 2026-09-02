@@ -6,7 +6,9 @@ import '../core/theme/app_theme.dart';
 import '../core/widgets/content_link_handler.dart';
 import '../core/widgets/content_spans.dart';
 import '../core/widgets/image_preview_page.dart';
+import '../features/auth/account_manage_page.dart';
 import '../features/auth/auth_repository.dart';
+import '../features/auth/login_sheet.dart';
 import '../features/contribute/submissions_page.dart';
 import '../features/download/download_page.dart';
 import '../features/sign/sign_page.dart';
@@ -20,9 +22,6 @@ import '../features/settings/settings_page.dart';
 import '../features/user/user_profile_page.dart';
 import '../features/video/content_detail_page.dart';
 import 'app_controller.dart';
-
-const Color _ink = Colors.blueGrey;
-const Color _muted = Colors.blueGrey;
 
 AppPalette _palette(BuildContext context) => AppPalette.of(context);
 
@@ -44,6 +43,7 @@ class MfunsApp extends StatefulWidget {
 
 class _MfunsAppState extends State<MfunsApp> {
   Color _seed = const Color(0xFF5094B2);
+  ThemeMode _mode = ThemeMode.system;
 
   @override
   void initState() {
@@ -52,11 +52,19 @@ class _MfunsAppState extends State<MfunsApp> {
     ThemeSettings.load().then((color) {
       if (mounted) setState(() => _seed = color);
     });
+    ThemeSettings.loadMode().then((mode) {
+      if (mounted) setState(() => _mode = _themeModeOf(mode));
+    });
   }
 
   void _setSeed(Color color) {
     setState(() => _seed = color);
     ThemeSettings.save(color);
+  }
+
+  void _setMode(AppThemeMode mode) {
+    setState(() => _mode = _themeModeOf(mode));
+    ThemeSettings.saveMode(mode);
   }
 
   @override
@@ -66,24 +74,38 @@ class _MfunsAppState extends State<MfunsApp> {
         navigatorKey: widget.navigatorKey,
         navigatorObservers: [appRouteObserver],
         theme: buildAppTheme(_seed),
+        darkTheme: buildAppTheme(_seed, brightness: Brightness.dark),
+        themeMode: _mode,
         home: _HomeShell(
           controller: widget.controller,
           themeSeed: _seed,
           onThemeChanged: _setSeed,
+          themeMode: _mode,
+          onModeChanged: _setMode,
         ),
       );
 }
+
+ThemeMode _themeModeOf(AppThemeMode mode) => switch (mode) {
+      AppThemeMode.system => ThemeMode.system,
+      AppThemeMode.light => ThemeMode.light,
+      AppThemeMode.dark => ThemeMode.dark,
+    };
 
 class _HomeShell extends StatefulWidget {
   const _HomeShell({
     required this.controller,
     required this.themeSeed,
     required this.onThemeChanged,
+    required this.themeMode,
+    required this.onModeChanged,
   });
 
   final AppController controller;
   final Color themeSeed;
   final ValueChanged<Color> onThemeChanged;
+  final ThemeMode themeMode;
+  final ValueChanged<AppThemeMode> onModeChanged;
 
   @override
   State<_HomeShell> createState() => _HomeShellState();
@@ -132,11 +154,9 @@ class _HomeShellState extends State<_HomeShell> {
     widget.controller.refreshUnreadCounts();
     switch (_index) {
       case 1:
-        return _timelineKey.currentState?.refreshActiveTab() ??
-            Future.value();
+        return _timelineKey.currentState?.refreshActiveTab() ?? Future.value();
       case 2:
-        return _messageKey.currentState?.reloadActiveTab() ??
-            Future.value();
+        return _messageKey.currentState?.reloadActiveTab() ?? Future.value();
       default:
         return _discoverKey.currentState?.refreshActiveTab() ??
             widget.controller.refreshHome();
@@ -153,6 +173,8 @@ class _HomeShellState extends State<_HomeShell> {
         controller: widget.controller,
         themeSeed: widget.themeSeed,
         onThemeChanged: widget.onThemeChanged,
+        themeMode: widget.themeMode,
+        onModeChanged: widget.onModeChanged,
       ),
     ];
     final content = Column(
@@ -229,7 +251,7 @@ class _SideRail extends StatelessWidget {
       (Icons.person_outline_rounded, Icons.person_rounded, '我的'),
     ];
     return Material(
-      color: Colors.white,
+      color: _palette(context).surface,
       child: SafeArea(
         right: false,
         child: SizedBox(
@@ -242,25 +264,25 @@ class _SideRail extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 7),
                   child: InkWell(
                     onTap: () => onChanged(i),
-                      child: Column(
-                        children: [
-                          _NavIcon(
-                            showDot: i == 2 && hasUnread,
-                            child: Icon(
-                              i == index ? items[i].$2 : items[i].$1,
-                              size: 23,
-                              color: i == index
-                                  ? palette.primary
-                                  : const Color(0xff777681),
-                            ),
+                    child: Column(
+                      children: [
+                        _NavIcon(
+                          showDot: i == 2 && hasUnread,
+                          child: Icon(
+                            i == index ? items[i].$2 : items[i].$1,
+                            size: 23,
+                            color: i == index
+                                ? palette.primary
+                                : _palette(context).muted,
                           ),
-                          const SizedBox(height: 3),
+                        ),
+                        const SizedBox(height: 3),
                         Text(items[i].$3,
                             style: TextStyle(
                                 fontSize: 11,
                                 color: i == index
                                     ? palette.primary
-                                    : const Color(0xff777681),
+                                    : _palette(context).muted,
                                 fontWeight: i == index
                                     ? FontWeight.w800
                                     : FontWeight.w600)),
@@ -361,7 +383,8 @@ class _MastheadTab extends StatelessWidget {
             Container(
               height: 3,
               decoration: BoxDecoration(
-                color: selected ? Colors.white : Colors.transparent,
+                color:
+                    selected ? _palette(context).surface : Colors.transparent,
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(4)),
               ),
@@ -388,9 +411,9 @@ class _BottomNavigation extends StatelessWidget {
         onTap: onChanged,
         type: BottomNavigationBarType.fixed,
         elevation: 12,
-        backgroundColor: Colors.white,
+        backgroundColor: _palette(context).surface,
         selectedItemColor: _palette(context).primary,
-        unselectedItemColor: const Color(0xff777681),
+        unselectedItemColor: _palette(context).muted,
         selectedFontSize: 12,
         unselectedFontSize: 12,
         items: [
@@ -541,14 +564,14 @@ class _MessageCenterPageState extends State<_MessageCenterPage>
                 icon: Icons.chat_bubble_outline_rounded,
                 title: '登录后查看消息通知',
                 subtitle: '私信、收到的赞、评论和@提及都在这里。',
-                onLogin: () => _showLoginSheet(context, widget.controller),
+                onLogin: () => showLoginSheet(context, widget.controller),
               );
             }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Row(
                     children: [
                       Expanded(
@@ -556,7 +579,7 @@ class _MessageCenterPageState extends State<_MessageCenterPage>
                             style: TextStyle(
                                 fontSize: 21,
                                 fontWeight: FontWeight.w800,
-                                color: _ink)),
+                                color: _palette(context).ink)),
                       ),
                     ],
                   ),
@@ -804,7 +827,9 @@ class _SectionTabs extends StatelessWidget {
                       width: 28,
                       height: 3,
                       decoration: BoxDecoration(
-                        color: selected ? Colors.white : Colors.transparent,
+                        color: selected
+                            ? _palette(context).surface
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -831,15 +856,16 @@ class _CategoryStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         height: 51,
-        color: Colors.white,
+        color: _palette(context).surface,
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           scrollDirection: Axis.horizontal,
           children: [
             if (categories.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: Text('正在加载分区…', style: TextStyle(color: _muted)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Text('正在加载分区…',
+                    style: TextStyle(color: _palette(context).muted)),
               ),
             ...categories.map((category) => _CategoryChip(
                   label: category.name,
@@ -868,11 +894,12 @@ class _CategoryChip extends StatelessWidget {
           onSelected: (_) => onTap(),
           selectedColor: _palette(context).primary.withOpacity(.15),
           labelStyle: TextStyle(
-            color: selected ? _palette(context).primary : _muted,
+            color:
+                selected ? _palette(context).primary : _palette(context).muted,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
           ),
           side: BorderSide.none,
-          backgroundColor: const Color(0xfff4f3f8),
+          backgroundColor: _palette(context).chip,
           shape: const StadiumBorder(),
         ),
       );
@@ -949,7 +976,7 @@ class _TimelinePageState extends State<_TimelinePage>
   Future<void> refreshActiveTab() => _refreshActiveTab();
 
   Future<void> _loginForFollowing() async {
-    await _showLoginSheet(context, widget.controller);
+    await showLoginSheet(context, widget.controller);
     if (mounted && widget.controller.session != null) {
       await widget.controller.loadFollowingFeeds();
     }
@@ -985,7 +1012,7 @@ class _TimelinePageState extends State<_TimelinePage>
   /// 标记 5 人后帖子被服务端屏蔽并从列表移除，因此在刷新前仍可取消。
   Future<void> _markLatestItem(LatestMfunsItem item) async {
     if (widget.controller.session == null) {
-      await _showLoginSheet(context, widget.controller);
+      await showLoginSheet(context, widget.controller);
       return;
     }
     final cancel = item.markedByMe;
@@ -1042,28 +1069,28 @@ class _TimelinePageState extends State<_TimelinePage>
                 padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
                 child: Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text('动态',
                           style: TextStyle(
                               fontSize: 21,
                               fontWeight: FontWeight.w800,
-                              color: _ink)),
+                              color: _palette(context).ink)),
                     ),
                     IconButton(
                       tooltip: '发布动态',
                       color: _palette(context).primary,
                       onPressed: () {
                         if (widget.controller.session == null) {
-                          _showLoginSheet(context, widget.controller);
+                          showLoginSheet(context, widget.controller);
                           return;
                         }
                         Navigator.of(context)
                             .push<bool>(
-                              MaterialPageRoute<bool>(
-                                builder: (_) => FeedComposePage(
-                                    controller: widget.controller),
-                              ),
-                            )
+                          MaterialPageRoute<bool>(
+                            builder: (_) =>
+                                FeedComposePage(controller: widget.controller),
+                          ),
+                        )
                             .then((changed) {
                           if (changed == true && mounted) {
                             _refreshActiveTab();
@@ -1099,8 +1126,7 @@ class _TimelinePageState extends State<_TimelinePage>
                           controller: widget.controller,
                           items: widget.controller.feeds,
                           isLoading: widget.controller.isLoadingFeeds,
-                          isLoadingMore:
-                              widget.controller.isLoadingMoreFeeds,
+                          isLoadingMore: widget.controller.isLoadingMoreFeeds,
                           hasMore: widget.controller.hasMoreFeeds,
                           error: widget.controller.feedsError,
                           onLoadMore: widget.controller.loadMoreFeeds,
@@ -1146,8 +1172,8 @@ class _TimelinePageState extends State<_TimelinePage>
                                 items: widget.controller.followingFeeds,
                                 isLoading:
                                     widget.controller.isLoadingFollowingFeeds,
-                                isLoadingMore: widget.controller
-                                    .isLoadingMoreFollowingFeeds,
+                                isLoadingMore: widget
+                                    .controller.isLoadingMoreFollowingFeeds,
                                 hasMore:
                                     widget.controller.hasMoreFollowingFeeds,
                                 error: widget.controller.followingFeedsError,
@@ -1156,8 +1182,7 @@ class _TimelinePageState extends State<_TimelinePage>
                                 onOpenUser: _openUserProfile,
                                 onOpenResource: _openContentDetail,
                                 onOpenFeed: _openFeedDetail,
-                                emptyText:
-                                    '还没有关注动态，先去时间线发现创作者吧',
+                                emptyText: '还没有关注动态，先去时间线发现创作者吧',
                                 scrollController: _followingScroll,
                               ),
                             ),
@@ -1231,16 +1256,18 @@ class _LatestItemList extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Center(
                   child: Text('加载更多失败：$error',
-                      style: const TextStyle(color: _muted, fontSize: 12)),
+                      style: TextStyle(
+                          color: _palette(context).muted, fontSize: 12)),
                 ),
               );
             }
             if (!hasMore) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Center(
                   child: Text('已经到底了',
-                      style: TextStyle(color: _muted, fontSize: 12)),
+                      style: TextStyle(
+                          color: _palette(context).muted, fontSize: 12)),
                 ),
               );
             }
@@ -1301,12 +1328,10 @@ class _LatestItemCardState extends State<_LatestItemCard> {
             ListTile(
               leading: cancel
                   ? const Icon(Icons.flag_rounded, color: Color(0xFF4FA36C))
-                  : const Icon(Icons.flag_outlined,
-                      color: Color(0xFFD29062)),
+                  : const Icon(Icons.flag_outlined, color: Color(0xFFD29062)),
               title: Text(cancel ? '取消不友好标记' : '不友好标记'),
-              subtitle: Text(cancel
-                  ? '取消后该帖子的标记数会减少'
-                  : '需登录：不友好内容标记，5 人标记后帖子将被屏蔽'),
+              subtitle:
+                  Text(cancel ? '取消后该帖子的标记数会减少' : '需登录：不友好内容标记，5 人标记后帖子将被屏蔽'),
               onTap: () {
                 Navigator.of(sheetContext).pop();
                 widget.onMarkItem(item);
@@ -1339,7 +1364,8 @@ class _LatestItemCardState extends State<_LatestItemCard> {
                   '该帖子已被你折叠（不友好标记，${item.markCount}/5 位喵友已标记）',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _muted, fontSize: 12.5),
+                  style:
+                      TextStyle(color: _palette(context).muted, fontSize: 12.5),
                 ),
               ),
               Text('展开',
@@ -1368,116 +1394,119 @@ class _LatestItemCardState extends State<_LatestItemCard> {
     return GestureDetector(
       onLongPress: () => _showMarkMenu(context),
       child: Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => widget.onOpenItem(item),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InkResponse(
-                onTap: item.authorId == null || item.authorId == 0
-                    ? null
-                    : () => widget.onOpenUser(item.authorId!),
-                radius: 28,
-                child: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: _palette(context).primary.withOpacity(.12),
-                  foregroundImage: item.authorAvatar.isEmpty
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => widget.onOpenItem(item),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkResponse(
+                  onTap: item.authorId == null || item.authorId == 0
                       ? null
-                      : NetworkImage(item.authorAvatar),
-                  foregroundColor: _palette(context).primary,
-                  child: Text(item.author.isEmpty ? 'M' : item.author[0]),
+                      : () => widget.onOpenUser(item.authorId!),
+                  radius: 28,
+                  child: CircleAvatar(
+                    radius: 20,
+                    backgroundColor: _palette(context).primary.withOpacity(.12),
+                    foregroundImage: item.authorAvatar.isEmpty
+                        ? null
+                        : NetworkImage(item.authorAvatar),
+                    foregroundColor: _palette(context).primary,
+                    child: Text(item.author.isEmpty ? 'M' : item.author[0]),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.author.isEmpty ? 'Mfuns 用户' : item.author,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: _ink,
-                              fontWeight: FontWeight.w800,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.author.isEmpty ? 'Mfuns 用户' : item.author,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _palette(context).ink,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
-                        ),
-                        _LatestTypeChip(label: typeLabel),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(_timelineTime(item.createdAt),
-                        style: const TextStyle(color: _muted, fontSize: 12)),
-                    const SizedBox(height: 8),
-                    Text(title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: _ink,
-                            fontWeight: FontWeight.w700,
-                            height: 1.35)),
-                    if (excerpt.isNotEmpty && excerpt != title) ...[
-                      const SizedBox(height: 5),
-                      Text(excerpt,
-                          maxLines: 3,
+                          _LatestTypeChip(label: typeLabel),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(_timelineTime(item.createdAt),
+                          style: TextStyle(
+                              color: _palette(context).muted, fontSize: 12)),
+                      const SizedBox(height: 8),
+                      Text(title,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: _ink, height: 1.4)),
-                    ],
-                    if (item.cover.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: AspectRatio(
-                          aspectRatio: 16 / 8,
-                          child: Image.network(
-                            item.cover,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const ColoredBox(
-                              color: Color(0xffefeff7),
-                              child: Center(
-                                child: Icon(Icons.broken_image_outlined,
-                                    color: _muted),
+                          style: TextStyle(
+                              color: _palette(context).ink,
+                              fontWeight: FontWeight.w700,
+                              height: 1.35)),
+                      if (excerpt.isNotEmpty && excerpt != title) ...[
+                        const SizedBox(height: 5),
+                        Text(excerpt,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: _palette(context).ink, height: 1.4)),
+                      ],
+                      if (item.cover.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 8,
+                            child: Image.network(
+                              item.cover,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => ColoredBox(
+                                color: _palette(context).placeholder,
+                                child: Center(
+                                  child: Icon(Icons.broken_image_outlined,
+                                      color: _palette(context).muted),
+                                ),
                               ),
                             ),
                           ),
                         ),
+                      ],
+                      const SizedBox(height: 10),
+                      Text(
+                        '${item.likes} 赞 · ${item.comments} 评论 · ${item.views} 浏览',
+                        style: TextStyle(
+                            color: _palette(context).muted, fontSize: 12),
                       ),
+                      if (item.markCount > 0) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.flag_outlined,
+                                size: 13, color: Color(0xFFD29062)),
+                            const SizedBox(width: 4),
+                            Text(
+                              item.markedByMe
+                                  ? '我已标记 · 已有 ${item.markCount}/5 位喵友标记此帖子'
+                                  : '已有 ${item.markCount}/5 位喵友标记此帖子',
+                              style: const TextStyle(
+                                  color: Color(0xFFD29062), fontSize: 11.5),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
-                    const SizedBox(height: 10),
-                    Text(
-                      '${item.likes} 赞 · ${item.comments} 评论 · ${item.views} 浏览',
-                      style: const TextStyle(color: _muted, fontSize: 12),
-                    ),
-                    if (item.markCount > 0) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.flag_outlined,
-                              size: 13, color: Color(0xFFD29062)),
-                          const SizedBox(width: 4),
-                          Text(
-                            item.markedByMe
-                                ? '我已标记 · 已有 ${item.markCount}/5 位喵友标记此帖子'
-                                : '已有 ${item.markCount}/5 位喵友标记此帖子',
-                            style: const TextStyle(
-                                color: Color(0xFFD29062), fontSize: 11.5),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -1534,12 +1563,13 @@ class _TimelineTabs extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          color: const Color(0xffeeedf5),
+          color: _palette(context).chip,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: List.generate(labels.length, (position) {
-            final logical = (order ?? List.generate(labels.length, (i) => i))[position];
+            final logical =
+                (order ?? List.generate(labels.length, (i) => i))[position];
             final selected = logical == index;
             return Expanded(
               child: InkWell(
@@ -1549,7 +1579,9 @@ class _TimelineTabs extends StatelessWidget {
                   duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.symmetric(vertical: 9),
                   decoration: BoxDecoration(
-                    color: selected ? Colors.white : Colors.transparent,
+                    color: selected
+                        ? _palette(context).surface
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(9),
                     boxShadow: selected
                         ? const [
@@ -1564,9 +1596,12 @@ class _TimelineTabs extends StatelessWidget {
                       Text(labels[position],
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                              color: selected ? _palette(context).primary : _muted,
-                              fontWeight:
-                                  selected ? FontWeight.w800 : FontWeight.w600)),
+                              color: selected
+                                  ? _palette(context).primary
+                                  : _palette(context).muted,
+                              fontWeight: selected
+                                  ? FontWeight.w800
+                                  : FontWeight.w600)),
                       if (badges.contains(position))
                         const Positioned(
                           right: -6,
@@ -1617,11 +1652,14 @@ class _FollowingFeedState extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               Text(title,
-                  style: const TextStyle(
-                      color: _ink, fontWeight: FontWeight.w800, fontSize: 17)),
+                  style: TextStyle(
+                      color: _palette(context).ink,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17)),
               const SizedBox(height: 6),
               Text(subtitle,
-                  textAlign: TextAlign.center, style: const TextStyle(color: _muted)),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _palette(context).muted)),
               const SizedBox(height: 14),
               FilledButton(onPressed: onLogin, child: const Text('登录')),
             ],
@@ -1692,16 +1730,18 @@ class _TimelineFeedList extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Center(
                   child: Text('加载更多失败：$error',
-                      style: const TextStyle(color: _muted, fontSize: 12)),
+                      style: TextStyle(
+                          color: _palette(context).muted, fontSize: 12)),
                 ),
               );
             }
             if (!hasMore) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Center(
                     child: Text('已经到底了',
-                        style: TextStyle(color: _muted, fontSize: 12))),
+                        style: TextStyle(
+                            color: _palette(context).muted, fontSize: 12))),
               );
             }
             return const SizedBox(height: 2);
@@ -1770,11 +1810,13 @@ class _TimelineFeedCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(item.author.isEmpty ? 'Mfuns 用户' : item.author,
-                          style: const TextStyle(
-                              color: _ink, fontWeight: FontWeight.w800)),
+                          style: TextStyle(
+                              color: _palette(context).ink,
+                              fontWeight: FontWeight.w800)),
                       const SizedBox(height: 2),
                       Text(_timelineTime(item.createdAt),
-                          style: const TextStyle(color: _muted, fontSize: 12)),
+                          style: TextStyle(
+                              color: _palette(context).muted, fontSize: 12)),
                       const SizedBox(height: 9),
                       item.spans.isEmpty
                           ? Text(item.content,
@@ -1782,14 +1824,14 @@ class _TimelineFeedCard extends StatelessWidget {
                               overflow: item.resource == null
                                   ? TextOverflow.visible
                                   : TextOverflow.ellipsis,
-                              style:
-                                  const TextStyle(color: _ink, height: 1.45))
+                              style: TextStyle(
+                                  color: _palette(context).ink, height: 1.45))
                           : ContentSpans(
                               spans: item.spans,
-                              onLinkTap: (url) => openContentLink(
-                                  context, controller, url),
-                              textStyle:
-                                  const TextStyle(color: _ink, height: 1.45)),
+                              onLinkTap: (url) =>
+                                  openContentLink(context, controller, url),
+                              textStyle: TextStyle(
+                                  color: _palette(context).ink, height: 1.45)),
                       if (item.resource != null) ...[
                         const SizedBox(height: 10),
                         _TimelineResourceCard(
@@ -1807,8 +1849,7 @@ class _TimelineFeedCard extends StatelessWidget {
                             separatorBuilder: (_, __) =>
                                 const SizedBox(width: 8),
                             itemBuilder: (context, imageIndex) {
-                              final uri =
-                                  Uri.tryParse(item.images[imageIndex]);
+                              final uri = Uri.tryParse(item.images[imageIndex]);
                               return ClipRRect(
                                 borderRadius: BorderRadius.circular(10),
                                 child: GestureDetector(
@@ -1816,8 +1857,7 @@ class _TimelineFeedCard extends StatelessWidget {
                                       ? null
                                       : () => Navigator.of(context).push(
                                             MaterialPageRoute<void>(
-                                              builder: (_) =>
-                                                  ImagePreviewPage(
+                                              builder: (_) => ImagePreviewPage(
                                                 uri: uri,
                                                 alt: '动态图片',
                                                 heroTag:
@@ -1832,19 +1872,23 @@ class _TimelineFeedCard extends StatelessWidget {
                                   child: AspectRatio(
                                     aspectRatio: 1,
                                     child: Hero(
-                                      tag: 'feed-image-${item.id}-$imageIndex-$uri',
+                                      tag:
+                                          'feed-image-${item.id}-$imageIndex-$uri',
                                       child: Image.network(
                                           item.images[imageIndex],
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, __, ___) =>
-                                              const ColoredBox(
-                                            color: Color(0xffefeff7),
-                                            child: Center(
-                                              child: Icon(
-                                                  Icons.broken_image_outlined,
-                                                  color: _muted),
-                                            ),
-                                          )),
+                                              ColoredBox(
+                                                color: _palette(context)
+                                                    .placeholder,
+                                                child: Center(
+                                                  child: Icon(
+                                                      Icons
+                                                          .broken_image_outlined,
+                                                      color: _palette(context)
+                                                          .muted),
+                                                ),
+                                              )),
                                     ),
                                   ),
                                 ),
@@ -1856,26 +1900,29 @@ class _TimelineFeedCard extends StatelessWidget {
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          const Icon(Icons.thumb_up_alt_outlined,
-                              size: 16, color: _muted),
+                          Icon(Icons.thumb_up_alt_outlined,
+                              size: 16, color: _palette(context).muted),
                           const SizedBox(width: 4),
                           Text('${item.likes}',
-                              style:
-                                  const TextStyle(color: _muted, fontSize: 12)),
+                              style: TextStyle(
+                                  color: _palette(context).muted,
+                                  fontSize: 12)),
                           const SizedBox(width: 18),
-                          const Icon(Icons.mode_comment_outlined,
-                              size: 16, color: _muted),
+                          Icon(Icons.mode_comment_outlined,
+                              size: 16, color: _palette(context).muted),
                           const SizedBox(width: 4),
                           Text('${item.comments}',
-                              style:
-                                  const TextStyle(color: _muted, fontSize: 12)),
+                              style: TextStyle(
+                                  color: _palette(context).muted,
+                                  fontSize: 12)),
                           const SizedBox(width: 18),
-                          const Icon(Icons.visibility_outlined,
-                              size: 16, color: _muted),
+                          Icon(Icons.visibility_outlined,
+                              size: 16, color: _palette(context).muted),
                           const SizedBox(width: 4),
                           Text('${item.views}',
-                              style:
-                                  const TextStyle(color: _muted, fontSize: 12)),
+                              style: TextStyle(
+                                  color: _palette(context).muted,
+                                  fontSize: 12)),
                         ],
                       ),
                     ],
@@ -1917,7 +1964,7 @@ class _TimelineResourceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-        color: const Color(0xfff4f4fa),
+        color: _palette(context).chip,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -1933,9 +1980,10 @@ class _TimelineResourceCard extends StatelessWidget {
                     width: 108,
                     height: 76,
                     child: item.cover.isEmpty
-                        ? const ColoredBox(
-                            color: Color(0xffe6e6f0),
-                            child: Icon(Icons.article_outlined, color: _muted),
+                        ? ColoredBox(
+                            color: _palette(context).placeholder,
+                            child: Icon(Icons.article_outlined,
+                                color: _palette(context).muted),
                           )
                         : Image.network(item.cover, fit: BoxFit.cover),
                   ),
@@ -1949,16 +1997,18 @@ class _TimelineResourceCard extends StatelessWidget {
                         Text(item.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: _ink, fontWeight: FontWeight.w700)),
+                            style: TextStyle(
+                                color: _palette(context).ink,
+                                fontWeight: FontWeight.w700)),
                         const Spacer(),
                         Row(
                           children: [
                             _FeedTypeTag(isVideo: item.isVideo),
                             const SizedBox(width: 6),
                             Text('${item.views} 浏览 · ${item.likes} 赞',
-                                style: const TextStyle(
-                                    color: _muted, fontSize: 11)),
+                                style: TextStyle(
+                                    color: _palette(context).muted,
+                                    fontSize: 11)),
                           ],
                         ),
                       ],
@@ -2039,7 +2089,8 @@ class _SearchPageState extends State<_SearchPage> {
                   onSubmitted: _search,
                   decoration: InputDecoration(
                     hintText: '搜索文章、视频和用户',
-                    prefixIcon: const Icon(Icons.search_rounded, color: _muted),
+                    prefixIcon: Icon(Icons.search_rounded,
+                        color: _palette(context).muted),
                     suffixIcon: IconButton(
                       tooltip: '搜索',
                       onPressed: _search,
@@ -2108,10 +2159,12 @@ class _SearchTypeBar extends StatelessWidget {
               onSelected: (_) => onChanged(item.type),
               selectedColor: _palette(context).primary.withOpacity(.14),
               labelStyle: TextStyle(
-                  color: selected ? _palette(context).primary : _muted,
+                  color: selected
+                      ? _palette(context).primary
+                      : _palette(context).muted,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w500),
               side: BorderSide.none,
-              backgroundColor: Colors.white,
+              backgroundColor: _palette(context).chip,
             ),
           );
         }).toList(),
@@ -2167,14 +2220,17 @@ class _UserSearchResults extends StatelessWidget {
           title: Text(user.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: _ink, fontWeight: FontWeight.w700, fontSize: 15)),
+              style: TextStyle(
+                  color: _palette(context).ink,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15)),
           subtitle: user.bio.isEmpty
               ? null
               : Text(user.bio,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: _muted, fontSize: 12.5)),
+                  style: TextStyle(
+                      color: _palette(context).muted, fontSize: 12.5)),
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
             builder: (_) =>
                 UserProfilePage(controller: controller, userId: user.id),
@@ -2190,27 +2246,33 @@ class _ProfilePage extends StatefulWidget {
     required this.controller,
     required this.themeSeed,
     required this.onThemeChanged,
+    required this.themeMode,
+    required this.onModeChanged,
   });
 
   final AppController controller;
   final Color themeSeed;
   final ValueChanged<Color> onThemeChanged;
+  final ThemeMode themeMode;
+  final ValueChanged<AppThemeMode> onModeChanged;
 
   @override
   State<_ProfilePage> createState() => _ProfilePageState();
 }
 
 class _ProfilePageState extends State<_ProfilePage> {
-  var _statsRequested = false;
+  /// 已为哪个 UID 加载过统计（历史/收藏夹/投稿数）；账号切换后自动重新加载。
+  int? _statsForUserId;
 
-  /// Loads history, favorite-folders and submission counts once the member
-  /// is signed in so the stat cards show real numbers without a manual
-  /// refresh.
   void _ensureStats() {
-    if (_statsRequested) return;
+    final userId = widget.controller.session?.userId;
+    if (userId == null) {
+      _statsForUserId = null;
+      return;
+    }
+    if (_statsForUserId == userId) return;
+    _statsForUserId = userId;
     final controller = widget.controller;
-    if (controller.session == null) return;
-    _statsRequested = true;
     controller.loadHistory();
     controller.loadFavoriteFolders();
     controller.loadSubmissionCounts();
@@ -2220,11 +2282,9 @@ class _ProfilePageState extends State<_ProfilePage> {
   Widget build(BuildContext context) => AnimatedBuilder(
         animation: widget.controller,
         builder: (context, _) {
-          if (widget.controller.session != null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) _ensureStats();
-            });
-          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _ensureStats();
+          });
           final session = widget.controller.session;
           return _PatternBackground(
             child: ListView(
@@ -2234,19 +2294,22 @@ class _ProfilePageState extends State<_ProfilePage> {
                   height: 150,
                   decoration: BoxDecoration(
                     color: _palette(context).primary,
-                    borderRadius:
-                        const BorderRadius.vertical(bottom: Radius.circular(26)),
+                    borderRadius: const BorderRadius.vertical(
+                        bottom: Radius.circular(26)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(22, 26, 22, 20),
                     child: session == null
                         ? _GuestProfile(
-                            onLogin: () => _showLoginSheet(context, widget.controller))
+                            onLogin: () =>
+                                showLoginSheet(context, widget.controller))
                         : _SignedInProfile(
                             session: session,
                             controller: widget.controller,
                             themeSeed: widget.themeSeed,
-                            onThemeChanged: widget.onThemeChanged),
+                            onThemeChanged: widget.onThemeChanged,
+                            themeMode: widget.themeMode,
+                            onModeChanged: widget.onModeChanged),
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -2256,11 +2319,15 @@ class _ProfilePageState extends State<_ProfilePage> {
                       ? _ProfileGuestBody(
                           controller: widget.controller,
                           themeSeed: widget.themeSeed,
-                          onThemeChanged: widget.onThemeChanged)
+                          onThemeChanged: widget.onThemeChanged,
+                          themeMode: widget.themeMode,
+                          onModeChanged: widget.onModeChanged)
                       : _ProfileMemberBody(
                           controller: widget.controller,
                           themeSeed: widget.themeSeed,
-                          onThemeChanged: widget.onThemeChanged),
+                          onThemeChanged: widget.onThemeChanged,
+                          themeMode: widget.themeMode,
+                          onModeChanged: widget.onModeChanged),
                 ),
               ],
             ),
@@ -2279,7 +2346,7 @@ class _GuestProfile extends StatelessWidget {
         children: [
           CircleAvatar(
               radius: 31,
-              backgroundColor: Colors.white,
+              backgroundColor: _palette(context).chip,
               foregroundColor: _palette(context).primary,
               child: const Icon(Icons.pets_rounded, size: 31)),
           const SizedBox(width: 13),
@@ -2301,7 +2368,8 @@ class _GuestProfile extends StatelessWidget {
           ),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: Colors.white, foregroundColor: _palette(context).primary),
+                backgroundColor: _palette(context).chip,
+                foregroundColor: _palette(context).primary),
             onPressed: onLogin,
             child: const Text('登录'),
           ),
@@ -2315,12 +2383,16 @@ class _SignedInProfile extends StatelessWidget {
     required this.controller,
     required this.themeSeed,
     required this.onThemeChanged,
+    required this.themeMode,
+    required this.onModeChanged,
   });
 
   final UserSession session;
   final AppController controller;
   final Color themeSeed;
   final ValueChanged<Color> onThemeChanged;
+  final ThemeMode themeMode;
+  final ValueChanged<AppThemeMode> onModeChanged;
 
   void _openProfile(BuildContext context) {
     final userId = session.userId;
@@ -2330,6 +2402,11 @@ class _SignedInProfile extends StatelessWidget {
             UserProfilePage(controller: controller, userId: userId)));
   }
 
+  void _openAccountManage(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => AccountManagePage(controller: controller)));
+  }
+
   @override
   Widget build(BuildContext context) => Row(
         children: [
@@ -2337,11 +2414,10 @@ class _SignedInProfile extends StatelessWidget {
             onTap: () => _openProfile(context),
             child: CircleAvatar(
               radius: 31,
-              backgroundColor: Colors.white,
+              backgroundColor: _palette(context).chip,
               foregroundColor: _palette(context).primary,
-              foregroundImage: session.avatar.isEmpty
-                  ? null
-                  : NetworkImage(session.avatar),
+              foregroundImage:
+                  session.avatar.isEmpty ? null : NetworkImage(session.avatar),
               child: Text(
                   session.displayName.isEmpty
                       ? '?'
@@ -2370,8 +2446,14 @@ class _SignedInProfile extends StatelessWidget {
             ),
           ),
           IconButton(
+            tooltip: '切换账号',
+            onPressed: () => _openAccountManage(context),
+            icon: const Icon(Icons.switch_account_rounded, color: Colors.white),
+          ),
+          IconButton(
             tooltip: '主题外观',
-            onPressed: () => _showThemeSheet(context, themeSeed, onThemeChanged),
+            onPressed: () => _showThemeSheet(
+                context, themeSeed, onThemeChanged, themeMode, onModeChanged),
             icon: const Icon(Icons.palette_outlined, color: Colors.white),
           ),
         ],
@@ -2379,10 +2461,17 @@ class _SignedInProfile extends StatelessWidget {
 }
 
 class _ThemeSheet extends StatefulWidget {
-  const _ThemeSheet({required this.seed, required this.onSelected});
+  const _ThemeSheet({
+    required this.seed,
+    required this.onSelected,
+    required this.mode,
+    required this.onModeChanged,
+  });
 
   final Color seed;
   final ValueChanged<Color> onSelected;
+  final ThemeMode mode;
+  final ValueChanged<AppThemeMode> onModeChanged;
 
   @override
   State<_ThemeSheet> createState() => _ThemeSheetState();
@@ -2438,8 +2527,8 @@ class _ThemeSheetState extends State<_ThemeSheet> {
   void _applyCustom() {
     final color = _parseHex(_hex.text);
     if (color == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('色号格式不正确，请输入 #RRGGBB 或 RRGGBB')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('色号格式不正确，请输入 #RRGGBB 或 RRGGBB')));
       return;
     }
     widget.onSelected(color);
@@ -2460,14 +2549,48 @@ class _ThemeSheetState extends State<_ThemeSheet> {
             children: [
               Icon(Icons.palette_rounded, color: palette.primary),
               const SizedBox(width: 8),
-              const Text('主题颜色',
-                  style: TextStyle(
-                      color: _ink,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800)),
+              const Text('主题外观',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+          SegmentedButton<AppThemeMode>(
+            segments: const [
+              ButtonSegment(
+                value: AppThemeMode.system,
+                label: Text('跟随系统'),
+                icon: Icon(Icons.brightness_auto_rounded, size: 17),
+              ),
+              ButtonSegment(
+                value: AppThemeMode.light,
+                label: Text('浅色'),
+                icon: Icon(Icons.light_mode_rounded, size: 17),
+              ),
+              ButtonSegment(
+                value: AppThemeMode.dark,
+                label: Text('深色'),
+                icon: Icon(Icons.dark_mode_rounded, size: 17),
+              ),
+            ],
+            selected: {_modeOf(widget.mode)},
+            showSelectedIcon: false,
+            style: ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              textStyle: WidgetStatePropertyAll(
+                TextStyle(fontSize: 12.5, color: palette.ink),
+              ),
+            ),
+            onSelectionChanged: (selection) {
+              widget.onModeChanged(selection.first);
+            },
+          ),
+          const SizedBox(height: 18),
+          Text('主题颜色',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: palette.ink)),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 16,
             runSpacing: 14,
@@ -2487,7 +2610,7 @@ class _ThemeSheetState extends State<_ThemeSheet> {
                     color: color,
                     shape: BoxShape.circle,
                     border: selected
-                        ? Border.all(color: _ink, width: 2.5)
+                        ? Border.all(color: _palette(context).ink, width: 2.5)
                         : null,
                   ),
                   child: selected
@@ -2499,11 +2622,11 @@ class _ThemeSheetState extends State<_ThemeSheet> {
             }).toList(),
           ),
           const SizedBox(height: 16),
-          const Text('自定义色号',
+          Text('自定义色号',
               style: TextStyle(
-                  color: _ink,
                   fontSize: 13,
-                  fontWeight: FontWeight.w700)),
+                  fontWeight: FontWeight.w700,
+                  color: palette.ink)),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -2513,7 +2636,7 @@ class _ThemeSheetState extends State<_ThemeSheet> {
                 decoration: BoxDecoration(
                   color: _parseHex(_hex.text) ?? const Color(0xFFCCCCCC),
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0x22000000)),
+                  border: Border.all(color: palette.divider),
                 ),
               ),
               const SizedBox(width: 10),
@@ -2536,8 +2659,7 @@ class _ThemeSheetState extends State<_ThemeSheet> {
             ],
           ),
           const SizedBox(height: 14),
-          const Text('选择后即生效',
-              style: TextStyle(color: _muted, fontSize: 12)),
+          Text('选择后即生效', style: TextStyle(color: palette.muted, fontSize: 12)),
         ],
       ),
     );
@@ -2568,9 +2690,9 @@ class _RaisedSheet extends StatelessWidget {
           curve: Curves.easeOutCubic,
           height: height,
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 26),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          decoration: BoxDecoration(
+            color: _palette(context).surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
           ),
           child: SingleChildScrollView(
             child: Column(
@@ -2581,7 +2703,7 @@ class _RaisedSheet extends StatelessWidget {
                     width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xffdedde7),
+                      color: _palette(context).divider,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -2598,25 +2720,46 @@ class _RaisedSheet extends StatelessWidget {
 }
 
 void _showThemeSheet(
-    BuildContext context, Color seed, ValueChanged<Color> onChanged) {
+  BuildContext context,
+  Color seed,
+  ValueChanged<Color> onChanged,
+  ThemeMode mode,
+  ValueChanged<AppThemeMode> onModeChanged,
+) {
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _ThemeSheet(seed: seed, onSelected: onChanged),
+    builder: (_) => _ThemeSheet(
+      seed: seed,
+      onSelected: onChanged,
+      mode: mode,
+      onModeChanged: onModeChanged,
+    ),
   );
 }
+
+/// MaterialApp 的 ThemeMode 转回应用自身的模式枚举。
+AppThemeMode _modeOf(ThemeMode mode) => switch (mode) {
+      ThemeMode.system => AppThemeMode.system,
+      ThemeMode.light => AppThemeMode.light,
+      ThemeMode.dark => AppThemeMode.dark,
+    };
 
 class _ProfileGuestBody extends StatelessWidget {
   const _ProfileGuestBody({
     required this.controller,
     required this.themeSeed,
     required this.onThemeChanged,
+    required this.themeMode,
+    required this.onModeChanged,
   });
 
   final AppController controller;
   final Color themeSeed;
   final ValueChanged<Color> onThemeChanged;
+  final ThemeMode themeMode;
+  final ValueChanged<AppThemeMode> onModeChanged;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -2635,15 +2778,16 @@ class _ProfileGuestBody extends StatelessWidget {
             icon: Icons.download_rounded,
             title: '下载管理',
             subtitle: '查看和管理已缓存的视频',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => const DownloadPage())),
+            onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const DownloadPage())),
           ),
           const SizedBox(height: 10),
           _ProfileItem(
             icon: Icons.palette_outlined,
             title: '主题外观',
-            subtitle: '自定义界面主题颜色',
-            onTap: () => _showThemeSheet(context, themeSeed, onThemeChanged),
+            subtitle: '主题模式与界面主题颜色',
+            onTap: () => _showThemeSheet(
+                context, themeSeed, onThemeChanged, themeMode, onModeChanged),
           ),
           const SizedBox(height: 10),
           _ProfileItem(
@@ -2653,6 +2797,16 @@ class _ProfileGuestBody extends StatelessWidget {
             onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                 builder: (_) => SettingsPage(controller: controller))),
           ),
+          if (controller.accounts.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _ProfileItem(
+              icon: Icons.switch_account_rounded,
+              title: '切换账号',
+              subtitle: '选择已保存的账号快速登录',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => AccountManagePage(controller: controller))),
+            ),
+          ],
         ],
       );
 }
@@ -2662,33 +2816,19 @@ class _ProfileMemberBody extends StatelessWidget {
     required this.controller,
     required this.themeSeed,
     required this.onThemeChanged,
+    required this.themeMode,
+    required this.onModeChanged,
   });
 
   final AppController controller;
   final Color themeSeed;
   final ValueChanged<Color> onThemeChanged;
+  final ThemeMode themeMode;
+  final ValueChanged<AppThemeMode> onModeChanged;
 
-  Future<void> _confirmLogout(BuildContext context, AppController controller) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      useRootNavigator: true,
-      builder: (context) => AlertDialog(
-        title: const Text('退出当前账号'),
-        content: const Text('退出后将清除登录凭证，需要重新登录才能继续使用。确定退出吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('退出'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    await controller.clearLocalSession();
+  void _openAccountManage(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => AccountManagePage(controller: controller)));
   }
 
   @override
@@ -2703,40 +2843,40 @@ class _ProfileMemberBody extends StatelessWidget {
           const SizedBox(height: 18),
           const _ProfileSectionTitle('创作与账号'),
           _ProfileItem(
-            icon: Icons.edit_note_rounded,
-            title: '我的投稿',
-            subtitle: '发布、编辑和管理投稿',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) =>
-                    SubmissionsPage(controller: controller)))),
+              icon: Icons.edit_note_rounded,
+              title: '我的投稿',
+              subtitle: '发布、编辑和管理投稿',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => SubmissionsPage(controller: controller)))),
           const SizedBox(height: 10),
           _ProfileItem(
-            icon: Icons.calendar_month_rounded,
-            title: '每日签到',
-            subtitle: '签到领经验，查看今日签到排行',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => SignPage(controller: controller)))),
+              icon: Icons.calendar_month_rounded,
+              title: '每日签到',
+              subtitle: '签到领经验，查看今日签到排行',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => SignPage(controller: controller)))),
           const SizedBox(height: 10),
           _ProfileItem(
-            icon: Icons.account_balance_wallet_outlined,
-            title: '我的资产',
-            subtitle: '喵币余额、改名卡与补签卡',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => AssetsPage(controller: controller)))),
+              icon: Icons.account_balance_wallet_outlined,
+              title: '我的资产',
+              subtitle: '喵币余额、改名卡与补签卡',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => AssetsPage(controller: controller)))),
           const SizedBox(height: 10),
           _ProfileItem(
             icon: Icons.download_rounded,
             title: '下载管理',
             subtitle: '查看和管理已缓存的视频',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => const DownloadPage())),
+            onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const DownloadPage())),
           ),
           const SizedBox(height: 10),
           _ProfileItem(
             icon: Icons.palette_outlined,
             title: '主题外观',
-            subtitle: '自定义界面主题颜色',
-            onTap: () => _showThemeSheet(context, themeSeed, onThemeChanged),
+            subtitle: '主题模式与界面主题颜色',
+            onTap: () => _showThemeSheet(
+                context, themeSeed, onThemeChanged, themeMode, onModeChanged),
           ),
           const SizedBox(height: 10),
           _ProfileItem(
@@ -2748,10 +2888,10 @@ class _ProfileMemberBody extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _ProfileItem(
-            icon: Icons.logout_rounded,
-            title: '退出当前会话',
-            subtitle: '这将清除登录凭证',
-            onTap: () => _confirmLogout(context, controller),
+            icon: Icons.switch_account_rounded,
+            title: '账号管理',
+            subtitle: '切换、登录新账号或退出登录',
+            onTap: () => _openAccountManage(context),
           ),
         ],
       );
@@ -2793,9 +2933,8 @@ class _LevelProgressCard extends StatelessWidget {
     String? hint;
     if (levelId != null && exp != null && sections.length >= levelId) {
       final current = sections[levelId - 1].experience;
-      final next = levelId < sections.length
-          ? sections[levelId].experience
-          : null;
+      final next =
+          levelId < sections.length ? sections[levelId].experience : null;
       if (next != null && next > current) {
         progress = ((exp - current) / (next - current)).clamp(0.0, 1.0);
         final remaining = next - exp;
@@ -2834,7 +2973,8 @@ class _LevelProgressCard extends StatelessWidget {
                 const Spacer(),
                 if (exp != null)
                   Text('经验 $exp',
-                      style: const TextStyle(color: _muted, fontSize: 12.5)),
+                      style: TextStyle(
+                          color: _palette(context).muted, fontSize: 12.5)),
               ],
             ),
             const SizedBox(height: 10),
@@ -2855,12 +2995,13 @@ class _LevelProgressCard extends StatelessWidget {
                     child: Text(hint,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style:
-                            const TextStyle(color: _muted, fontSize: 11.5)),
+                        style: TextStyle(
+                            color: _palette(context).muted, fontSize: 11.5)),
                   ),
                 if (levelId != null)
                   Text('Lv.$levelId',
-                      style: const TextStyle(color: _muted, fontSize: 11.5)),
+                      style: TextStyle(
+                          color: _palette(context).muted, fontSize: 11.5)),
               ],
             ),
           ],
@@ -2922,10 +3063,14 @@ class _MemberStat extends StatelessWidget {
           child: Column(
             children: [
               Text(value,
-                  style: const TextStyle(
-                      color: _ink, fontWeight: FontWeight.w900, fontSize: 18)),
+                  style: TextStyle(
+                      color: _palette(context).ink,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18)),
               const SizedBox(height: 3),
-              Text(label, style: const TextStyle(color: _muted, fontSize: 12)),
+              Text(label,
+                  style:
+                      TextStyle(color: _palette(context).muted, fontSize: 12)),
             ],
           ),
         ),
@@ -2937,7 +3082,7 @@ class _StatDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Container(width: 1, height: 29, color: const Color(0xffecebf2));
+      Container(width: 1, height: 29, color: _palette(context).divider);
 }
 
 class _ProfileSectionTitle extends StatelessWidget {
@@ -2951,8 +3096,10 @@ class _ProfileSectionTitle extends StatelessWidget {
         child: Align(
           alignment: Alignment.centerLeft,
           child: Text(text,
-              style: const TextStyle(
-                  color: _muted, fontSize: 13, fontWeight: FontWeight.w700)),
+              style: TextStyle(
+                  color: _palette(context).muted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700)),
         ),
       );
 }
@@ -2975,15 +3122,13 @@ class _ProfileItem extends StatelessWidget {
         child: ListTile(
           onTap: onTap,
           leading: CircleAvatar(
-            backgroundColor:
-                _palette(context).primary.withOpacity(.11),
+            backgroundColor: _palette(context).primary.withOpacity(.11),
             foregroundColor: _palette(context).primary,
             child: Icon(icon),
           ),
           title: Text(title,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: _ink)),
+              style: TextStyle(
+                  fontWeight: FontWeight.w700, color: _palette(context).ink)),
           subtitle: Text(subtitle),
           trailing: const Icon(Icons.chevron_right_rounded),
         ),
@@ -3083,19 +3228,22 @@ class _FavoriteFoldersPageState extends State<_FavoriteFoldersPage> {
                       child: ListTile(
                         contentPadding: const EdgeInsets.all(16),
                         leading: CircleAvatar(
-                          backgroundColor: _palette(context).primary.withOpacity(.13),
+                          backgroundColor:
+                              _palette(context).primary.withOpacity(.13),
                           foregroundColor: _palette(context).primary,
                           child: const Icon(Icons.bookmark_rounded),
                         ),
                         title: Text(folder.name,
-                            style: const TextStyle(
-                                color: _ink, fontWeight: FontWeight.w700)),
+                            style: TextStyle(
+                                color: _palette(context).ink,
+                                fontWeight: FontWeight.w700)),
                         subtitle: Text(folder.description.isEmpty
                             ? '${folder.count} 个内容'
                             : folder.description),
                         trailing: Text('${folder.count}',
-                            style: const TextStyle(
-                                color: _muted, fontWeight: FontWeight.w700)),
+                            style: TextStyle(
+                                color: _palette(context).muted,
+                                fontWeight: FontWeight.w700)),
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => _FavoriteItemsPage(
@@ -3134,6 +3282,47 @@ class _FavoriteItemsPageState extends State<_FavoriteItemsPage> {
     });
   }
 
+  Future<void> _removeItem(ContentPreview item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('移出收藏夹？'),
+        content: Text(
+            '将「${item.title}」从「${widget.folder.name}」移出。\n可在内容详情页重新收藏。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('移出',
+                style:
+                    TextStyle(color: Theme.of(dialogContext).colorScheme.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await widget.controller.removeFavorite(
+        listId: widget.folder.id,
+        resourceId: item.id,
+        resourceType: item.type,
+      );
+      // 刷新当前夹列表与收藏夹计数。
+      await widget.controller.loadFavoriteItems(widget.folder.id);
+      await widget.controller.loadFavoriteFolders();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已移出收藏夹')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('移出失败：$error')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: Text(widget.folder.name), centerTitle: true),
@@ -3154,6 +3343,7 @@ class _FavoriteItemsPageState extends State<_FavoriteItemsPage> {
                     .loadFavoriteItems(widget.folder.id, loadMore: true),
                 isLoadingMore: widget.controller.isLoadingMoreFavorites,
                 hasMore: widget.controller.hasMoreFavoriteItems,
+                onRemoveItem: _removeItem,
               ),
             ),
           ),
@@ -3174,6 +3364,7 @@ class _ContentGrid extends StatelessWidget {
     this.scrollController,
     this.junctionIndex,
     this.onJunctionTap,
+    this.onRemoveItem,
   });
 
   final AppController controller;
@@ -3189,6 +3380,9 @@ class _ContentGrid extends StatelessWidget {
   /// 新内容交界位置：在此处插入“刚刚看到这里”标记（行首全宽）。
   final int? junctionIndex;
   final VoidCallback? onJunctionTap;
+
+  /// 收藏夹内列表提供：卡片上显示“移出”按钮（其余页面为 null 不显示）。
+  final void Function(ContentPreview item)? onRemoveItem;
 
   @override
   Widget build(BuildContext context) {
@@ -3219,11 +3413,12 @@ class _ContentGrid extends StatelessWidget {
             child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
           );
         } else if (!hasMore && onLoadMore != null) {
-          footer = const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
+          footer = Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
             child: Center(
                 child: Text('已经到底了',
-                    style: TextStyle(color: _muted, fontSize: 12))),
+                    style: TextStyle(
+                        color: _palette(context).muted, fontSize: 12))),
           );
         } else {
           footer = const SizedBox(height: 2);
@@ -3235,8 +3430,15 @@ class _ContentGrid extends StatelessWidget {
               sliver: SliverGrid(
                 gridDelegate: delegate,
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) =>
-                      _ContentCard(controller: controller, item: items[index]),
+                  (context, index) {
+                    final item = items[index];
+                    return _ContentCard(
+                        controller: controller,
+                        item: item,
+                        onRemoveItem: onRemoveItem == null
+                            ? null
+                            : () => onRemoveItem!(item));
+                  },
                   childCount: junction,
                 ),
               ),
@@ -3250,8 +3452,15 @@ class _ContentGrid extends StatelessWidget {
             sliver: SliverGrid(
               gridDelegate: delegate,
               delegate: SliverChildBuilderDelegate(
-                (context, index) => _ContentCard(
-                    controller: controller, item: items[junction + index]),
+                (context, index) {
+                  final item = items[junction + index];
+                  return _ContentCard(
+                      controller: controller,
+                      item: item,
+                      onRemoveItem: onRemoveItem == null
+                          ? null
+                          : () => onRemoveItem!(item));
+                },
                 childCount: items.length - junction,
               ),
             ),
@@ -3295,20 +3504,21 @@ class _FeedJunction extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(18),
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
               decoration: BoxDecoration(
-                color: const Color(0xffeeedf5),
+                color: _palette(context).chip,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0x33888888)),
+                border: Border.all(color: _palette(context).divider),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.refresh_rounded, size: 15, color: _muted),
-                  SizedBox(width: 6),
+                  Icon(Icons.refresh_rounded,
+                      size: 15, color: _palette(context).muted),
+                  const SizedBox(width: 6),
                   Text('刚刚看到这里，点击刷新',
-                      style: TextStyle(color: _muted, fontSize: 12.5)),
+                      style: TextStyle(
+                          color: _palette(context).muted, fontSize: 12.5)),
                 ],
               ),
             ),
@@ -3318,10 +3528,17 @@ class _FeedJunction extends StatelessWidget {
 }
 
 class _ContentCard extends StatelessWidget {
-  const _ContentCard({required this.controller, required this.item});
+  const _ContentCard({
+    required this.controller,
+    required this.item,
+    this.onRemoveItem,
+  });
 
   final AppController controller;
   final ContentPreview item;
+
+  /// 收藏夹内列表提供：点击确认后将内容移出收藏夹。
+  final VoidCallback? onRemoveItem;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -3344,8 +3561,8 @@ class _ContentCard extends StatelessWidget {
                 child: Text(item.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: _ink,
+                    style: TextStyle(
+                        color: _palette(context).ink,
                         fontSize: 13.5,
                         height: 1.25,
                         fontWeight: FontWeight.w600)),
@@ -3355,26 +3572,43 @@ class _ContentCard extends StatelessWidget {
                 child: Text(item.author.isEmpty ? 'Mfuns 用户' : item.author,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _muted, fontSize: 11.5)),
+                    style: TextStyle(
+                        color: _palette(context).muted, fontSize: 11.5)),
               ),
               const Spacer(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(9, 3, 9, 8),
                 child: Row(
                   children: [
-                    const Icon(Icons.favorite_rounded,
-                        size: 13, color: _muted),
+                    Icon(Icons.favorite_rounded,
+                        size: 13, color: _palette(context).muted),
                     const SizedBox(width: 3),
                     Text('${item.likes}',
-                        style: const TextStyle(color: _muted, fontSize: 11)),
+                        style: TextStyle(
+                            color: _palette(context).muted, fontSize: 11)),
                     const SizedBox(width: 9),
-                    const Icon(Icons.visibility_outlined,
-                        size: 14, color: _muted),
+                    Icon(Icons.visibility_outlined,
+                        size: 14, color: _palette(context).muted),
                     const SizedBox(width: 3),
                     Expanded(
                         child: Text('${item.views}',
-                            style: const TextStyle(color: _muted, fontSize: 11),
+                            style: TextStyle(
+                                color: _palette(context).muted, fontSize: 11),
                             overflow: TextOverflow.ellipsis)),
+                    if (onRemoveItem != null)
+                      Tooltip(
+                        message: '移出收藏夹',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: onRemoveItem,
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Icon(Icons.bookmark_remove_outlined,
+                                size: 17,
+                                color: Theme.of(context).colorScheme.error),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -3525,7 +3759,9 @@ class _RankingCard extends StatelessWidget {
                           style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
-                              color: rank <= 3 ? _palette(context).accent : _muted))),
+                              color: rank <= 3
+                                  ? _palette(context).accent
+                                  : _palette(context).muted))),
                 ),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(9),
@@ -3543,13 +3779,15 @@ class _RankingCard extends StatelessWidget {
                         Text(item.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: _ink, fontWeight: FontWeight.w700)),
+                            style: TextStyle(
+                                color: _palette(context).ink,
+                                fontWeight: FontWeight.w700)),
                         const Spacer(),
                         Text(
                             '${item.likes} 赞 · ${item.comments} 评论 · ${item.views} 浏览',
-                            style:
-                                const TextStyle(color: _muted, fontSize: 11.5)),
+                            style: TextStyle(
+                                color: _palette(context).muted,
+                                fontSize: 11.5)),
                       ],
                     ),
                   ),
@@ -3580,7 +3818,7 @@ class _MessageState extends StatelessWidget {
           padding: const EdgeInsets.all(32),
           child: Text(message,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _muted)),
+              style: TextStyle(color: _palette(context).muted)),
         ),
       );
 }
@@ -3592,16 +3830,20 @@ class _PatternBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => CustomPaint(
-        painter: _DiamondPatternPainter(),
+        painter: _DiamondPatternPainter(color: _palette(context).divider),
         child: child,
       );
 }
 
 class _DiamondPatternPainter extends CustomPainter {
+  const _DiamondPatternPainter({required this.color});
+
+  final Color color;
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xffececf3)
+      ..color = color
       ..strokeWidth = .7
       ..style = PaintingStyle.stroke;
     const step = 22.0;
@@ -3615,114 +3857,4 @@ class _DiamondPatternPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-Future<void> _showLoginSheet(BuildContext context, AppController controller) =>
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _LoginSheet(controller: controller),
-    );
-
-class _LoginSheet extends StatefulWidget {
-  const _LoginSheet({required this.controller});
-
-  final AppController controller;
-
-  @override
-  State<_LoginSheet> createState() => _LoginSheetState();
-}
-
-class _LoginSheetState extends State<_LoginSheet> {
-  final _account = TextEditingController();
-  final _password = TextEditingController();
-  var _obscurePassword = true;
-
-  @override
-  void dispose() {
-    _account.dispose();
-    _password.dispose();
-    super.dispose();
-  }
-
-  Future<void> _login() async {
-    if (_account.text.trim().isEmpty || _password.text.isEmpty) return;
-    final error = await widget.controller.login(_account.text, _password.text);
-    if (!mounted) return;
-    if (error == null) {
-      Navigator.of(context).pop();
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
-  }
-
-  @override
-  Widget build(BuildContext context) => _RaisedSheet(
-        child: AnimatedBuilder(
-          animation: widget.controller,
-          builder: (context, _) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                      backgroundColor: const Color(0xffefefff),
-                      foregroundColor: _palette(context).primary,
-                      child: const Icon(Icons.pets_rounded)),
-                  const SizedBox(width: 10),
-                  const Text('登录 Mfuns',
-                      style: TextStyle(
-                          fontSize: 21,
-                          fontWeight: FontWeight.w800,
-                          color: _ink)),
-                ],
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _account,
-                keyboardType: TextInputType.emailAddress,
-                autofillHints: const [AutofillHints.username],
-                decoration:
-                    const InputDecoration(labelText: '用户名 / ID / 邮箱 / 手机号'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _password,
-                obscureText: _obscurePassword,
-                autofillHints: const [AutofillHints.password],
-                onSubmitted: (_) => _login(),
-                decoration: InputDecoration(
-                  labelText: '密码',
-                  suffixIcon: IconButton(
-                    tooltip: _obscurePassword ? '显示密码' : '隐藏密码',
-                    icon: Icon(_obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined),
-                    onPressed: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                      backgroundColor: _palette(context).primary,
-                      padding: const EdgeInsets.symmetric(vertical: 14)),
-                  onPressed: widget.controller.isLoggingIn ? null : _login,
-                  child: widget.controller.isLoggingIn
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Text('登录'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
 }

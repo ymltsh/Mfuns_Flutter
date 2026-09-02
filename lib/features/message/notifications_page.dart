@@ -10,6 +10,7 @@ const _notifyTypes = <int, String>{
   1: '赞',
   2: '评论',
   3: '提及',
+  4: '系统',
 };
 
 class NotificationsPage extends StatefulWidget {
@@ -93,14 +94,13 @@ class NotificationsPageState extends State<NotificationsPage>
                 children: [
                   Text('未读',
                       style: TextStyle(
-                          color: palette.primary,
-                          fontWeight: FontWeight.w800)),
+                          color: palette.primary, fontWeight: FontWeight.w800)),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '赞 ${counts.like} · 评论 ${counts.comment} · 提及 ${counts.mention} · 系统 ${counts.system}',
-                      style: const TextStyle(
-                          color: Colors.blueGrey, fontSize: 13),
+                      style: TextStyle(
+                          color: AppPalette.of(context).muted, fontSize: 13),
                     ),
                   ),
                 ],
@@ -111,7 +111,7 @@ class NotificationsPageState extends State<NotificationsPage>
         TabBar(
           controller: _notifyTabs,
           labelColor: palette.primary,
-          unselectedLabelColor: Colors.blueGrey,
+          unselectedLabelColor: AppPalette.of(context).muted,
           tabs: _notifyTypes.entries
               .map((entry) => Tab(text: entry.value))
               .toList(growable: false),
@@ -120,6 +120,10 @@ class NotificationsPageState extends State<NotificationsPage>
           child: TabBarView(
             controller: _notifyTabs,
             children: _notifyTypes.entries.map((entry) {
+              // 系统通知走独立的 /v1/notify/site 接口，卡片样式也不同。
+              if (entry.key == 4) {
+                return _SystemNotifyTab(controller: widget.controller);
+              }
               return _NotifyTab(
                 controller: widget.controller,
                 type: entry.key,
@@ -184,7 +188,7 @@ class _NotifyTabState extends State<_NotifyTab> {
                   children: [
                     Text('加载失败：${snapshot.error}',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.blueGrey)),
+                        style: TextStyle(color: AppPalette.of(context).muted)),
                     const SizedBox(height: 10),
                     TextButton.icon(
                         onPressed: _reload,
@@ -220,20 +224,21 @@ class _NotifyTabState extends State<_NotifyTab> {
 }
 
 class _NotifyEmpty extends StatelessWidget {
-  const _NotifyEmpty({required this.onRetry});
+  const _NotifyEmpty({required this.onRetry, this.message = '暂无此类通知'});
 
   final VoidCallback onRetry;
+  final String message;
 
   @override
   Widget build(BuildContext context) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.notifications_off_outlined,
-                color: Colors.blueGrey, size: 42),
+            Icon(Icons.notifications_off_outlined,
+                color: AppPalette.of(context).muted, size: 42),
             const SizedBox(height: 10),
-            const Text('暂无此类通知',
-                style: TextStyle(color: Colors.blueGrey)),
+            Text(message,
+                style: TextStyle(color: AppPalette.of(context).muted)),
             const SizedBox(height: 6),
             TextButton.icon(
                 onPressed: onRetry,
@@ -242,6 +247,140 @@ class _NotifyEmpty extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// 系统通知（站点公告等）：独立接口 `/v1/notify/site`，
+/// 卡片只展示系统图标、正文与时间，无发送者、不跳转原内容。
+class _SystemNotifyTab extends StatefulWidget {
+  const _SystemNotifyTab({required this.controller});
+
+  final AppController controller;
+
+  @override
+  State<_SystemNotifyTab> createState() => _SystemNotifyTabState();
+}
+
+class _SystemNotifyTabState extends State<_SystemNotifyTab> {
+  late Future<List<NotifyItem>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.controller.siteNotifications();
+  }
+
+  Future<void> _reload() async {
+    final next = widget.controller.siteNotifications();
+    setState(() => _future = next);
+    await next;
+    // 拉取系统通知列表后服务端视为已读，同步刷新未读与小红点。
+    widget.controller.refreshUnreadCounts();
+  }
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<List<NotifyItem>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('加载失败：${snapshot.error}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppPalette.of(context).muted)),
+                    const SizedBox(height: 10),
+                    TextButton.icon(
+                        onPressed: _reload,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('重试')),
+                  ],
+                ),
+              ),
+            );
+          }
+          final items = snapshot.data ?? const <NotifyItem>[];
+          if (items.isEmpty) {
+            return _NotifyEmpty(onRetry: _reload, message: '暂无系统通知');
+          }
+          return RefreshIndicator(
+            color: AppPalette.of(context).primary,
+            onRefresh: _reload,
+            child: ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+              itemCount: items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) =>
+                  _SystemNotifyCard(item: items[index]),
+            ),
+          );
+        },
+      );
+}
+
+class _SystemNotifyCard extends StatelessWidget {
+  const _SystemNotifyCard({required this.item});
+
+  final NotifyItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: palette.primary.withOpacity(.12),
+              foregroundColor: palette.primary,
+              child: const Icon(Icons.campaign_outlined, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text('系统通知',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: AppPalette.of(context).muted,
+                                fontWeight: FontWeight.w800)),
+                      ),
+                      if (item.createdAt != null)
+                        Text(_notifyTime(item.createdAt!),
+                            style: TextStyle(
+                                color: AppPalette.of(context).muted,
+                                fontSize: 11)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    item.text.isEmpty ? '（空通知）' : item.text,
+                    style: TextStyle(
+                        color: AppPalette.of(context).muted, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _NotifyCard extends StatefulWidget {
@@ -429,12 +568,11 @@ class _NotifyCardState extends State<_NotifyCard> {
                   return CircleAvatar(
                     radius: 20,
                     backgroundColor: palette.primary.withOpacity(.12),
-                    foregroundImage:
-                        (item.senderAvatar.isNotEmpty
-                                ? NetworkImage(item.senderAvatar)
-                                : (profile?.avatar.isEmpty ?? true)
-                                    ? null
-                                    : NetworkImage(profile!.avatar)),
+                    foregroundImage: (item.senderAvatar.isNotEmpty
+                        ? NetworkImage(item.senderAvatar)
+                        : (profile?.avatar.isEmpty ?? true)
+                            ? null
+                            : NetworkImage(profile!.avatar)),
                     foregroundColor: palette.primary,
                     child: Text(
                       name.isNotEmpty
@@ -477,8 +615,8 @@ class _NotifyCardState extends State<_NotifyCard> {
                                         : name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        color: Colors.blueGrey,
+                                    style: TextStyle(
+                                        color: AppPalette.of(context).muted,
                                         fontWeight: FontWeight.w800),
                                   );
                                 },
@@ -487,15 +625,16 @@ class _NotifyCardState extends State<_NotifyCard> {
                           ),
                           if (item.createdAt != null)
                             Text(_notifyTime(item.createdAt!),
-                                style: const TextStyle(
-                                    color: Colors.blueGrey, fontSize: 11)),
+                                style: TextStyle(
+                                    color: AppPalette.of(context).muted,
+                                    fontSize: 11)),
                         ],
                       ),
                       const SizedBox(height: 6),
                       Text(
                         item.text.isEmpty ? '（空通知）' : item.text,
-                        style: const TextStyle(
-                            color: Colors.blueGrey, height: 1.4),
+                        style: TextStyle(
+                            color: AppPalette.of(context).muted, height: 1.4),
                       ),
                       if (_openingReference) ...[
                         const SizedBox(height: 6),
@@ -510,24 +649,22 @@ class _NotifyCardState extends State<_NotifyCard> {
                           children: [
                             Icon(Icons.open_in_new_rounded,
                                 size: 13,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .primary),
+                                color: Theme.of(context).colorScheme.primary),
                             const SizedBox(width: 3),
                             Text('查看原内容',
                                 style: TextStyle(
                                     fontSize: 11.5,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primary)),
+                                    color:
+                                        Theme.of(context).colorScheme.primary)),
                           ],
                         ),
                       ],
                       if (item.commentId != null) ...[
                         const SizedBox(height: 4),
                         Text('评论 ID ${item.commentId}',
-                            style: const TextStyle(
-                                color: Colors.blueGrey, fontSize: 11.5)),
+                            style: TextStyle(
+                                color: AppPalette.of(context).muted,
+                                fontSize: 11.5)),
                       ],
                     ],
                   ),

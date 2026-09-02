@@ -82,9 +82,10 @@ class DownloadTaskCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          _Tag(label: task.qualityLabel.isEmpty
-                              ? task.quality
-                              : task.qualityLabel),
+                          _Tag(
+                              label: task.qualityLabel.isEmpty
+                                  ? task.quality
+                                  : task.qualityLabel),
                           const SizedBox(width: 6),
                           _Tag(label: '${task.totalPartCount} 个分P'),
                           const SizedBox(width: 6),
@@ -128,9 +129,7 @@ class DownloadTaskCard extends StatelessWidget {
             if (status == DownloadStatus.failed) ...[
               const SizedBox(height: 8),
               Text(
-                task.errorMessage.isEmpty
-                    ? '下载失败，请重试'
-                    : task.errorMessage,
+                task.errorMessage.isEmpty ? '下载失败，请重试' : task.errorMessage,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(

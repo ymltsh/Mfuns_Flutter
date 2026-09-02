@@ -945,8 +945,8 @@ class NotifyItem {
       senderName: '${sender['name'] ?? sender['username'] ?? ''}',
       senderAvatar: _coverUrl(sender['avatar'] ?? sender['face']),
       createdAt: _asDateTime(json['created_at'] ?? json['time']),
-      text: _quillToText(
-          '${params['reply_text'] ?? params['text'] ?? params['content'] ?? ''}'),
+      text: _notifyBodyText(
+          '${params['reply_text'] ?? params['text'] ?? params['content'] ?? json['content'] ?? json['text'] ?? json['title'] ?? ''}'),
       commentId: _asInt(params['comment_id']),
       areaId: _asInt(params['area_id'] ?? json['area_id']),
       resourceId: _asInt(params['resource_id'] ??
@@ -1847,6 +1847,14 @@ class HomeRepository {
     return _toNotifyItems(response.data);
   }
 
+  /// 系统通知（站点公告等）走独立的 `/v1/notify/site` 接口，
+  /// `html=1` 时正文为 HTML，解析时统一转为纯文本。
+  Future<List<NotifyItem>> getSiteNotifications({int page = 1}) async {
+    final response = await _client
+        .get('/v1/notify/site', query: {'page': page, 'html': 1});
+    return _toNotifyItems(response.data);
+  }
+
   Future<List<DanmakuItem>> getDanmaku(int videoId, int part) async {
     final response = await _client.get(
       '/v1/danmaku/get_normal',
@@ -2071,7 +2079,10 @@ class HomeRepository {
   }
 
   List<NotifyItem> _toNotifyItems(Object? data) {
-    final rawList = data is List ? data : _asMap(data)['list'];
+    final root = _asMap(data);
+    final rawList = data is List
+        ? data
+        : root['list'] ?? root['items'] ?? root['data'] ?? root['notifications'];
     if (rawList is! List) return const [];
     return rawList
         .whereType<Map<String, dynamic>>()
@@ -2351,5 +2362,15 @@ String _quillToText(String raw) {
   } on FormatException {
     // Fall back to the raw text below.
   }
+  return value;
+}
+
+/// 通知正文统一转纯文本：Quill JSON 走 [_quillToText]，
+/// HTML（`html=1` 的系统通知）走 [_htmlToText]，其余原样返回。
+String _notifyBodyText(String raw) {
+  final value = raw.trim();
+  if (value.isEmpty) return '';
+  if (value.startsWith('{')) return _quillToText(value);
+  if (value.contains('<')) return _htmlToText(value);
   return value;
 }

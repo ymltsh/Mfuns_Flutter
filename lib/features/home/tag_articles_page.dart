@@ -5,9 +5,6 @@ import '../../core/theme/app_theme.dart';
 import '../video/content_detail_page.dart';
 import 'home_repository.dart';
 
-const _ink = Color(0xff3a3a45);
-const _muted = Color(0xff8a8a94);
-
 AppPalette _palette(BuildContext context) => AppPalette.of(context);
 
 /// 标签文章列表页：展示 `GET /v1/tag/article_list?tag=xxx` 返回的文章。
@@ -55,7 +52,9 @@ class _TagArticlesPageState extends State<TagArticlesPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text('${snapshot.error}',
-                        style: const TextStyle(color: _muted, fontSize: 12.5)),
+                        style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontSize: 12.5)),
                     TextButton(onPressed: _reload, child: const Text('重试')),
                   ],
                 ),
@@ -63,9 +62,10 @@ class _TagArticlesPageState extends State<TagArticlesPage> {
             }
             final items = snapshot.data ?? const <ContentPreview>[];
             if (items.isEmpty) {
-              return const Center(
+              return Center(
                 child: Text('这个标签下还没有文章',
-                    style: TextStyle(color: _muted, fontSize: 13)),
+                    style: TextStyle(
+                        color: AppPalette.of(context).muted, fontSize: 13)),
               );
             }
             return RefreshIndicator(
@@ -121,14 +121,17 @@ class _TagArticleCard extends StatelessWidget {
                         Text(item.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: _ink, fontWeight: FontWeight.w700)),
+                            style: TextStyle(
+                                color: AppPalette.of(context).ink,
+                                fontWeight: FontWeight.w700)),
                         const Spacer(),
                         Text(
                           '${item.author.isEmpty ? 'Mfuns 用户' : item.author} · ${item.likes} 赞 · ${item.comments} 评论 · ${item.views} 浏览',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: _muted, fontSize: 11.5),
+                          style: TextStyle(
+                              color: AppPalette.of(context).muted,
+                              fontSize: 11.5),
                         ),
                       ],
                     ),
@@ -161,8 +164,7 @@ class _Cover extends StatelessWidget {
               top: 4,
               right: 4,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
                     color: Colors.black.withOpacity(.48),
                     borderRadius: BorderRadius.circular(4)),

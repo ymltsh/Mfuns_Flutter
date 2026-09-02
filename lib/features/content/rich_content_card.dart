@@ -38,8 +38,7 @@ class RichContentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final markdown = normalizeRichContent(source);
     final colors = Theme.of(context).colorScheme;
-    final styleSheet =
-        MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+    final styleSheet = MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
       p: Theme.of(context).textTheme.bodyLarge?.copyWith(
             height: 1.7,
             color: colors.onSurface,
@@ -287,9 +286,8 @@ class _CopyCodeButtonState extends State<_CopyCodeButton> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = _copied
-        ? const Color(0xFF34C759)
-        : theme.colorScheme.onSurfaceVariant;
+    final color =
+        _copied ? const Color(0xFF34C759) : theme.colorScheme.onSurfaceVariant;
     return Material(
       color: theme.colorScheme.surface.withOpacity(.92),
       borderRadius: BorderRadius.circular(8),
@@ -323,4 +321,3 @@ class _CopyCodeButtonState extends State<_CopyCodeButton> {
     );
   }
 }
-

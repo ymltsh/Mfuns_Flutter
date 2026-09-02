@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../theme/app_theme.dart';
 import '../../features/home/home_repository.dart';
 import 'sticker_image.dart';
 
@@ -16,8 +17,7 @@ final _linkPattern = RegExp(
 /// 裸 MV 号（如 mv60751），作为 Mfuns 视频短链识别。
 final _mvPattern = RegExp(r'(?<![A-Za-z0-9])mv\d+', caseSensitive: false);
 
-final _trailingPunctuation =
-    RegExp(r"[)\]}>.,;:!?，。！？；：、'」』）】]+$");
+final _trailingPunctuation = RegExp(r"[)\]}>.,;:!?，。！？；：、'」』）】]+$");
 
 /// 文本中的一个可点击片段：URL 或 MV 号。
 class _LinkMatch {
@@ -88,7 +88,7 @@ class ContentSpans extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseStyle = textStyle ??
-        const TextStyle(color: Colors.blueGrey, height: 1.4);
+        TextStyle(color: AppPalette.of(context).muted, height: 1.4);
     final mentionStyle = TextStyle(
       color: baseStyle.color == Colors.white
           ? Colors.white
@@ -105,8 +105,8 @@ class ContentSpans extends StatelessWidget {
           if (span.isSticker)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 1),
-              child: StickerImage(
-                  stickerKey: span.stickerKey, size: stickerSize),
+              child:
+                  StickerImage(stickerKey: span.stickerKey, size: stickerSize),
             )
           else if (span.isMention)
             Padding(
@@ -129,7 +129,8 @@ class ContentSpans extends StatelessWidget {
     );
   }
 
-  List<Widget> _textSegments(String text, {
+  List<Widget> _textSegments(
+    String text, {
     required TextStyle baseStyle,
     required TextStyle linkStyle,
   }) {
@@ -138,8 +139,8 @@ class ContentSpans extends StatelessWidget {
     var cursor = 0;
     for (final match in _findLinks(text)) {
       if (match.start > cursor) {
-        segments.add(Text(text.substring(cursor, match.start),
-            style: baseStyle));
+        segments
+            .add(Text(text.substring(cursor, match.start), style: baseStyle));
       }
       final raw = match.raw;
       final trimmed = _trimTrailingPunctuation(raw);

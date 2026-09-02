@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/download/download_manager.dart';
 import '../../core/download/download_policy.dart';
+import '../../core/theme/app_theme.dart';
 import '../download/download_controller.dart';
 import '../download/widgets/download_progress.dart';
 
@@ -101,23 +102,22 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                 children: [
                   SwitchListTile(
                     value: policy?.wifiOnly ?? true,
-                    title: const Text('仅 Wi-Fi 下载',
+                    title: Text('仅 Wi-Fi 下载',
                         style: TextStyle(
-                            color: Colors.blueGrey,
+                            color: AppPalette.of(context).muted,
                             fontWeight: FontWeight.w700)),
-                    subtitle: const Text(
-                        '开启后移动网络下自动暂停下载，新任务需手动确认',
+                    subtitle: Text('开启后移动网络下自动暂停下载，新任务需手动确认',
                         style: TextStyle(
-                            color: Colors.blueGrey, fontSize: 12)),
+                            color: AppPalette.of(context).muted, fontSize: 12)),
                     secondary: CircleAvatar(
                       backgroundColor: palette.primary.withOpacity(.11),
                       foregroundColor: palette.primary,
                       child: const Icon(Icons.wifi_rounded, size: 20),
                     ),
                     onChanged: _loaded
-                        ? (value) => _updatePolicy((policy ??
-                                DownloadPolicy.defaults)
-                            .copyWith(wifiOnly: value))
+                        ? (value) => _updatePolicy(
+                            (policy ?? DownloadPolicy.defaults)
+                                .copyWith(wifiOnly: value))
                         : null,
                   ),
                   const Divider(height: 1, indent: 56),
@@ -125,20 +125,19 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                     leading: CircleAvatar(
                       backgroundColor: palette.primary.withOpacity(.11),
                       foregroundColor: palette.primary,
-                      child:
-                          const Icon(Icons.speed_rounded, size: 20),
+                      child: const Icon(Icons.speed_rounded, size: 20),
                     ),
-                    title: const Text('最大并发下载数',
+                    title: Text('最大并发下载数',
                         style: TextStyle(
-                            color: Colors.blueGrey,
+                            color: AppPalette.of(context).muted,
                             fontWeight: FontWeight.w700)),
                     subtitle: Text(
                       '同时下载 ${policy?.maxConcurrent ?? 2} 个任务',
-                      style: const TextStyle(
-                          color: Colors.blueGrey, fontSize: 12),
+                      style: TextStyle(
+                          color: AppPalette.of(context).muted, fontSize: 12),
                     ),
-                    trailing: const Icon(Icons.chevron_right_rounded,
-                        color: Colors.blueGrey),
+                    trailing: Icon(Icons.chevron_right_rounded,
+                        color: AppPalette.of(context).muted),
                     onTap: _loaded ? _selectMaxConcurrent : null,
                   ),
                 ],
@@ -151,22 +150,22 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('下载空间',
+                    Text('下载空间',
                         style: TextStyle(
-                            color: Colors.blueGrey,
+                            color: AppPalette.of(context).muted,
                             fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
                     Text(
                       '已下载 ${_controller!.completedCount} 个视频 · '
                       '占用 ${formatBytes(_controller!.usedSpaceBytes)}',
-                      style: const TextStyle(
-                          color: Colors.blueGrey, fontSize: 13),
+                      style: TextStyle(
+                          color: AppPalette.of(context).muted, fontSize: 13),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
+                    Text(
                       '缓存文件保存在 App 私有目录，删除下载任务会同步清理文件。',
                       style: TextStyle(
-                          color: Colors.blueGrey,
+                          color: AppPalette.of(context).muted,
                           fontSize: 12,
                           height: 1.5),
                     ),

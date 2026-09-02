@@ -224,4 +224,17 @@ void main() {
     expect(item.senderAvatar, 'https://cdn2.mfuns.net/static/notify.png');
     expect(item.text, '回复了你');
   });
+
+  test('parses system notification content (HTML from notify/site)', () {
+    final item = NotifyItem.fromJson({
+      'id': 1,
+      'title': '系统公告',
+      'content': '<p>服务器将于 <b>明日</b> 维护，敬请谅解。</p>',
+      'created_at': 1720000000,
+    });
+    expect(item.senderUserId, 0);
+    expect(item.text, '服务器将于 明日 维护，敬请谅解。');
+    expect(item.resourceId, isNull);
+    expect(item.createdAt, isNotNull);
+  });
 }

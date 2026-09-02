@@ -46,13 +46,13 @@ class _SubmissionsPageState extends State<SubmissionsPage> {
   void _openEditor() {
     Navigator.of(context)
         .push<bool>(
-          MaterialPageRoute<bool>(
-            builder: (_) => SubmissionEditorPage(
-              controller: widget.controller,
-              type: _tab,
-            ),
-          ),
-        )
+      MaterialPageRoute<bool>(
+        builder: (_) => SubmissionEditorPage(
+          controller: widget.controller,
+          type: _tab,
+        ),
+      ),
+    )
         .then((changed) {
       if (changed == true) _reload();
     });
@@ -79,82 +79,83 @@ class _SubmissionsPageState extends State<SubmissionsPage> {
           children: [
             TabBar(
               labelColor: palette.primary,
-              unselectedLabelColor: Colors.blueGrey,
+              unselectedLabelColor: AppPalette.of(context).muted,
               tabs: const [
                 Tab(text: '文章'),
                 Tab(text: '视频'),
               ],
               onTap: _selectTab,
             ),
-          Expanded(
-            child: FutureBuilder<List<SubmissionItem>>(
-              future: _future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
+            Expanded(
+              child: FutureBuilder<List<SubmissionItem>>(
+                future: _future,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('加载失败：${snapshot.error}',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: AppPalette.of(context).muted)),
+                            const SizedBox(height: 10),
+                            TextButton.icon(
+                                onPressed: _reload,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('重试')),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  final items = snapshot.data ?? const <SubmissionItem>[];
+                  if (items.isEmpty) {
+                    return Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('加载失败：${snapshot.error}',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.blueGrey)),
+                          Icon(Icons.edit_note_outlined,
+                              color: AppPalette.of(context).muted, size: 44),
                           const SizedBox(height: 10),
+                          Text('还没有投稿',
+                              style: TextStyle(
+                                  color: AppPalette.of(context).muted)),
+                          const SizedBox(height: 6),
                           TextButton.icon(
-                              onPressed: _reload,
-                              icon: const Icon(Icons.refresh_rounded),
-                              label: const Text('重试')),
+                              onPressed: _openEditor,
+                              icon: const Icon(Icons.add_rounded),
+                              label: const Text('发布第一篇投稿')),
                         ],
+                      ),
+                    );
+                  }
+                  return RefreshIndicator(
+                    color: palette.primary,
+                    onRefresh: _reload,
+                    child: ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) => _SubmissionCard(
+                        item: items[index],
+                        type: _tab,
+                        controller: widget.controller,
+                        onChanged: _reload,
                       ),
                     ),
                   );
-                }
-                final items =
-                    snapshot.data ?? const <SubmissionItem>[];
-                if (items.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.edit_note_outlined,
-                            color: Colors.blueGrey, size: 44),
-                        const SizedBox(height: 10),
-                        const Text('还没有投稿',
-                            style: TextStyle(color: Colors.blueGrey)),
-                        const SizedBox(height: 6),
-                        TextButton.icon(
-                            onPressed: _openEditor,
-                            icon: const Icon(Icons.add_rounded),
-                            label: const Text('发布第一篇投稿')),
-                      ],
-                    ),
-                  );
-                }
-                return RefreshIndicator(
-                  color: palette.primary,
-                  onRefresh: _reload,
-                  child: ListView.separated(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) => _SubmissionCard(
-                      item: items[index],
-                      type: _tab,
-                      controller: widget.controller,
-                      onChanged: _reload,
-                    ),
-                  ),
-                );
-              },
+                },
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -240,8 +241,8 @@ class _SubmissionCard extends StatelessWidget {
                     Text(item.title.isEmpty ? '未命名投稿' : item.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Colors.blueGrey,
+                        style: TextStyle(
+                            color: AppPalette.of(context).muted,
                             fontWeight: FontWeight.w700)),
                     const SizedBox(height: 6),
                     Row(
@@ -260,8 +261,9 @@ class _SubmissionCard extends StatelessWidget {
                         const SizedBox(width: 8),
                         if (item.createdAt != null)
                           Text(_submissionTime(item.createdAt!),
-                              style: const TextStyle(
-                                  color: Colors.blueGrey, fontSize: 11.5)),
+                              style: TextStyle(
+                                  color: AppPalette.of(context).muted,
+                                  fontSize: 11.5)),
                       ],
                     ),
                   ],
@@ -298,7 +300,9 @@ class _SubmissionCard extends StatelessWidget {
 
 String _submissionTime(DateTime value) {
   final now = DateTime.now();
-  if (value.year == now.year && value.month == now.month && value.day == now.day) {
+  if (value.year == now.year &&
+      value.month == now.month &&
+      value.day == now.day) {
     return '今天 ${_twoDigits(value.hour)}:${_twoDigits(value.minute)}';
   }
   return '${value.year}-${_twoDigits(value.month)}-${_twoDigits(value.day)}';

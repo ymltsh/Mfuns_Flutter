@@ -14,7 +14,14 @@ class UserPreferences {
   static const _keyBackgroundPlay = 'pref.background_play';
   static const _keyArticleScrollbar = 'pref.article_scrollbar';
   static const _keyShowDislike = 'pref.player_show_dislike';
+  static const _keyLandscapeSideRatio = 'pref.landscape_side_ratio';
   static const _keyLatestMarkedIds = 'pref.latest_marked_ids';
+
+  /// 横屏播放页右侧简介/评论栏宽度占整屏宽的比例，可选 1/2、1/3、1/4、1/5。
+  static const landscapeSideRatios = [1 / 2, 1 / 3, 1 / 4, 1 / 5];
+
+  /// 默认比例：右侧简介/评论栏占整屏 1/3。
+  static const defaultLandscapeSideRatio = 1 / 3;
 
   /// 自定义 GitHub 加速地址（用于更新清单与下载），默认官方加速站。
   static Future<String> loadAcceleratorBase() async {
@@ -182,6 +189,24 @@ class UserPreferences {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_keyShowDislike, enabled);
+    } catch (_) {}
+  }
+
+  /// 横屏播放页右侧简介/评论栏宽度占整屏宽的比例，默认 1/3。
+  static Future<double> loadLandscapeSideRatio() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getDouble(_keyLandscapeSideRatio) ??
+          defaultLandscapeSideRatio;
+    } catch (_) {
+      return defaultLandscapeSideRatio;
+    }
+  }
+
+  static Future<void> saveLandscapeSideRatio(double value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_keyLandscapeSideRatio, value);
     } catch (_) {}
   }
 

@@ -466,6 +466,36 @@ void main() {
       expect(coordinator.phase, MfunsPlaybackPhase.foregroundPaused);
     });
 
+    test('暂停后熄屏再亮屏，状态回切且可再次播放', () async {
+      // 场景：播放 → 手动暂停 → 熄屏 → 亮屏 → 再点播放。
+      final a = FakeVideoHandle('a')..playing = true;
+      await coordinator.bindHandle(a, url: 'https://example.com/v.mp4');
+      await coordinator.requestPlay();
+      expect(a.playing, isTrue);
+
+      // 手动暂停（前台）。
+      await coordinator.requestPause();
+      expect(a.playing, isFalse);
+      expect(coordinator.phase, MfunsPlaybackPhase.foregroundPaused);
+
+      // 熄屏：视频本就在暂停，不 handoff，进入 backgroundPaused。
+      await coordinator.onAppBackgrounded(backgroundPlayEnabled: true);
+      expect(bg.hasSource, isFalse);
+      expect(coordinator.phase, MfunsPlaybackPhase.backgroundPaused);
+      expect(coordinator.isBackgroundSourceActive, isFalse);
+
+      // 亮屏：状态必须回切到 foregroundPaused，否则 requestPlay 会被吞掉。
+      await coordinator.onAppForegrounded();
+      expect(coordinator.phase, MfunsPlaybackPhase.foregroundPaused);
+      expect(coordinator.isBackgroundSourceActive, isFalse);
+      expect(a.playing, isFalse);
+
+      // 再点播放：必须真正调用视频播放器。
+      await coordinator.requestPlay();
+      expect(a.playing, isTrue);
+      expect(coordinator.phase, MfunsPlaybackPhase.foregroundPlaying);
+    });
+
     test('回前台 seek 失败时重试直到成功', () async {
       final a = FakeVideoHandle('a')
         ..playing = true

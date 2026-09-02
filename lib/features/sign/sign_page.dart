@@ -5,9 +5,6 @@ import '../../core/theme/app_theme.dart';
 import '../home/home_repository.dart';
 import '../user/user_profile_page.dart';
 
-const _ink = Color(0xff3a3a45);
-const _muted = Color(0xff8a8a94);
-
 AppPalette _palette(BuildContext context) => AppPalette.of(context);
 
 class SignPage extends StatefulWidget {
@@ -89,8 +86,7 @@ class _SignPageState extends State<SignPage> {
                 MediaQuery.orientationOf(context) == Orientation.landscape;
             final status = _SignStatusCard(
               signInfo: signInfo,
-              signedToday:
-                  signInfo?.signedDays.contains(today.day) ?? false,
+              signedToday: signInfo?.signedDays.contains(today.day) ?? false,
               isSigning: widget.controller.isSigning,
               loading: widget.controller.isLoadingSignInfo,
               error: widget.controller.signInfoError,
@@ -114,8 +110,7 @@ class _SignPageState extends State<SignPage> {
             // 横屏双栏布局：左侧签到操作，右侧签到日历（自适应列宽）。
             if (isLandscape) {
               final panelWidth =
-                  (MediaQuery.sizeOf(context).width * 0.42)
-                      .clamp(300.0, 460.0);
+                  (MediaQuery.sizeOf(context).width * 0.42).clamp(300.0, 460.0);
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -177,54 +172,58 @@ class _SignStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                _SignStat(label: '本月签到', value: signInfo?.monthTimes),
-                const SizedBox(width: 10),
-                Container(width: 1, height: 30, color: const Color(0xffe2e2ea)),
-                const SizedBox(width: 10),
-                _SignStat(label: '累计签到', value: signInfo?.allTimes),
-                const Spacer(),
-                FilledButton.icon(
-                  onPressed:
-                      signedToday || isSigning || loading ? null : onSign,
-                  icon: isSigning
-                      ? const SizedBox(
-                          width: 15,
-                          height: 15,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white),
-                        )
-                      : Icon(signedToday
-                          ? Icons.check_rounded
-                          : Icons.edit_calendar_rounded),
-                  label: Text(signedToday ? '今日已签到' : '立即签到'),
-                ),
-              ],
-            ),
-            if (error != null) ...[
-              const SizedBox(height: 8),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          child: Column(
+            children: [
               Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded,
-                      size: 15, color: _muted),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(error!,
-                        style: const TextStyle(
-                            color: _muted, fontSize: 12.5)),
+                  _SignStat(label: '本月签到', value: signInfo?.monthTimes),
+                  const SizedBox(width: 10),
+                  Container(
+                      width: 1,
+                      height: 30,
+                      color: AppPalette.of(context).divider),
+                  const SizedBox(width: 10),
+                  _SignStat(label: '累计签到', value: signInfo?.allTimes),
+                  const Spacer(),
+                  FilledButton.icon(
+                    onPressed:
+                        signedToday || isSigning || loading ? null : onSign,
+                    icon: isSigning
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : Icon(signedToday
+                            ? Icons.check_rounded
+                            : Icons.edit_calendar_rounded),
+                    label: Text(signedToday ? '今日已签到' : '立即签到'),
                   ),
                 ],
               ),
+              if (error != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.error_outline_rounded,
+                        size: 15, color: AppPalette.of(context).muted),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(error!,
+                          style: TextStyle(
+                              color: AppPalette.of(context).muted,
+                              fontSize: 12.5)),
+                    ),
+                  ],
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-      ),
-    );
+      );
 }
 
 class _SignStat extends StatelessWidget {
@@ -237,11 +236,14 @@ class _SignStat extends StatelessWidget {
   Widget build(BuildContext context) => Column(
         children: [
           Text('${value ?? '—'}',
-              style: const TextStyle(
-                  color: _ink, fontSize: 19, fontWeight: FontWeight.w900)),
+              style: TextStyle(
+                  color: AppPalette.of(context).ink,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900)),
           const SizedBox(height: 2),
           Text(label,
-              style: const TextStyle(color: _muted, fontSize: 11.5)),
+              style: TextStyle(
+                  color: AppPalette.of(context).muted, fontSize: 11.5)),
         ],
       );
 }
@@ -273,17 +275,16 @@ class _SignRankCard extends StatelessWidget {
                 const Icon(Icons.emoji_events_rounded,
                     size: 17, color: Color(0xFFE6A23C)),
                 const SizedBox(width: 6),
-                const Text('今日签到排行',
+                Text('今日签到排行',
                     style: TextStyle(
-                        color: _ink,
+                        color: AppPalette.of(context).ink,
                         fontSize: 14.5,
                         fontWeight: FontWeight.w800)),
                 const Spacer(),
                 TextButton(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) =>
-                          SignRankPage(controller: controller),
+                      builder: (_) => SignRankPage(controller: controller),
                     ),
                   ),
                   child: const Text('完整排行'),
@@ -294,22 +295,25 @@ class _SignRankCard extends StatelessWidget {
           if (loading && items.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 22),
-              child: Center(
-                  child: CircularProgressIndicator(strokeWidth: 2.4)),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
             )
           else if (error != null && items.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 22),
               child: Center(
                   child: Text(error!,
-                      style: const TextStyle(color: _muted, fontSize: 12.5))),
+                      style: TextStyle(
+                          color: AppPalette.of(context).muted,
+                          fontSize: 12.5))),
             )
           else if (items.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 22),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 22),
               child: Center(
                   child: Text('今天还没有人签到',
-                      style: TextStyle(color: _muted, fontSize: 12.5))),
+                      style: TextStyle(
+                          color: AppPalette.of(context).muted,
+                          fontSize: 12.5))),
             )
           else
             for (final (index, entry) in top.indexed) ...[
@@ -355,14 +359,15 @@ class _SignCalendar extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Text('本月签到日历',
+                Text('本月签到日历',
                     style: TextStyle(
-                        color: _ink,
+                        color: AppPalette.of(context).ink,
                         fontSize: 14.5,
                         fontWeight: FontWeight.w800)),
                 const Spacer(),
                 Text('${month.year} 年 ${month.month} 月',
-                    style: const TextStyle(color: _muted, fontSize: 12.5)),
+                    style: TextStyle(
+                        color: AppPalette.of(context).muted, fontSize: 12.5)),
               ],
             ),
             const SizedBox(height: 10),
@@ -371,8 +376,9 @@ class _SignCalendar extends StatelessWidget {
                   .map((label) => Expanded(
                         child: Center(
                           child: Text(label,
-                              style: const TextStyle(
-                                  color: _muted, fontSize: 11)),
+                              style: TextStyle(
+                                  color: AppPalette.of(context).muted,
+                                  fontSize: 11)),
                         ),
                       ))
                   .toList(),
@@ -383,18 +389,18 @@ class _SignCalendar extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                for (var i = 1; i < firstWeekday; i++)
-                  const SizedBox.shrink(),
+                for (var i = 1; i < firstWeekday; i++) const SizedBox.shrink(),
                 for (var day = 1; day <= daysInMonth; day++)
                   _SignDayCell(
                     day: day,
                     signed: signedDays.contains(day),
                     isToday: todayDay == day,
                     inPast: isPastDay(day),
-                    onTap:
-                        signedDays.contains(day) || todayDay == day || !isPastDay(day)
-                            ? null
-                            : () => onSignAgain(day),
+                    onTap: signedDays.contains(day) ||
+                            todayDay == day ||
+                            !isPastDay(day)
+                        ? null
+                        : () => onSignAgain(day),
                   ),
               ],
             ),
@@ -441,7 +447,9 @@ class _SignDayCell extends StatelessWidget {
         ],
       );
     } else {
-      foreground = isToday ? palette.primary : _muted.withOpacity(.6);
+      foreground = isToday
+          ? palette.primary
+          : AppPalette.of(context).muted.withOpacity(.6);
       background = Colors.transparent;
       decoration = isToday
           ? BoxDecoration(
@@ -489,17 +497,18 @@ class _SignAwardsCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('累计签到奖励',
+            Text('累计签到奖励',
                 style: TextStyle(
-                    color: _ink,
+                    color: AppPalette.of(context).ink,
                     fontSize: 14.5,
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             if (entries.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Text('奖励配置暂未加载',
-                    style: TextStyle(color: _muted, fontSize: 12.5)),
+                    style: TextStyle(
+                        color: AppPalette.of(context).muted, fontSize: 12.5)),
               )
             else
               for (final entry in entries)
@@ -524,8 +533,9 @@ class _SignAwardsCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           entry.value.map((award) => award.desc).join(' + '),
-                          style: const TextStyle(
-                              color: _ink, fontSize: 12.5),
+                          style: TextStyle(
+                              color: AppPalette.of(context).ink,
+                              fontSize: 12.5),
                         ),
                       ),
                       if (allTimes >= entry.key)
@@ -574,15 +584,15 @@ class _SignRankPageState extends State<SignRankPage> {
                   padding: const EdgeInsets.all(28),
                   child: Text(error,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: _muted)),
+                      style: TextStyle(color: AppPalette.of(context).muted)),
                 ),
               );
             }
             final items = widget.controller.signRank;
             if (items.isEmpty) {
-              return const Center(
+              return Center(
                 child: Text('今天还没有人签到',
-                    style: TextStyle(color: _muted)),
+                    style: TextStyle(color: AppPalette.of(context).muted)),
               );
             }
             final list = RefreshIndicator(
@@ -637,11 +647,11 @@ class _SignRankRow extends StatelessWidget {
       1 => const Color(0xFFE6A23C),
       2 => const Color(0xFF9AA0A8),
       3 => const Color(0xFFD29062),
-      _ => _muted,
+      _ => AppPalette.of(context).muted,
     };
     final nameColor = switch (entry.nameColor) {
       'red' => const Color(0xFFE04F4F),
-      _ => _ink,
+      _ => AppPalette.of(context).ink,
     };
     return ListTile(
       onTap: entry.userId == 0
@@ -655,46 +665,45 @@ class _SignRankRow extends StatelessWidget {
                 ),
               ));
             },
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 26,
-              child: Text('$rank',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: rankColor,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900)),
-            ),
-            const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: palette.primary.withOpacity(.12),
-              foregroundImage:
-                  entry.avatar.isEmpty ? null : NetworkImage(entry.avatar),
-              foregroundColor: palette.primary,
-              child: Text(entry.name.isEmpty ? 'U' : entry.name[0]),
-            ),
-          ],
-        ),
-        title: Text(entry.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                color: nameColor,
-                fontSize: 14,
-                fontWeight: FontWeight.w700)),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.calendar_today_rounded,
-                size: 13, color: _muted),
-            const SizedBox(width: 4),
-            Text('${entry.count} 天',
-                style: const TextStyle(color: _muted, fontSize: 12.5)),
-          ],
-        ),
-      );
+      leading: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 26,
+            child: Text('$rank',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: rankColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900)),
+          ),
+          const SizedBox(width: 8),
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: palette.primary.withOpacity(.12),
+            foregroundImage:
+                entry.avatar.isEmpty ? null : NetworkImage(entry.avatar),
+            foregroundColor: palette.primary,
+            child: Text(entry.name.isEmpty ? 'U' : entry.name[0]),
+          ),
+        ],
+      ),
+      title: Text(entry.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+              color: nameColor, fontSize: 14, fontWeight: FontWeight.w700)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.calendar_today_rounded,
+              size: 13, color: AppPalette.of(context).muted),
+          const SizedBox(width: 4),
+          Text('${entry.count} 天',
+              style: TextStyle(
+                  color: AppPalette.of(context).muted, fontSize: 12.5)),
+        ],
+      ),
+    );
   }
 }

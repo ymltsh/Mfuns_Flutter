@@ -65,7 +65,7 @@ void main() async {
       case LocalMessageNotifier.payloadMention:
         controller.openMessagesTab(subTab: 1, notifyTab: 2);
       case LocalMessageNotifier.payloadSystem:
-        controller.openMessagesTab(subTab: 1, notifyTab: 2);
+        controller.openMessagesTab(subTab: 1, notifyTab: 3);
       default:
         controller.openMessagesTab();
     }

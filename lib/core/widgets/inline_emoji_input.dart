@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../features/home/home_repository.dart';
+import '../theme/app_theme.dart';
 import 'emoji_picker_sheet.dart';
 
 /// Comment composer box.
@@ -94,8 +95,7 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
       _isReplacing = true;
       _mentionDebounce?.cancel();
       final marker = '[@${user.id}:${user.name}]';
-      _input.text =
-          _input.text.replaceRange(match.start, match.end, marker);
+      _input.text = _input.text.replaceRange(match.start, match.end, marker);
       _input.selection =
           TextSelection.collapsed(offset: match.start + marker.length);
       _isReplacing = false;
@@ -121,10 +121,9 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
     EmojiPickerSheet.show(context, (span) {
       if (!mounted) return;
       setState(() {
-        _input.text = _input.text +
-            (span.isSticker ? '[${span.stickerKey}]' : span.text);
-        _input.selection =
-            TextSelection.collapsed(offset: _input.text.length);
+        _input.text =
+            _input.text + (span.isSticker ? '[${span.stickerKey}]' : span.text);
+        _input.selection = TextSelection.collapsed(offset: _input.text.length);
       });
     });
   }
@@ -142,8 +141,7 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
       final selection = _input.selection;
       final start = selection.isValid ? selection.start : text.length;
       _input.text = text.replaceRange(start, selection.end, marker);
-      _input.selection =
-          TextSelection.collapsed(offset: start + marker.length);
+      _input.selection = TextSelection.collapsed(offset: start + marker.length);
       _isReplacing = false;
     });
   }
@@ -186,7 +184,7 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
         constraints: const BoxConstraints(minHeight: 48),
         padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppPalette.of(context).surface,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
@@ -230,10 +228,12 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
               minLines: 1,
               maxLines: 4,
               style: TextStyle(
-                  color: Colors.blueGrey, fontSize: widget.fontSize),
+                  color: AppPalette.of(context).muted,
+                  fontSize: widget.fontSize),
               decoration: InputDecoration(
-                hintText:
-                    _images.isEmpty && _input.text.isEmpty ? widget.hintText : '',
+                hintText: _images.isEmpty && _input.text.isEmpty
+                    ? widget.hintText
+                    : '',
                 isDense: true,
                 filled: false,
                 border: InputBorder.none,
@@ -275,8 +275,8 @@ class _EmbedThumb extends StatelessWidget {
                 child: Container(
                   width: 15,
                   height: 15,
-                  decoration: const BoxDecoration(
-                    color: Color(0xff9a9aa6),
+                  decoration: BoxDecoration(
+                    color: AppPalette.of(context).muted,
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.close_rounded,

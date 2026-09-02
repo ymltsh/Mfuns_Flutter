@@ -265,16 +265,16 @@ void main() {
       await tester.runAsync(() async => seedActiveTask());
       await tester.pumpWidget(MaterialApp(home: DownloadPage(controller: controller)));
       await tester.pump();
+      await tester.tap(find.text('下载中（1）'));
+      await tester.pumpAndSettle();
       expect(find.text('正在下载的视频'), findsOneWidget);
       expect(find.text('2 个分P'), findsOneWidget);
     });
 
-    testWidgets('已下载标签展示完成的任务', (tester) async {
+    testWidgets('默认进入已下载标签并展示完成的任务', (tester) async {
       await tester.runAsync(() async => seedCompletedTask());
       await tester.pumpWidget(MaterialApp(home: DownloadPage(controller: controller)));
       await tester.pump();
-      await tester.tap(find.text('已下载（1）'));
-      await tester.pumpAndSettle();
       expect(find.text('已下载的视频'), findsOneWidget);
       expect(find.text('播放'), findsOneWidget);
       expect(find.text('删除'), findsOneWidget);

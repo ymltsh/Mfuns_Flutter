@@ -10,9 +10,6 @@ import '../message/messages_page.dart';
 import '../video/content_detail_page.dart';
 import 'follow_list_page.dart';
 
-const _profileInk = Colors.blueGrey;
-const _profileMuted = Colors.blueGrey;
-
 AppPalette _palette(BuildContext context) => AppPalette.of(context);
 
 class UserProfilePage extends StatefulWidget {
@@ -95,13 +92,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
                     sliver: SliverAppBar(
                       pinned: true,
                       automaticallyImplyLeading: false,
-                      backgroundColor: Colors.white,
+                      backgroundColor: AppPalette.of(context).surface,
                       surfaceTintColor: Colors.transparent,
                       forceElevated: innerBoxIsScrolled,
                       toolbarHeight: 0,
                       bottom: TabBar(
                         labelColor: _palette(context).primary,
-                        unselectedLabelColor: _profileMuted,
+                        unselectedLabelColor: AppPalette.of(context).muted,
                         tabs: const [
                           Tab(text: '动态'),
                           Tab(text: '文章'),
@@ -270,8 +267,8 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                         Flexible(
                           child: Text(profile.name,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  color: _profileInk,
+                              style: TextStyle(
+                                  color: AppPalette.of(context).ink,
                                   fontSize: 20,
                                   fontWeight: FontWeight.w800)),
                         ),
@@ -291,17 +288,16 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                     ),
                     const SizedBox(height: 5),
                     Text('MF ${profile.id}',
-                        style: const TextStyle(
-                            color: _profileMuted, fontSize: 12)),
+                        style: TextStyle(
+                            color: AppPalette.of(context).muted, fontSize: 12)),
                     const SizedBox(height: 8),
                     Text(
-                      profile.bio == '暂无简介'
-                          ? '这个人很神秘，什么也没写。'
-                          : profile.bio,
+                      profile.bio == '暂无简介' ? '这个人很神秘，什么也没写。' : profile.bio,
                       textAlign: TextAlign.center,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: _profileInk, height: 1.35),
+                      style: TextStyle(
+                          color: AppPalette.of(context).ink, height: 1.35),
                     ),
                     const SizedBox(height: 13),
                     Row(
@@ -322,7 +318,8 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                     ),
                     const SizedBox(height: 13),
                     if (_isOwnProfile)
-                      const Text('我的主页', style: TextStyle(color: _profileMuted))
+                      Text('我的主页',
+                          style: TextStyle(color: AppPalette.of(context).muted))
                     else
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -344,8 +341,7 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                           const SizedBox(width: 10),
                           FilledButton.tonalIcon(
                             onPressed: _openMessage,
-                            icon: const Icon(
-                                Icons.chat_bubble_outline_rounded,
+                            icon: const Icon(Icons.chat_bubble_outline_rounded,
                                 size: 18),
                             label: const Text('私信'),
                           ),
@@ -377,12 +373,12 @@ class _ProfileAvatar extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 43,
-            backgroundColor: Colors.white,
+            backgroundColor: AppPalette.of(context).surface,
             child: CircleAvatar(
               radius: 39,
               foregroundImage:
                   profile.avatar.isEmpty ? null : NetworkImage(profile.avatar),
-              backgroundColor: const Color(0xffe8e9f6),
+              backgroundColor: AppPalette.of(context).chip,
               foregroundColor: _palette(context).primary,
               child: Text(
                   profile.name.isEmpty ? 'M' : profile.name.substring(0, 1),
@@ -436,8 +432,8 @@ class _UserFeedTabState extends State<_UserFeedTab> {
 
   Future<void> _load() async {
     try {
-      final page = await widget.controller
-          .userFeeds(userId: widget.userId, startId: -1);
+      final page =
+          await widget.controller.userFeeds(userId: widget.userId, startId: -1);
       if (!mounted) return;
       setState(() {
         _items = page;
@@ -463,8 +459,9 @@ class _UserFeedTabState extends State<_UserFeedTab> {
       if (!mounted) return;
       setState(() {
         final seen = _items!.map((item) => item.id).toSet();
-        final additions =
-            page.where((item) => !seen.contains(item.id)).toList(growable: false);
+        final additions = page
+            .where((item) => !seen.contains(item.id))
+            .toList(growable: false);
         _items = [..._items!, ...additions];
         _hasMore = page.isNotEmpty;
       });
@@ -503,8 +500,7 @@ class _UserFeedTabState extends State<_UserFeedTab> {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverOverlapInjector(
-              handle:
-                  NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
             ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
@@ -549,8 +545,8 @@ class _UserFeedCard extends StatelessWidget {
             final resource = item.resource;
             if (item.isAutoSync && resource != null) {
               Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) =>
-                      ContentDetailPage(controller: controller, preview: resource)));
+                  builder: (_) => ContentDetailPage(
+                      controller: controller, preview: resource)));
               return;
             }
             if (item.id <= 0) return;
@@ -570,19 +566,19 @@ class _UserFeedCard extends StatelessWidget {
                   Text(item.content,
                       maxLines: 4,
                       overflow: TextOverflow.ellipsis,
-                      style:
-                          const TextStyle(color: _profileInk, height: 1.4))
+                      style: TextStyle(
+                          color: AppPalette.of(context).ink, height: 1.4))
                 else
                   item.spans.isEmpty
                       ? Text(item.content,
-                          style: const TextStyle(
-                              color: _profileInk, height: 1.4))
+                          style: TextStyle(
+                              color: AppPalette.of(context).ink, height: 1.4))
                       : ContentSpans(
                           spans: item.spans,
                           onLinkTap: (url) =>
                               openContentLink(context, controller, url),
-                          textStyle: const TextStyle(
-                              color: _profileInk, height: 1.4)),
+                          textStyle: TextStyle(
+                              color: AppPalette.of(context).ink, height: 1.4)),
                 if (item.resource != null) ...[
                   const SizedBox(height: 10),
                   _ProfileResourceCard(
@@ -634,8 +630,9 @@ class _UserFeedCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                           '${item.likes} 赞 · ${item.comments} 评论 · ${_userTime(item.createdAt)}',
-                          style: const TextStyle(
-                              color: _profileMuted, fontSize: 12)),
+                          style: TextStyle(
+                              color: AppPalette.of(context).muted,
+                              fontSize: 12)),
                     ),
                   ],
                 ),
@@ -683,7 +680,7 @@ class _ProfileResourceCard extends StatelessWidget {
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: const Color(0xfff3f2f8),
+            color: AppPalette.of(context).chip,
             borderRadius: BorderRadius.circular(10),
           ),
           padding: const EdgeInsets.all(8),
@@ -695,10 +692,10 @@ class _ProfileResourceCard extends StatelessWidget {
                   width: 72,
                   height: 48,
                   child: item.cover.isEmpty
-                      ? const ColoredBox(
-                          color: Color(0xffe4e3ee),
+                      ? ColoredBox(
+                          color: AppPalette.of(context).placeholder,
                           child: Icon(Icons.image_outlined,
-                              size: 20, color: _profileMuted),
+                              size: 20, color: AppPalette.of(context).muted),
                         )
                       : Image.network(item.cover, fit: BoxFit.cover),
                 ),
@@ -711,8 +708,8 @@ class _ProfileResourceCard extends StatelessWidget {
                     Text(item.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: _profileInk,
+                        style: TextStyle(
+                            color: AppPalette.of(context).ink,
                             fontSize: 13,
                             fontWeight: FontWeight.w700)),
                     const SizedBox(height: 3),
@@ -721,8 +718,9 @@ class _ProfileResourceCard extends StatelessWidget {
                         _FeedTypeTag(isVideo: item.isVideo),
                         const SizedBox(width: 6),
                         Text('${item.likes} 赞 · ${item.views} 浏览',
-                            style: const TextStyle(
-                                color: _profileMuted, fontSize: 11)),
+                            style: TextStyle(
+                                color: AppPalette.of(context).muted,
+                                fontSize: 11)),
                       ],
                     ),
                   ],
@@ -799,8 +797,9 @@ class _UserContentTabState extends State<_UserContentTab> {
       if (!mounted) return;
       setState(() {
         final seen = _items!.map((item) => item.id).toSet();
-        final additions =
-            page.where((item) => !seen.contains(item.id)).toList(growable: false);
+        final additions = page
+            .where((item) => !seen.contains(item.id))
+            .toList(growable: false);
         _items = [..._items!, ...additions];
         _hasMore = page.isNotEmpty;
       });
@@ -839,8 +838,7 @@ class _UserContentTabState extends State<_UserContentTab> {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverOverlapInjector(
-              handle:
-                  NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+              handle: NestedScrollView.sliverOverlapAbsorberHandleFor(context),
             ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
@@ -895,11 +893,12 @@ class _ProfileListFooter extends StatelessWidget {
       );
     }
     if (!hasMore) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 14),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
         child: Center(
           child: Text('没有更多了',
-              style: TextStyle(color: _profileMuted, fontSize: 12)),
+              style:
+                  TextStyle(color: AppPalette.of(context).muted, fontSize: 12)),
         ),
       );
     }
@@ -936,10 +935,10 @@ class _UserContentCard extends StatelessWidget {
                 SizedBox(
                   width: 128,
                   child: item.cover.isEmpty
-                      ? const ColoredBox(
-                          color: Color(0xffececf5),
-                          child:
-                              Icon(Icons.image_outlined, color: _profileMuted),
+                      ? ColoredBox(
+                          color: AppPalette.of(context).placeholder,
+                          child: Icon(Icons.image_outlined,
+                              color: AppPalette.of(context).muted),
                         )
                       : Image.network(item.cover, fit: BoxFit.cover),
                 ),
@@ -952,13 +951,14 @@ class _UserContentCard extends StatelessWidget {
                         Text(item.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: _profileInk,
+                            style: TextStyle(
+                                color: AppPalette.of(context).ink,
                                 fontWeight: FontWeight.w700)),
                         const Spacer(),
                         Text('${item.likes} 赞 · ${item.views} 浏览',
-                            style: const TextStyle(
-                                color: _profileMuted, fontSize: 11.5)),
+                            style: TextStyle(
+                                color: AppPalette.of(context).muted,
+                                fontSize: 11.5)),
                       ],
                     ),
                   ),
@@ -985,7 +985,7 @@ class _ProfileMessage extends StatelessWidget {
             children: [
               Text(message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: _profileMuted)),
+                  style: TextStyle(color: AppPalette.of(context).muted)),
               const SizedBox(height: 10),
               TextButton.icon(
                   onPressed: onRetry,
@@ -1013,12 +1013,13 @@ class _ProfileStat extends StatelessWidget {
           child: Column(
             children: [
               Text(value == null ? '—' : '$value',
-                  style: const TextStyle(
-                      color: _profileInk, fontWeight: FontWeight.w800)),
+                  style: TextStyle(
+                      color: AppPalette.of(context).ink,
+                      fontWeight: FontWeight.w800)),
               const SizedBox(height: 2),
               Text(label,
-                  style: const TextStyle(
-                      color: _profileMuted, fontSize: 11)),
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted, fontSize: 11)),
             ],
           ),
         ),
@@ -1030,7 +1031,7 @@ class _ProfileDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      Container(width: 1, height: 26, color: const Color(0xffe2e2ea));
+      Container(width: 1, height: 26, color: AppPalette.of(context).divider);
 }
 
 /// 等级与经验徽章：按段位着色（S 金 / A 红 / B 蓝 / C 绿 / D 灰）。
@@ -1066,8 +1067,7 @@ class _LevelBadge extends StatelessWidget {
               margin: const EdgeInsets.symmetric(horizontal: 6),
               color: color.withOpacity(.4),
             ),
-            Text('经验 $exp',
-                style: TextStyle(color: color, fontSize: 11.5)),
+            Text('经验 $exp', style: TextStyle(color: color, fontSize: 11.5)),
           ],
         ],
       ),
