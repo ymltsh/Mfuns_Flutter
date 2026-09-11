@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.4.4",
-    "build": 42,
-    "name": "Mfuns Flutter v1.4.4 仙后座",
+    "version": "1.5.0",
+    "build": 43,
+    "name": "Mfuns Flutter v1.5.0 仙后座",
     "date": "2026-09-12",
-    "notes": "新增\n- 我的页常用入口支持列表 / 卡片两种布局，可在设置中切换\n- 文章阅读支持进度滑块，可快速定位长文阅读位置\n- 私信记录、通知和浏览历史支持分页加载，长列表浏览更完整\n- 设置中可单独编辑昵称、性别和个人简介\n优化\n- 我的页、设置页和消息页重新分组与排版，宽屏和窄屏显示更清晰\n- 通知、消息和历史列表的加载、去重与空状态体验改进",
+    "notes": "新增\n- 我的页常用入口支持列表 / 卡片两种布局，可在设置中切换\n- 文章阅读支持进度滑块，可快速定位长文阅读位置\n- 私信记录、通知和浏览历史支持分页加载，长列表浏览更完整\n- 设置中可单独编辑昵称、性别和个人简介\n优化\n- 我的页、设置页和消息页重新分组与排版，宽屏和窄屏显示更清晰\n- 通知、消息和历史列表的加载、去重与空状态体验改进\n修复\n- 修复私信中的表情包被作为普通图片重复显示的问题",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.4cas/mfuns-flutter-1.4.4cas.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.4cas/mfuns-flutter-windows-1.4.4cas.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.0cas/mfuns-flutter-1.5.0cas.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.0cas/mfuns-flutter-windows-1.5.0cas.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.4.4cas"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.0cas"
   },
   "history": [
+    {
+      "version": "1.4.4",
+      "build": 42,
+      "name": "Mfuns Flutter v1.4.4 仙后座",
+      "date": "2026-09-12",
+      "notes": "新增\n- 我的页常用入口支持列表 / 卡片两种布局，可在设置中切换\n- 文章阅读支持进度滑块，可快速定位长文阅读位置\n- 私信记录、通知和浏览历史支持分页加载，长列表浏览更完整\n- 设置中可单独编辑昵称、性别和个人简介\n优化\n- 我的页、设置页和消息页重新分组与排版，宽屏和窄屏显示更清晰\n- 通知、消息和历史列表的加载、去重与空状态体验改进",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.4cas/mfuns-flutter-1.4.4cas.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.4.4cas/mfuns-flutter-windows-1.4.4cas.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.4.4cas"
+    },
     {
       "version": "1.4.3",
       "build": 41,
