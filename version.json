@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.5.1",
-    "build": 44,
-    "name": "Mfuns Flutter v1.5.1 仙后座",
+    "version": "1.5.2",
+    "build": 45,
+    "name": "Mfuns Flutter v1.5.2 仙后座",
     "date": "2026-09-13",
-    "notes": "新增\n- 投稿列表支持封面预览；文章投稿支持富文本编辑、预览与正文图片插入\n- 视频投稿支持添加、删除、重命名与重新上传分P；标签改为快捷 Chip 输入\n修复\n- 视频下载改用直连网络出口，避免 Clash 代理导致的地区限制和下载失败\n优化\n- 下载任务恢复、重试和多分P队列稳定性提升",
+    "notes": "新增\n- 关于页加入版本星座彩蛋，连续点击 Logo 7 次可解锁\n- 仙后座 CAS 全屏星图动画：群星、主星、连线与版本信息依次浮现\n优化\n- 彩蛋布局适配手机横竖屏与 Windows 窗口",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.1cas/mfuns-flutter-1.5.1cas.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.1cas/mfuns-flutter-windows-1.5.1cas.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.2cas/mfuns-flutter-1.5.2cas.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.2cas/mfuns-flutter-windows-1.5.2cas.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.1cas"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.2cas"
   },
   "history": [
+    {
+      "version": "1.5.1",
+      "build": 44,
+      "name": "Mfuns Flutter v1.5.1 仙后座",
+      "date": "2026-09-13",
+      "notes": "新增\n- 投稿列表支持封面预览；文章投稿支持富文本编辑、预览与正文图片插入\n- 视频投稿支持添加、删除、重命名与重新上传分P；标签改为快捷 Chip 输入\n修复\n- 视频下载改用直连网络出口，避免 Clash 代理导致的地区限制和下载失败\n优化\n- 下载任务恢复、重试和多分P队列稳定性提升",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.1cas/mfuns-flutter-1.5.1cas.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.1cas/mfuns-flutter-windows-1.5.1cas.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.1cas"
+    },
     {
       "version": "1.5.0",
       "build": 43,
