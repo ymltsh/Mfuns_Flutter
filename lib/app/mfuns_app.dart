@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/config/user_preferences.dart';
 import '../core/navigation/app_route_observer.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/content_link_handler.dart';
@@ -2297,37 +2298,48 @@ class _ProfilePageState extends State<_ProfilePage> {
                     borderRadius: const BorderRadius.vertical(
                         bottom: Radius.circular(26)),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 26, 22, 20),
-                    child: session == null
-                        ? _GuestProfile(
-                            onLogin: () =>
-                                showLoginSheet(context, widget.controller))
-                        : _SignedInProfile(
-                            session: session,
-                            controller: widget.controller,
-                            themeSeed: widget.themeSeed,
-                            onThemeChanged: widget.onThemeChanged,
-                            themeMode: widget.themeMode,
-                            onModeChanged: widget.onModeChanged),
+                  child: Align(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1000),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 26, 22, 20),
+                        child: session == null
+                            ? _GuestProfile(
+                                onLogin: () =>
+                                    showLoginSheet(context, widget.controller))
+                            : _SignedInProfile(
+                                session: session,
+                                controller: widget.controller,
+                                themeSeed: widget.themeSeed,
+                                onThemeChanged: widget.onThemeChanged,
+                                themeMode: widget.themeMode,
+                                onModeChanged: widget.onModeChanged),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 18),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: session == null
-                      ? _ProfileGuestBody(
-                          controller: widget.controller,
-                          themeSeed: widget.themeSeed,
-                          onThemeChanged: widget.onThemeChanged,
-                          themeMode: widget.themeMode,
-                          onModeChanged: widget.onModeChanged)
-                      : _ProfileMemberBody(
-                          controller: widget.controller,
-                          themeSeed: widget.themeSeed,
-                          onThemeChanged: widget.onThemeChanged,
-                          themeMode: widget.themeMode,
-                          onModeChanged: widget.onModeChanged),
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1000),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: session == null
+                          ? _ProfileGuestBody(
+                              controller: widget.controller,
+                              themeSeed: widget.themeSeed,
+                              onThemeChanged: widget.onThemeChanged,
+                              themeMode: widget.themeMode,
+                              onModeChanged: widget.onModeChanged)
+                          : _ProfileMemberBody(
+                              controller: widget.controller,
+                              themeSeed: widget.themeSeed,
+                              onThemeChanged: widget.onThemeChanged,
+                              themeMode: widget.themeMode,
+                              onModeChanged: widget.onModeChanged),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -2479,6 +2491,7 @@ class _ThemeSheet extends StatefulWidget {
 
 class _ThemeSheetState extends State<_ThemeSheet> {
   late final TextEditingController _hex;
+  late AppThemeMode _selectedMode;
 
   static const swatches = <Color>[
     Color(0xFF5094B2), // 希露菲青（默认）
@@ -2500,6 +2513,15 @@ class _ThemeSheetState extends State<_ThemeSheet> {
   void initState() {
     super.initState();
     _hex = TextEditingController(text: _hexOf(widget.seed));
+    _selectedMode = _modeOf(widget.mode);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ThemeSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.mode != widget.mode) {
+      _selectedMode = _modeOf(widget.mode);
+    }
   }
 
   @override
@@ -2572,7 +2594,7 @@ class _ThemeSheetState extends State<_ThemeSheet> {
                 icon: Icon(Icons.dark_mode_rounded, size: 17),
               ),
             ],
-            selected: {_modeOf(widget.mode)},
+            selected: {_selectedMode},
             showSelectedIcon: false,
             style: ButtonStyle(
               visualDensity: VisualDensity.compact,
@@ -2581,7 +2603,10 @@ class _ThemeSheetState extends State<_ThemeSheet> {
               ),
             ),
             onSelectionChanged: (selection) {
-              widget.onModeChanged(selection.first);
+              final mode = selection.first;
+              if (mode == _selectedMode) return;
+              setState(() => _selectedMode = mode);
+              widget.onModeChanged(mode);
             },
           ),
           const SizedBox(height: 18),
@@ -2761,54 +2786,87 @@ class _ProfileGuestBody extends StatelessWidget {
   final ThemeMode themeMode;
   final ValueChanged<AppThemeMode> onModeChanged;
 
+  void _requestLogin(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('登录后即可查看该内容')),
+    );
+    showLoginSheet(context, controller);
+  }
+
   @override
-  Widget build(BuildContext context) => Column(
-        children: [
-          const _ProfileItem(
-              icon: Icons.history_rounded,
-              title: '历史记录',
-              subtitle: '登录后同步浏览记录'),
-          const SizedBox(height: 10),
-          const _ProfileItem(
-              icon: Icons.bookmark_outline_rounded,
-              title: '我的收藏',
-              subtitle: '把喜欢的内容留在这里'),
-          const SizedBox(height: 10),
-          _ProfileItem(
-            icon: Icons.download_rounded,
-            title: '下载管理',
-            subtitle: '查看和管理已缓存的视频',
-            onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const DownloadPage())),
-          ),
-          const SizedBox(height: 10),
-          _ProfileItem(
-            icon: Icons.palette_outlined,
-            title: '主题外观',
-            subtitle: '主题模式与界面主题颜色',
-            onTap: () => _showThemeSheet(
-                context, themeSeed, onThemeChanged, themeMode, onModeChanged),
-          ),
-          const SizedBox(height: 10),
-          _ProfileItem(
-            icon: Icons.settings_outlined,
-            title: '设置',
-            subtitle: '编辑资料、清除缓存与关于',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => SettingsPage(controller: controller))),
-          ),
-          if (controller.accounts.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _ProfileItem(
-              icon: Icons.switch_account_rounded,
-              title: '切换账号',
-              subtitle: '选择已保存的账号快速登录',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => AccountManagePage(controller: controller))),
-            ),
-          ],
-        ],
-      );
+  Widget build(BuildContext context) {
+    final contentActions = [
+      _ProfileAction(
+        icon: Icons.history_rounded,
+        title: '历史记录',
+        subtitle: '同步浏览轨迹',
+        badge: '需登录',
+        onTap: () => _requestLogin(context),
+      ),
+      _ProfileAction(
+        icon: Icons.bookmark_outline_rounded,
+        title: '我的收藏',
+        subtitle: '收纳喜欢的内容',
+        badge: '需登录',
+        onTap: () => _requestLogin(context),
+      ),
+      _ProfileAction(
+        icon: Icons.download_rounded,
+        title: '下载管理',
+        subtitle: '管理本地缓存',
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const DownloadPage()),
+        ),
+      ),
+    ];
+    final preferenceActions = [
+      _ProfileAction(
+        icon: Icons.palette_outlined,
+        title: '主题外观',
+        subtitle: '模式与主题颜色',
+        onTap: () => _showThemeSheet(
+          context,
+          themeSeed,
+          onThemeChanged,
+          themeMode,
+          onModeChanged,
+        ),
+      ),
+      _ProfileAction(
+        icon: Icons.settings_outlined,
+        title: '设置',
+        subtitle: '缓存、关于与其他选项',
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => SettingsPage(controller: controller),
+        )),
+      ),
+      if (controller.accounts.isNotEmpty)
+        _ProfileAction(
+          icon: Icons.switch_account_rounded,
+          title: '切换账号',
+          subtitle: '使用已保存的账号',
+          onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => AccountManagePage(controller: controller),
+          )),
+        ),
+    ];
+
+    return Column(
+      children: [
+        _ProfileActionSection(
+          title: '内容与下载',
+          actions: contentActions,
+          layout: controller.profileEntryLayout,
+        ),
+        const SizedBox(height: 20),
+        _ProfileActionSection(
+          title: '个性化与账号',
+          actions: preferenceActions,
+          layout: controller.profileEntryLayout,
+        ),
+      ],
+    );
+  }
 }
 
 class _ProfileMemberBody extends StatelessWidget {
@@ -2832,69 +2890,94 @@ class _ProfileMemberBody extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-        children: [
-          _LevelProgressCard(
-            session: controller.session,
-            sections: controller.levelSections,
-          ),
-          const SizedBox(height: 12),
-          _MemberStats(controller: controller),
-          const SizedBox(height: 18),
-          const _ProfileSectionTitle('创作与账号'),
-          _ProfileItem(
-              icon: Icons.edit_note_rounded,
-              title: '我的投稿',
-              subtitle: '发布、编辑和管理投稿',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => SubmissionsPage(controller: controller)))),
-          const SizedBox(height: 10),
-          _ProfileItem(
-              icon: Icons.calendar_month_rounded,
-              title: '每日签到',
-              subtitle: '签到领经验，查看今日签到排行',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => SignPage(controller: controller)))),
-          const SizedBox(height: 10),
-          _ProfileItem(
-              icon: Icons.account_balance_wallet_outlined,
-              title: '我的资产',
-              subtitle: '喵币余额、改名卡与补签卡',
-              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                  builder: (_) => AssetsPage(controller: controller)))),
-          const SizedBox(height: 10),
-          _ProfileItem(
-            icon: Icons.download_rounded,
-            title: '下载管理',
-            subtitle: '查看和管理已缓存的视频',
-            onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => const DownloadPage())),
-          ),
-          const SizedBox(height: 10),
-          _ProfileItem(
-            icon: Icons.palette_outlined,
-            title: '主题外观',
-            subtitle: '主题模式与界面主题颜色',
-            onTap: () => _showThemeSheet(
-                context, themeSeed, onThemeChanged, themeMode, onModeChanged),
-          ),
-          const SizedBox(height: 10),
-          _ProfileItem(
-            icon: Icons.settings_outlined,
-            title: '设置',
-            subtitle: '编辑资料、清除缓存与关于',
-            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) => SettingsPage(controller: controller))),
-          ),
-          const SizedBox(height: 10),
-          _ProfileItem(
-            icon: Icons.switch_account_rounded,
-            title: '账号管理',
-            subtitle: '切换、登录新账号或退出登录',
-            onTap: () => _openAccountManage(context),
-          ),
-        ],
-      );
+  Widget build(BuildContext context) {
+    final commonActions = [
+      _ProfileAction(
+        icon: Icons.edit_note_rounded,
+        title: '我的投稿',
+        subtitle: '发布与管理作品',
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => SubmissionsPage(controller: controller),
+        )),
+      ),
+      _ProfileAction(
+        icon: Icons.calendar_month_rounded,
+        title: '每日签到',
+        subtitle: '签到领经验',
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => SignPage(controller: controller),
+        )),
+      ),
+      _ProfileAction(
+        icon: Icons.account_balance_wallet_outlined,
+        title: '我的资产',
+        subtitle: '喵币与背包道具',
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => AssetsPage(controller: controller),
+        )),
+      ),
+      _ProfileAction(
+        icon: Icons.download_rounded,
+        title: '下载管理',
+        subtitle: '管理本地缓存',
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const DownloadPage()),
+        ),
+      ),
+    ];
+    final preferenceActions = [
+      _ProfileAction(
+        icon: Icons.palette_outlined,
+        title: '主题外观',
+        subtitle: '模式与主题颜色',
+        onTap: () => _showThemeSheet(
+          context,
+          themeSeed,
+          onThemeChanged,
+          themeMode,
+          onModeChanged,
+        ),
+      ),
+      _ProfileAction(
+        icon: Icons.settings_outlined,
+        title: '设置',
+        subtitle: '资料、缓存与关于',
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => SettingsPage(controller: controller),
+        )),
+      ),
+      _ProfileAction(
+        icon: Icons.switch_account_rounded,
+        title: '账号管理',
+        subtitle: '切换账号或退出',
+        onTap: () => _openAccountManage(context),
+      ),
+    ];
+
+    return Column(
+      children: [
+        _LevelProgressCard(
+          session: controller.session,
+          sections: controller.levelSections,
+        ),
+        const SizedBox(height: 18),
+        const _ProfileSectionTitle('内容概览'),
+        _MemberStats(controller: controller),
+        const SizedBox(height: 20),
+        _ProfileActionSection(
+          title: '常用功能',
+          actions: commonActions,
+          layout: controller.profileEntryLayout,
+        ),
+        const SizedBox(height: 20),
+        _ProfileActionSection(
+          title: '偏好与账号',
+          actions: preferenceActions,
+          layout: controller.profileEntryLayout,
+        ),
+      ],
+    );
+  }
 }
 
 /// 等级 ID → 段位（1=D, 2=D+, 3=C, 4=C+, 5=B, 6=B+, 7=A, 8=A+, 9=S, 10=S+）。
@@ -3024,7 +3107,7 @@ class _MemberStats extends StatelessWidget {
             children: [
               _MemberStat(
                 label: '历史',
-                value: '${controller.history.length}',
+                value: controller.historyTotalCount?.toString() ?? '…',
                 onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                     builder: (_) => _HistoryPage(controller: controller))),
               ),
@@ -3104,35 +3187,222 @@ class _ProfileSectionTitle extends StatelessWidget {
       );
 }
 
-class _ProfileItem extends StatelessWidget {
-  const _ProfileItem(
-      {required this.icon,
-      required this.title,
-      required this.subtitle,
-      this.onTap});
+class _ProfileAction {
+  const _ProfileAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.badge,
+  });
 
   final IconData icon;
   final String title;
   final String subtitle;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
+  final String? badge;
+}
+
+/// 功能入口使用自适应网格：手机两列，宽屏自动增加列数。
+class _ProfileActionSection extends StatelessWidget {
+  const _ProfileActionSection({
+    required this.title,
+    required this.actions,
+    required this.layout,
+  });
+
+  final String title;
+  final List<_ProfileAction> actions;
+  final ProfileEntryLayout layout;
 
   @override
-  Widget build(BuildContext context) => Card(
-        clipBehavior: Clip.antiAlias,
-        child: ListTile(
-          onTap: onTap,
-          leading: CircleAvatar(
-            backgroundColor: _palette(context).primary.withOpacity(.11),
-            foregroundColor: _palette(context).primary,
-            child: Icon(icon),
-          ),
-          title: Text(title,
-              style: TextStyle(
-                  fontWeight: FontWeight.w700, color: _palette(context).ink)),
-          subtitle: Text(subtitle),
-          trailing: const Icon(Icons.chevron_right_rounded),
+  Widget build(BuildContext context) {
+    final content = switch (layout) {
+      ProfileEntryLayout.list => _ProfileActionList(actions: actions),
+      ProfileEntryLayout.card => _ProfileActionGrid(actions: actions),
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ProfileSectionTitle(title),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: content,
         ),
+      ],
+    );
+  }
+}
+
+class _ProfileActionList extends StatelessWidget {
+  const _ProfileActionList({required this.actions})
+      : super(key: const ValueKey('profile-action-list'));
+
+  final List<_ProfileAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _palette(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var index = 0; index < actions.length; index++) ...[
+            ListTile(
+              onTap: actions[index].onTap,
+              leading: CircleAvatar(
+                backgroundColor: palette.primary.withOpacity(.11),
+                foregroundColor: palette.primary,
+                child: Icon(actions[index].icon, size: 20),
+              ),
+              title: Text(
+                actions[index].title,
+                style: TextStyle(
+                  color: palette.ink,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(actions[index].subtitle),
+              trailing: actions[index].badge == null
+                  ? Icon(Icons.chevron_right_rounded, color: palette.muted)
+                  : Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: palette.primary.withOpacity(.09),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        actions[index].badge!,
+                        style: TextStyle(
+                          color: palette.primary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+            ),
+            if (index != actions.length - 1)
+              const Divider(height: 1, indent: 56),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileActionGrid extends StatelessWidget {
+  const _ProfileActionGrid({required this.actions})
+      : super(key: const ValueKey('profile-action-grid'));
+
+  final List<_ProfileAction> actions;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 840
+              ? 4
+              : constraints.maxWidth >= 560
+                  ? 3
+                  : 2;
+          const spacing = 10.0;
+          final itemWidth =
+              (constraints.maxWidth - spacing * (columns - 1)) / columns;
+          return Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: actions
+                .map((action) => SizedBox(
+                      width: itemWidth,
+                      child: _ProfileActionCard(action: action),
+                    ))
+                .toList(),
+          );
+        },
       );
+}
+
+class _ProfileActionCard extends StatelessWidget {
+  const _ProfileActionCard({required this.action});
+
+  final _ProfileAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _palette(context);
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: action.onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 104),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(13, 13, 10, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: palette.primary.withOpacity(.11),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child:
+                          Icon(action.icon, color: palette.primary, size: 21),
+                    ),
+                    const Spacer(),
+                    if (action.badge != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: palette.primary.withOpacity(.09),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          action.badge!,
+                          style: TextStyle(
+                            color: palette.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      )
+                    else
+                      Icon(Icons.arrow_forward_ios_rounded,
+                          color: palette.muted, size: 13),
+                  ],
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  action.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.ink,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  action.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: palette.muted, fontSize: 11.5),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _HistoryPage extends StatefulWidget {
@@ -3287,8 +3557,8 @@ class _FavoriteItemsPageState extends State<_FavoriteItemsPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('移出收藏夹？'),
-        content: Text(
-            '将「${item.title}」从「${widget.folder.name}」移出。\n可在内容详情页重新收藏。'),
+        content:
+            Text('将「${item.title}」从「${widget.folder.name}」移出。\n可在内容详情页重新收藏。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -3297,8 +3567,8 @@ class _FavoriteItemsPageState extends State<_FavoriteItemsPage> {
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text('移出',
-                style:
-                    TextStyle(color: Theme.of(dialogContext).colorScheme.error)),
+                style: TextStyle(
+                    color: Theme.of(dialogContext).colorScheme.error)),
           ),
         ],
       ),
@@ -3314,12 +3584,12 @@ class _FavoriteItemsPageState extends State<_FavoriteItemsPage> {
       await widget.controller.loadFavoriteItems(widget.folder.id);
       await widget.controller.loadFavoriteFolders();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已移出收藏夹')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已移出收藏夹')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('移出失败：$error')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('移出失败：$error')));
     }
   }
 

@@ -37,12 +37,79 @@ void main() {
     expect(peer.message, '纯文本消息');
   });
 
+  test('reads a private-message cursor from nested message data', () {
+    final page = MessageRecordsPage.fromData({
+      'list': [
+        {
+          'uid': 7,
+          'data': {
+            'id': '1788156395257-0',
+            'message': '较早消息',
+          },
+        },
+        {
+          'id': '1788156396257-0',
+          'uid': 5,
+          'data': {'message': '较新消息'},
+        },
+      ],
+    });
+
+    expect(page.items, hasLength(2));
+    expect(page.nextCursor, '1788156395257-0');
+    expect(page.hasMore, isTrue);
+  });
+
+  test('parses Redis stream pairs and an explicit next cursor', () {
+    final page = MessageRecordsPage.fromData({
+      'records': [
+        [
+          '1788156396257-0',
+          {
+            'uid': 5,
+            'data': {'message': '较新消息'},
+          },
+        ],
+        [
+          '1788156395257-0',
+          {
+            'uid': 7,
+            'data': {'message': '较早消息'},
+          },
+        ],
+      ],
+      'next_msg_id': '1788156394000-0',
+      'has_more': 1,
+    });
+
+    expect(page.items.map((item) => item.id), [
+      '1788156395257-0',
+      '1788156396257-0',
+    ]);
+    expect(page.nextCursor, '1788156394000-0');
+    expect(page.hasMore, isTrue);
+  });
+
+  test('parses records keyed by Redis stream id', () {
+    final page = MessageRecordsPage.fromData({
+      '1788156395257-0': {
+        'uid': 7,
+        'message': '顶层消息正文',
+        'time': 1720000002,
+      },
+    });
+
+    expect(page.items.single.id, '1788156395257-0');
+    expect(page.items.single.message, '顶层消息正文');
+    expect(page.items.single.time, isNotNull);
+    expect(page.nextCursor, '1788156395257-0');
+  });
+
   test('parses stickers out of message records', () {
     final record = MessageRecord.fromJson({
       'uid': 7,
       'data': {
-        'message':
-            '{"ops":[{"insert":{"sticker":"s-1"}},{"insert":"冲鸭\\n"}]}',
+        'message': '{"ops":[{"insert":{"sticker":"s-1"}},{"insert":"冲鸭\\n"}]}',
         'time': 1720000003,
       },
     });
@@ -62,8 +129,10 @@ void main() {
         'time': 1720000003,
       },
     });
-    expect(record.images,
-        ['https://cdn2.mfuns.net/static/a.png', 'https://cdn2.mfuns.net/static/b.jpg']);
+    expect(record.images, [
+      'https://cdn2.mfuns.net/static/a.png',
+      'https://cdn2.mfuns.net/static/b.jpg'
+    ]);
     expect(record.message, isEmpty);
 
     final plain = MessageRecord.fromJson({
@@ -97,19 +166,36 @@ void main() {
     expect(record.images, ['https://cdn2.mfuns.net/static/x.png']);
   });
 
+  test('does not treat HTML stickers as private-message images', () {
+    final record = MessageRecord.fromJson({
+      'uid': 7,
+      'data': {
+        'message':
+            '<p><img class="sticker" src="/sticker/s/1.png" alt="[s-1]"></p>',
+      },
+    });
+
+    expect(record.spans, [const CommentSpan.sticker('s-1')]);
+    expect(record.images, isEmpty);
+  });
+
   test('embeds images into quill content when sending', () {
     final json = messageQuillJson(
         const [CommentSpan.text('看图')], const ['/static/a.png']);
     final ops = (jsonDecode(json) as Map<String, dynamic>)['ops'] as List;
     expect(ops[0], {'insert': '看图\n'});
-    expect(ops[1], {'insert': {'image': '/static/a.png'}});
+    expect(ops[1], {
+      'insert': {'image': '/static/a.png'}
+    });
     expect(ops, hasLength(3));
 
     final onlyImage = messageQuillJson(const [], ['/static/a.png']);
     final onlyOps =
         (jsonDecode(onlyImage) as Map<String, dynamic>)['ops'] as List;
     expect(onlyOps, hasLength(2));
-    expect(onlyOps[0], {'insert': {'image': '/static/a.png'}});
+    expect(onlyOps[0], {
+      'insert': {'image': '/static/a.png'}
+    });
     expect(onlyOps[1], {'insert': '\n'});
   });
 

@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'download_status.dart';
@@ -23,9 +26,98 @@ abstract class DownloadTaskStore {
   Future<void> close();
 }
 
+/// Windows/Linux 下载任务存储。
+///
+/// `sqflite` 在这两个桌面平台没有实现，因此把体积很小的任务元数据保存为
+/// JSON；视频文件仍由 [DownloadStorage] 独立管理。写入通过队列串行化，避免
+/// 多个并发下载同时上报进度时互相覆盖文件。
+class FileDownloadTaskStore implements DownloadTaskStore {
+  FileDownloadTaskStore({Future<File> Function()? fileProvider})
+      : _fileProvider = fileProvider ?? _defaultFileProvider;
+
+  final Future<File> Function() _fileProvider;
+  final Map<String, DownloadTask> _tasks = {};
+  Future<void> _writeTail = Future<void>.value();
+  var _initialized = false;
+
+  static Future<File> _defaultFileProvider() async {
+    final directory = await getApplicationSupportDirectory();
+    return File(p.join(directory.path, 'mfuns_downloads.json'));
+  }
+
+  @override
+  Future<void> init() async {
+    if (_initialized) return;
+    final file = await _fileProvider();
+    try {
+      if (await file.exists()) {
+        final decoded = jsonDecode(await file.readAsString());
+        if (decoded is List) {
+          for (final value in decoded.whereType<Map<String, dynamic>>()) {
+            final task = DownloadTask.fromMap(value);
+            if (task.taskId.isNotEmpty) _tasks[task.taskId] = task;
+          }
+        }
+      }
+    } on FileSystemException {
+      // 文件不可读时保留空列表，后续写入会重新建立存储。
+    } on FormatException {
+      // 损坏的元数据不能阻断应用启动或新下载。
+    }
+    _initialized = true;
+  }
+
+  @override
+  Future<void> upsert(DownloadTask task) async {
+    await init();
+    _tasks[task.taskId] = task;
+    await _persist();
+  }
+
+  @override
+  Future<void> delete(String taskId) async {
+    await init();
+    _tasks.remove(taskId);
+    await _persist();
+  }
+
+  @override
+  Future<DownloadTask?> get(String taskId) async {
+    await init();
+    return _tasks[taskId];
+  }
+
+  @override
+  Future<List<DownloadTask>> getAll() async {
+    await init();
+    return _tasks.values.toList(growable: false);
+  }
+
+  Future<void> _persist() {
+    final snapshot =
+        _tasks.values.map((task) => task.toJson()).toList(growable: false);
+    final write = _writeTail.then((_) async {
+      final file = await _fileProvider();
+      await file.parent.create(recursive: true);
+      final temporary = File('${file.path}.tmp');
+      await temporary.writeAsString(jsonEncode(snapshot), flush: true);
+      if (await file.exists()) await file.delete();
+      await temporary.rename(file.path);
+    });
+    _writeTail = write.then<void>((_) {}, onError: (_) {});
+    return write;
+  }
+
+  @override
+  Future<void> close() async {
+    await _writeTail;
+  }
+}
+
 /// SQLite 实现：`download_tasks` 表（任务 = 视频，分P明细存 parts_json）。
 class SqfliteDownloadTaskStore implements DownloadTaskStore {
-  SqfliteDownloadTaskStore({String? databasePath}) : _databasePath = databasePath;
+  SqfliteDownloadTaskStore({String? databasePath})
+      : _databasePath = databasePath;
 
   static const _dbName = 'mfuns_downloads.db';
   static const _table = 'download_tasks';
@@ -459,6 +551,25 @@ class DownloadRepository extends ChangeNotifier {
     ));
   }
 
+  /// 用重新获取的播放地址替换任务内对应分P的短期签名 URL。
+  Future<bool> updatePartSources(
+    String taskId,
+    List<DownloadPartSource> sources,
+  ) async {
+    final task = _tasks[taskId];
+    if (task == null || sources.isEmpty) return false;
+    final byPart = {for (final source in sources) source.part: source.url};
+    var changed = false;
+    final parts = task.parts.map((part) {
+      final url = byPart[part.part];
+      if (url == null || url.isEmpty || url == part.sourceUrl) return part;
+      changed = true;
+      return part.copyWith(sourceUrl: url);
+    }).toList(growable: false);
+    if (changed) await updateParts(taskId, parts);
+    return changed;
+  }
+
   /// 更新单个分P进度并汇总到任务。
   Future<void> updatePartProgress(
     DownloadTask task,
@@ -467,10 +578,13 @@ class DownloadRepository extends ChangeNotifier {
     required int totalBytes,
     double speed = 0,
   }) async {
-    final updatedParts = _mapPart(task, part, (item) => item.copyWith(
-          downloadedBytes: downloadedBytes,
-          totalBytes: totalBytes,
-        ));
+    final updatedParts = _mapPart(
+        task,
+        part,
+        (item) => item.copyWith(
+              downloadedBytes: downloadedBytes,
+              totalBytes: totalBytes,
+            ));
     await _upsert(task.copyWith(
       parts: updatedParts,
       downloadedBytes: _sumDownloaded(updatedParts),
@@ -499,10 +613,13 @@ class DownloadRepository extends ChangeNotifier {
     DownloadStatus status, {
     String errorMessage = '',
   }) async {
-    final updatedParts = _mapPart(task, part, (item) => item.copyWith(
-          status: status,
-          errorMessage: errorMessage,
-        ));
+    final updatedParts = _mapPart(
+        task,
+        part,
+        (item) => item.copyWith(
+              status: status,
+              errorMessage: errorMessage,
+            ));
     await _upsert(task.copyWith(
       parts: updatedParts,
       updatedAt: DateTime.now(),

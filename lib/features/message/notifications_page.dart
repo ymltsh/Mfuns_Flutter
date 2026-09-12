@@ -138,7 +138,7 @@ class NotificationsPageState extends State<NotificationsPage>
   }
 }
 
-class _NotifyTab extends StatefulWidget {
+class _NotifyTab extends StatelessWidget {
   const _NotifyTab({
     required this.controller,
     required this.type,
@@ -152,74 +152,16 @@ class _NotifyTab extends StatefulWidget {
   final Map<int, UserProfile> userCache;
 
   @override
-  State<_NotifyTab> createState() => _NotifyTabState();
-}
-
-class _NotifyTabState extends State<_NotifyTab> {
-  late Future<List<NotifyItem>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = widget.controller.notifications(type: widget.type);
-  }
-
-  Future<void> _reload() async {
-    final next = widget.controller.notifications(type: widget.type);
-    setState(() => _future = next);
-    await next;
-    // 拉取通知列表后服务端视为已读，同步刷新未读与小红点。
-    widget.controller.refreshUnreadCounts();
-  }
-
-  @override
-  Widget build(BuildContext context) => FutureBuilder<List<NotifyItem>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('加载失败：${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppPalette.of(context).muted)),
-                    const SizedBox(height: 10),
-                    TextButton.icon(
-                        onPressed: _reload,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('重试')),
-                  ],
-                ),
-              ),
-            );
-          }
-          final items = snapshot.data ?? const <NotifyItem>[];
-          if (items.isEmpty) {
-            return _NotifyEmpty(onRetry: _reload);
-          }
-          return RefreshIndicator(
-            color: AppPalette.of(context).primary,
-            onRefresh: _reload,
-            child: ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) => _NotifyCard(
-                item: items[index],
-                controller: widget.controller,
-                userCache: widget.userCache,
-                onOpenUser: widget.onOpenUser,
-              ),
-            ),
-          );
-        },
+  Widget build(BuildContext context) => _PagedNotifyListView(
+        loadPage: (page) => controller.notifications(type: type, page: page),
+        onLoaded: controller.refreshUnreadCounts,
+        emptyMessage: '暂无此类通知',
+        itemBuilder: (context, item) => _NotifyCard(
+          item: item,
+          controller: controller,
+          userCache: userCache,
+          onOpenUser: onOpenUser,
+        ),
       );
 }
 
@@ -251,77 +193,208 @@ class _NotifyEmpty extends StatelessWidget {
 
 /// 系统通知（站点公告等）：独立接口 `/v1/notify/site`，
 /// 卡片只展示系统图标、正文与时间，无发送者、不跳转原内容。
-class _SystemNotifyTab extends StatefulWidget {
+class _SystemNotifyTab extends StatelessWidget {
   const _SystemNotifyTab({required this.controller});
 
   final AppController controller;
 
   @override
-  State<_SystemNotifyTab> createState() => _SystemNotifyTabState();
+  Widget build(BuildContext context) => _PagedNotifyListView(
+        loadPage: (page) => controller.siteNotifications(page: page),
+        onLoaded: controller.refreshUnreadCounts,
+        emptyMessage: '暂无系统通知',
+        itemBuilder: (context, item) => _SystemNotifyCard(item: item),
+      );
 }
 
-class _SystemNotifyTabState extends State<_SystemNotifyTab> {
-  late Future<List<NotifyItem>> _future;
+/// 通知类列表（赞/评论/提及/系统）的分页加载：
+/// 按页拉取、滚动到底自动加载下一页，首屏带下拉刷新。
+class _PagedNotifyListView extends StatefulWidget {
+  const _PagedNotifyListView({
+    required this.loadPage,
+    required this.onLoaded,
+    required this.itemBuilder,
+    this.emptyMessage = '暂无此类通知',
+  });
+
+  final Future<List<NotifyItem>> Function(int page) loadPage;
+
+  /// 首屏（或刷新）加载完成后回调，用于同步刷新未读与小红点。
+  final VoidCallback onLoaded;
+
+  final Widget Function(BuildContext context, NotifyItem item) itemBuilder;
+  final String emptyMessage;
+
+  @override
+  State<_PagedNotifyListView> createState() => _PagedNotifyListViewState();
+}
+
+class _PagedNotifyListViewState extends State<_PagedNotifyListView> {
+  final _scrollController = ScrollController();
+  List<NotifyItem> _items = const [];
+  var _page = 1;
+  var _hasMore = true;
+  var _isLoadingMore = false;
+  var _initialLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _future = widget.controller.siteNotifications();
-  }
-
-  Future<void> _reload() async {
-    final next = widget.controller.siteNotifications();
-    setState(() => _future = next);
-    await next;
-    // 拉取系统通知列表后服务端视为已读，同步刷新未读与小红点。
-    widget.controller.refreshUnreadCounts();
+    _scrollController.addListener(_onScroll);
+    _loadFirst();
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<List<NotifyItem>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('加载失败：${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppPalette.of(context).muted)),
-                    const SizedBox(height: 10),
-                    TextButton.icon(
-                        onPressed: _reload,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('重试')),
-                  ],
-                ),
-              ),
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 滚动到底部附近时加载下一页。
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadFirst() async {
+    setState(() {
+      _initialLoading = true;
+      _error = null;
+      _items = const [];
+      _page = 1;
+      _hasMore = true;
+    });
+    try {
+      final items = await widget.loadPage(1);
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        // 返回条数不足一页即认为没有更多。
+        _hasMore = items.length >= messagePageSize;
+        _initialLoading = false;
+      });
+      widget.onLoaded();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$error';
+        _initialLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore || _items.isEmpty) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final next = await widget.loadPage(_page + 1);
+      if (!mounted) return;
+      setState(() {
+        final known = _items.map(_notifyKey).toSet();
+        final additions = next
+            .where((item) => known.add(_notifyKey(item)))
+            .toList(growable: false);
+        _items = [..._items, ...additions];
+        _page++;
+        _hasMore = next.isNotEmpty && additions.isNotEmpty;
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      // 滚动到底可再次触发加载。
+      if (mounted) setState(() => _isLoadingMore = false);
+    }
+  }
+
+  /// 通知项没有唯一 id，用发送者/评论/资源/时间组合去重。
+  static String _notifyKey(NotifyItem item) =>
+      '${item.senderUserId}|${item.commentId}|${item.resourceId}|${item.createdAt?.millisecondsSinceEpoch}';
+
+  @override
+  Widget build(BuildContext context) {
+    if (_initialLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && _items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('加载失败：$_error',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppPalette.of(context).muted)),
+              const SizedBox(height: 10),
+              TextButton.icon(
+                  onPressed: _loadFirst,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('重试')),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_items.isEmpty) {
+      return _NotifyEmpty(onRetry: _loadFirst, message: widget.emptyMessage);
+    }
+    return RefreshIndicator(
+      color: AppPalette.of(context).primary,
+      onRefresh: _loadFirst,
+      child: ListView.separated(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        itemCount: _items.length + 1,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          if (index >= _items.length) {
+            return _NotifyLoadMoreFooter(
+              loading: _isLoadingMore,
+              hasMore: _hasMore,
             );
           }
-          final items = snapshot.data ?? const <NotifyItem>[];
-          if (items.isEmpty) {
-            return _NotifyEmpty(onRetry: _reload, message: '暂无系统通知');
-          }
-          return RefreshIndicator(
-            color: AppPalette.of(context).primary,
-            onRefresh: _reload,
-            child: ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
-              itemBuilder: (context, index) =>
-                  _SystemNotifyCard(item: items[index]),
-            ),
-          );
+          return widget.itemBuilder(context, _items[index]);
         },
+      ),
+    );
+  }
+}
+
+class _NotifyLoadMoreFooter extends StatelessWidget {
+  const _NotifyLoadMoreFooter({required this.loading, required this.hasMore});
+
+  final bool loading;
+  final bool hasMore;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
+        ),
       );
+    }
+    if (!hasMore) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text('没有更多了',
+              style: TextStyle(
+                  color: AppPalette.of(context).muted, fontSize: 12)),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
 }
 
 class _SystemNotifyCard extends StatelessWidget {

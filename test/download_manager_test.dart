@@ -79,11 +79,11 @@ void main() {
       final taskId = await manager.enqueue(request3Parts());
       expect(taskId, 'v1_1080p');
 
-      final completed =
-          await watcher.waitFor(taskId, DownloadStatus.completed);
+      final completed = await watcher.waitFor(taskId, DownloadStatus.completed);
       expect(completed.totalPartCount, 3);
       expect(completed.completedPartCount, 3);
-      expect(completed.totalBytes, content1.length + content2.length + content3.length);
+      expect(completed.totalBytes,
+          content1.length + content2.length + content3.length);
       expect(completed.isPlayable, isTrue);
       // 各分P正式文件存在且内容一致，临时文件已重命名。
       for (final part in completed.parts) {
@@ -98,14 +98,56 @@ void main() {
       watcher.close();
     });
 
+    test('签名地址 403 后重新获取播放地址并完成下载', () async {
+      final content = body(32 * 1024);
+      var resolveCount = 0;
+      final refreshingManager = DownloadManager(
+        repository: repository,
+        transport: transport,
+        environment: environment,
+        initialPolicy: const DownloadPolicy(wifiOnly: false, maxConcurrent: 1),
+        sourceResolver: (videoId, quality) async {
+          resolveCount++;
+          if (resolveCount == 1) throw Exception('首次刷新失败');
+          return const [
+            DownloadPartSource(
+              part: 1,
+              url: 'https://cdn.example.com/fresh.mp4',
+            ),
+          ];
+        },
+      )..autoRetryBase = const Duration(milliseconds: 5);
+      transport.responders = [
+        (_) async => FakeDownloadConnection(statusCode: 403),
+        FakeDownloadTransport.partial(content),
+      ];
+      await refreshingManager.initialize();
+      final watcher = TaskWatcher(refreshingManager.watchTasks());
+
+      final taskId = await refreshingManager.enqueue(makeRequest(parts: const [
+        DownloadPartSource(
+          part: 1,
+          url: 'https://cdn.example.com/expired.mp4',
+        ),
+      ]));
+      final completed = await watcher.waitFor(taskId, DownloadStatus.completed);
+
+      expect(resolveCount, 2);
+      expect(completed.parts.single.sourceUrl,
+          'https://cdn.example.com/fresh.mp4');
+      expect(
+          await File(completed.parts.single.filePath).readAsBytes(), content);
+      watcher.close();
+      await refreshingManager.dispose();
+    });
+
     test('部分分P完成时任务仍为 downloading，且已完成分P保留', () async {
       final slowTransport = SlowDownloadTransport(fullBody: body(1024));
       final slowManager = DownloadManager(
         repository: repository,
         transport: slowTransport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
       );
       await slowManager.initialize();
       final watcher = TaskWatcher(slowManager.watchTasks());
@@ -163,8 +205,7 @@ void main() {
       ];
       final watcher = TaskWatcher(manager.watchTasks());
       final taskId = await manager.enqueue(makeRequest());
-      final completed =
-          await watcher.waitFor(taskId, DownloadStatus.completed);
+      final completed = await watcher.waitFor(taskId, DownloadStatus.completed);
       expect(await File(completed.parts.single.filePath).readAsBytes(),
           Uint8List.fromList([...body(10), ...body(10)]));
       watcher.close();
@@ -178,8 +219,7 @@ void main() {
         repository: repository,
         transport: slowTransport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
       );
       await slowManager.initialize();
       final watcher = TaskWatcher(slowManager.watchTasks());
@@ -216,8 +256,7 @@ void main() {
         repository: repository,
         transport: slowTransport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: false, maxConcurrent: 1),
+        initialPolicy: const DownloadPolicy(wifiOnly: false, maxConcurrent: 1),
       );
       await policyManager.initialize();
       final watcher = TaskWatcher(policyManager.watchTasks());
@@ -246,8 +285,7 @@ void main() {
         repository: repository,
         transport: slowTransport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
       );
       await slowManager.initialize();
       final watcher = TaskWatcher(slowManager.watchTasks());
@@ -277,8 +315,7 @@ void main() {
       await waitUntil(() => slowTransport.connections.length == 4,
           description: 'P3 建立连接');
       slowTransport.releaseAll();
-      final completed =
-          await watcher.waitFor(taskId, DownloadStatus.completed);
+      final completed = await watcher.waitFor(taskId, DownloadStatus.completed);
       expect(completed.completedPartCount, 3);
       watcher.close();
       await slowManager.dispose();
@@ -290,16 +327,17 @@ void main() {
         repository: repository,
         transport: slowTransport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
       );
       await slowManager.initialize();
       final watcher = TaskWatcher(slowManager.watchTasks());
 
       // 先下载 P1、P2（两个分P的任务）。
       final taskId = await slowManager.enqueue(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
       ]));
       await waitUntil(() => slowTransport.connections.isNotEmpty,
           description: 'P1 建立连接');
@@ -313,15 +351,17 @@ void main() {
 
       // 补下 P3：enqueue 合并进任务并回到 pending。
       await slowManager.enqueue(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
-        const DownloadPartSource(part: 3, url: 'https://cdn.example.com/p3.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 3, url: 'https://cdn.example.com/p3.mp4'),
       ]));
       await waitUntil(() => slowTransport.connections.length == 3,
           description: 'P3 建立连接');
       slowTransport.releaseAll();
-      final completed =
-          await watcher.waitFor(taskId, DownloadStatus.completed);
+      final completed = await watcher.waitFor(taskId, DownloadStatus.completed);
       expect(completed.completedPartCount, 3);
       watcher.close();
       await slowManager.dispose();
@@ -333,8 +373,7 @@ void main() {
         repository: repository,
         transport: slowTransport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
       );
       await slowManager.initialize();
       final watcher = TaskWatcher(slowManager.watchTasks());
@@ -345,14 +384,12 @@ void main() {
       await watcher.waitFor(taskId, DownloadStatus.downloading);
       // 放行 P1 使其完成，P2 挂起。
       slowTransport.connections.first.release();
-      await waitUntilTask(
-          watcher, taskId, (t) => t.completedPartCount >= 1);
+      await waitUntilTask(watcher, taskId, (t) => t.completedPartCount >= 1);
       await waitUntil(() => slowTransport.connections.length == 2,
           description: 'P2 建立连接');
 
       await slowManager.cancel(taskId);
-      final canceled =
-          await watcher.waitFor(taskId, DownloadStatus.canceled);
+      final canceled = await watcher.waitFor(taskId, DownloadStatus.canceled);
       // 已完成 P1 正式文件保留；P2/P3 临时文件被删除。
       expect(await File(canceled.parts[0].filePath).exists(), isTrue);
       expect(canceled.parts[0].status, DownloadStatus.completed);
@@ -371,8 +408,7 @@ void main() {
           () => slowTransport.connections.length == previousConnections + 2,
           description: 'P3 建立连接');
       slowTransport.releaseAll();
-      final completed =
-          await watcher.waitFor(taskId, DownloadStatus.completed);
+      final completed = await watcher.waitFor(taskId, DownloadStatus.completed);
       expect(completed.completedPartCount, 3);
       watcher.close();
       await slowManager.dispose();
@@ -393,8 +429,7 @@ void main() {
       expect(failed.parts.single.status, DownloadStatus.pending);
 
       await manager.retry(taskId);
-      final completed =
-          await watcher.waitFor(taskId, DownloadStatus.completed);
+      final completed = await watcher.waitFor(taskId, DownloadStatus.completed);
       expect(completed.isPlayable, isTrue);
       watcher.close();
     });
@@ -427,8 +462,7 @@ void main() {
       transport.failures = {1}; // 第一次连接模拟断网
       final watcher = TaskWatcher(manager.watchTasks());
       final taskId = await manager.enqueue(makeRequest());
-      final completed =
-          await watcher.waitFor(taskId, DownloadStatus.completed);
+      final completed = await watcher.waitFor(taskId, DownloadStatus.completed);
       expect(completed.isPlayable, isTrue);
       expect(transport.callCount, greaterThan(1));
       watcher.close();
@@ -476,9 +510,9 @@ void main() {
       ];
       final watcher = TaskWatcher(manager.watchTasks());
       final taskId = await manager.enqueue(makeRequest());
-      final completed =
-          await watcher.waitFor(taskId, DownloadStatus.completed);
-      expect(await File(completed.parts.single.filePath).readAsBytes(), content);
+      final completed = await watcher.waitFor(taskId, DownloadStatus.completed);
+      expect(
+          await File(completed.parts.single.filePath).readAsBytes(), content);
       expect(transport.requestedOffsets, [0, content.length ~/ 2]);
       watcher.close();
     });
@@ -490,8 +524,7 @@ void main() {
         repository: repository,
         transport: transport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: true, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: true, maxConcurrent: 2),
       );
       await wifiManager.initialize();
       environment.setNetwork(DownloadNetworkType.mobile);
@@ -508,8 +541,7 @@ void main() {
         repository: repository,
         transport: transport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: true, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: true, maxConcurrent: 2),
       );
       await wifiManager.initialize();
       environment.setNetwork(DownloadNetworkType.mobile);
@@ -527,8 +559,7 @@ void main() {
         repository: repository,
         transport: transport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: true, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: true, maxConcurrent: 2),
       );
       await wifiManager.initialize();
       transport.responders = [FakeDownloadTransport.partial(body(1024))];
@@ -546,8 +577,7 @@ void main() {
         repository: repository,
         transport: slowTransport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: true, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: true, maxConcurrent: 2),
       );
       await wifiManager.initialize();
       final watcher = TaskWatcher(wifiManager.watchTasks());
@@ -579,8 +609,8 @@ void main() {
       await repository.setTaskStatus(task, DownloadStatus.downloading);
       final part = File(task.parts.single.tempFilePath);
       await part.create(recursive: true);
-      await part.writeAsBytes(
-          Uint8List.sublistView(content, 0, content.length ~/ 2));
+      await part
+          .writeAsBytes(Uint8List.sublistView(content, 0, content.length ~/ 2));
       expect(await part.length(), content.length ~/ 2);
 
       // “重启”：新 manager + 相同 store/storage，服务器支持 Range 续传。
@@ -594,15 +624,14 @@ void main() {
         repository: restartedRepo,
         transport: restartedTransport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
       );
       await restartedManager.initialize();
       final watcher = TaskWatcher(restartedManager.watchTasks());
 
-      final completed =
-          await watcher.waitFor(taskId, DownloadStatus.completed);
-      expect(await File(completed.parts.single.filePath).readAsBytes(), content);
+      final completed = await watcher.waitFor(taskId, DownloadStatus.completed);
+      expect(
+          await File(completed.parts.single.filePath).readAsBytes(), content);
       // 从断点（而非 0）发起续传请求。
       expect(restartedTransport.requestedOffsets.first, content.length ~/ 2);
       watcher.close();
@@ -626,8 +655,7 @@ void main() {
         repository: restartedRepo,
         transport: restartedTransport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
       );
       await restartedManager.initialize();
       final watcher = TaskWatcher(restartedManager.watchTasks());
@@ -639,7 +667,8 @@ void main() {
     });
 
     test('重启后 paused / failed 任务不自动恢复', () async {
-      final pausedTask = await repository.createTask(makeRequest(quality: '720p'));
+      final pausedTask =
+          await repository.createTask(makeRequest(quality: '720p'));
       await repository.setTaskStatus(pausedTask, DownloadStatus.paused);
       final failedTask =
           await repository.createTask(makeRequest(quality: '4k'));
@@ -653,8 +682,7 @@ void main() {
         repository: restartedRepo,
         transport: transport,
         environment: environment,
-        initialPolicy:
-            const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
+        initialPolicy: const DownloadPolicy(wifiOnly: false, maxConcurrent: 2),
       );
       await restartedManager.initialize();
       await settle();

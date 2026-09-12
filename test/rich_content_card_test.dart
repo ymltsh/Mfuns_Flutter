@@ -24,20 +24,18 @@ void main() {
     );
   });
 
-  test('renders private-pack stickers inline instead of full-width images',
-      () {
-    final markdown = normalizeRichContent(
-        '<p>太棒了<img class="sticker" width="50px" '
-        'src="https://resource.mfuns.net/image/sticker/s/1.png" '
-        "alt='[s-1]'/></p>");
+  test('renders private-pack stickers inline instead of full-width images', () {
+    final markdown =
+        normalizeRichContent('<p>太棒了<img class="sticker" width="50px" '
+            'src="https://resource.mfuns.net/image/sticker/s/1.png" '
+            "alt='[s-1]'/></p>");
     expect(markdown, contains('![sticker:s-1]('));
     expect(markdown, isNot(contains('![图片](')));
     expect(markdown.trim().contains('\n\n'), isFalse);
   });
 
   test('derives sticker key from src when alt is missing', () {
-    final markdown = normalizeRichContent(
-        '<p>冲鸭<img class=\'sticker\' '
+    final markdown = normalizeRichContent('<p>冲鸭<img class=\'sticker\' '
         'src="https://resource.mfuns.net/image/sticker/family/3.gif"/></p>');
     expect(markdown, contains('![sticker:family-3]('));
   });
@@ -54,6 +52,20 @@ void main() {
         '{"ops":[{"insert":{"sticker":"simple-5"}},{"insert":"赞\\n"}]}');
     expect(markdown, contains('![sticker:simple-5]('));
     expect(markdown, contains('赞'));
+  });
+
+  test('keeps quill inline and block formatting when opening an article', () {
+    final markdown = normalizeRichContent(
+      '{"ops":['
+      '{"insert":"富文本","attributes":{"bold":true}},'
+      '{"insert":"标题"},'
+      '{"insert":"\\n","attributes":{"header":2}},'
+      '{"insert":"项目一"},'
+      '{"insert":"\\n","attributes":{"list":"bullet"}}'
+      ']}',
+    );
+    expect(markdown, contains('## **富文本**标题'));
+    expect(markdown, contains('- 项目一'));
   });
 
   test('extracts sticker spans from feed content html', () {

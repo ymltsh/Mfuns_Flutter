@@ -11,6 +11,7 @@ import 'package:window_manager/window_manager.dart';
 import 'app/app_controller.dart';
 import 'app/mfuns_app.dart';
 import 'core/download/download_manager.dart';
+import 'core/download/download_task.dart';
 import 'core/media/media_notification.dart';
 import 'core/network/link_router.dart';
 import 'core/notify/local_message_notifier.dart';
@@ -20,8 +21,7 @@ final _navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // 桌面端初始化窗口管理插件（全屏切换等能力）。
-  if (!kIsWeb &&
-      (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+  if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
     try {
       await windowManager.ensureInitialized();
     } catch (_) {
@@ -53,6 +53,14 @@ void main() async {
     // 平台不支持时静默。
   }
   final controller = AppController();
+  DownloadManager.instance.sourceResolver = (videoId, quality) async {
+    final qualities = await controller.videoQualities(videoId);
+    return [
+      for (final item in qualities)
+        if (DownloadTask.qualityKeyFromLabels(item.name, item.label) == quality)
+          DownloadPartSource(part: item.part, url: item.url),
+    ];
+  };
   // 消息前台通知（Notification API）：初始化通道、请求权限；
   // 点击通知时回到根页面并跳转对应页面（私信/赞/评论/提及）。
   await LocalMessageNotifier.instance.init(onTap: (payload) {

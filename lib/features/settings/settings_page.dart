@@ -29,7 +29,7 @@ String _qualityLabel(String value) => value.isEmpty ? '自动' : value;
 
 String _sideRatioLabel(double ratio) => '1/${(1 / ratio).round()}';
 
-/// 设置页：编辑资料、播放器与弹幕偏好、清除缓存、关于。
+/// 设置页：按账号、内容体验、网络和应用支持分组展示。
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, required this.controller});
 
@@ -337,180 +337,177 @@ class _SettingsPageState extends State<SettingsPage> {
           builder: (context, _) => ListView(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
             children: [
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.badge_outlined,
-                    title: '编辑资料',
-                    subtitle: '修改昵称、性别与个人简介',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) =>
-                            ProfileEditPage(controller: widget.controller),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.play_circle_outline_rounded,
-                    title: '播放器配置',
-                    subtitle: '默认清晰度与自动播放',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const PlayerSettingsPage(),
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1, indent: 56),
-                  _SettingsTile(
-                    icon: Icons.subtitles_outlined,
-                    title: '弹幕设置',
-                    subtitle:
-                        '${_danmakuOn ? '开启' : '关闭'} · 透明度 ${(_danmakuOpacity * 100).round()}% · 字号 ${_danmakuSize.round()}',
-                    onTap: _loaded
-                        ? () => Navigator.of(context).push(
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 760),
+                  child: Column(
+                    children: [
+                      _SettingsSection(
+                        title: '账号与界面',
+                        children: [
+                          _SettingsTile(
+                            icon: Icons.badge_outlined,
+                            title: '编辑资料',
+                            subtitle: '单独修改昵称、性别或个人简介',
+                            onTap: () => Navigator.of(context).push(
                               MaterialPageRoute<void>(
-                                builder: (_) => DanmakuSettingsPage(
-                                  enabled: _danmakuOn,
-                                  opacity: _danmakuOpacity,
-                                  size: _danmakuSize,
-                                  onChanged: (enabled, opacity, size) {
-                                    setState(() {
-                                      _danmakuOn = enabled;
-                                      _danmakuOpacity = opacity;
-                                      _danmakuSize = size;
-                                    });
-                                  },
-                                ),
+                                builder: (_) => ProfileEditPage(
+                                    controller: widget.controller),
                               ),
-                            )
-                        : null,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.menu_book_outlined,
-                    title: '文章阅读设置',
-                    subtitle: '阅读进度滑块等长文章阅读选项',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ArticleReaderSettingsPage(),
+                            ),
+                          ),
+                          _ProfileEntryLayoutTile(
+                              controller: widget.controller),
+                          SwitchListTile(
+                            value: widget.controller.autoSignIn,
+                            title: Text('自动签到',
+                                style: TextStyle(
+                                    color: AppPalette.of(context).muted,
+                                    fontWeight: FontWeight.w700)),
+                            subtitle: Text('打开应用和每日零点自动检查签到',
+                                style: TextStyle(
+                                    color: AppPalette.of(context).muted,
+                                    fontSize: 12)),
+                            secondary: CircleAvatar(
+                              backgroundColor: AppPalette.of(context)
+                                  .primary
+                                  .withOpacity(.11),
+                              foregroundColor: AppPalette.of(context).primary,
+                              child: const Icon(Icons.event_repeat_rounded,
+                                  size: 20),
+                            ),
+                            onChanged: widget.controller.setAutoSignIn,
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _SettingsCard(
-                children: [
-                  SwitchListTile(
-                    value: widget.controller.autoSignIn,
-                    title: Text('自动签到',
+                      const SizedBox(height: 20),
+                      _SettingsSection(
+                        title: '播放与阅读',
+                        children: [
+                          _SettingsTile(
+                            icon: Icons.play_circle_outline_rounded,
+                            title: '播放器配置',
+                            subtitle: '默认清晰度与自动播放',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const PlayerSettingsPage(),
+                              ),
+                            ),
+                          ),
+                          _SettingsTile(
+                            icon: Icons.subtitles_outlined,
+                            title: '弹幕设置',
+                            subtitle:
+                                '${_danmakuOn ? '开启' : '关闭'} · 透明度 ${(_danmakuOpacity * 100).round()}% · 字号 ${_danmakuSize.round()}',
+                            onTap: _loaded
+                                ? () => Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => DanmakuSettingsPage(
+                                          enabled: _danmakuOn,
+                                          opacity: _danmakuOpacity,
+                                          size: _danmakuSize,
+                                          onChanged: (enabled, opacity, size) {
+                                            setState(() {
+                                              _danmakuOn = enabled;
+                                              _danmakuOpacity = opacity;
+                                              _danmakuSize = size;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    )
+                                : null,
+                          ),
+                          _SettingsTile(
+                            icon: Icons.menu_book_outlined,
+                            title: '文章阅读设置',
+                            subtitle: '阅读进度滑块等长文章阅读选项',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    const ArticleReaderSettingsPage(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      _SettingsSection(
+                        title: '下载与网络',
+                        children: [
+                          _SettingsTile(
+                            icon: Icons.download_rounded,
+                            title: '下载设置',
+                            subtitle: '仅 Wi-Fi 下载、并发数与存储空间',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const DownloadSettingsPage(),
+                              ),
+                            ),
+                          ),
+                          _SettingsTile(
+                            icon: Icons.network_check_rounded,
+                            title: '网络诊断',
+                            subtitle: '检测 DNS、延迟与业务接口连通性',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const NetworkDiagnosticsPage(),
+                              ),
+                            ),
+                          ),
+                          _SettingsTile(
+                            icon: Icons.bolt_rounded,
+                            title: '下载加速配置',
+                            subtitle: '自定义 GitHub 更新与下载加速地址',
+                            onTap: _configureAccelerator,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      _SettingsSection(
+                        title: '应用与支持',
+                        children: [
+                          _SettingsTile(
+                            icon: Icons.system_update_alt_rounded,
+                            title: '检查更新',
+                            subtitle: _checkingUpdate
+                                ? '正在检查…'
+                                : '当前 v${AppConfig.appVersion}，检查新版本',
+                            onTap: _checkingUpdate ? null : _checkUpdate,
+                          ),
+                          _SettingsTile(
+                            icon: Icons.cleaning_services_outlined,
+                            title: '清除缓存',
+                            subtitle: '清理表情包等本地缓存数据',
+                            onTap: () => _confirmClearCache(context),
+                          ),
+                          _SettingsTile(
+                            icon: Icons.feedback_outlined,
+                            title: '意见反馈',
+                            subtitle: '前往反馈帖留言',
+                            onTap: _openFeedback,
+                          ),
+                          _SettingsTile(
+                            icon: Icons.info_outline_rounded,
+                            title: '关于',
+                            subtitle:
+                                'Mfuns Flutter · v${AppConfig.appVersion}',
+                            onTap: () => _showAbout(context),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 22),
+                      Text(
+                        '登录状态：${widget.controller.session?.displayName ?? '未登录'}',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                            color: AppPalette.of(context).muted,
-                            fontWeight: FontWeight.w700)),
-                    subtitle: Text('打开应用时检查签到状态，未签到则自动完成；运行期间每天 00:00 也会自动签到',
-                        style: TextStyle(
-                            color: AppPalette.of(context).muted, fontSize: 12)),
-                    secondary: CircleAvatar(
-                      backgroundColor:
-                          AppPalette.of(context).primary.withOpacity(.11),
-                      foregroundColor: AppPalette.of(context).primary,
-                      child: const Icon(Icons.event_repeat_rounded, size: 20),
-                    ),
-                    onChanged: (value) =>
-                        widget.controller.setAutoSignIn(value),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.download_rounded,
-                    title: '下载设置',
-                    subtitle: '仅 Wi-Fi 下载、最大并发数与下载空间',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const DownloadSettingsPage(),
+                            color: AppPalette.of(context).muted, fontSize: 12),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-              const SizedBox(height: 14),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.network_check_rounded,
-                    title: '网络诊断',
-                    subtitle: '检测连接状态、DNS、延迟与业务接口连通性',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const NetworkDiagnosticsPage(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.system_update_alt_rounded,
-                    title: '检查更新',
-                    subtitle: _checkingUpdate
-                        ? '正在检查…'
-                        : '当前 v${AppConfig.appVersion}，检查是否有新版本',
-                    onTap: _checkingUpdate ? null : _checkUpdate,
-                  ),
-                  const Divider(height: 1, indent: 56),
-                  _SettingsTile(
-                    icon: Icons.bolt_rounded,
-                    title: '下载加速配置',
-                    subtitle: '自定义 GitHub 加速地址，用于更新与下载',
-                    onTap: _configureAccelerator,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              _SettingsCard(
-                children: [
-                  _SettingsTile(
-                    icon: Icons.cleaning_services_outlined,
-                    title: '清除缓存',
-                    subtitle: '清理表情包等本地缓存数据',
-                    onTap: () => _confirmClearCache(context),
-                  ),
-                  const Divider(height: 1, indent: 56),
-                  _SettingsTile(
-                    icon: Icons.feedback_outlined,
-                    title: '意见反馈',
-                    subtitle: '点击打开反馈帖，在评论区留言即可',
-                    onTap: _openFeedback,
-                  ),
-                  const Divider(height: 1, indent: 56),
-                  _SettingsTile(
-                    icon: Icons.info_outline_rounded,
-                    title: '关于',
-                    subtitle:
-                        '为 Mfuns Flutter 点个Star吧！ v${AppConfig.appVersion}',
-                    onTap: () => _showAbout(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Text('登录状态：${widget.controller.session?.displayName ?? '未登录'}',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: AppPalette.of(context).muted, fontSize: 12)),
             ],
           ),
         ),
@@ -709,14 +706,12 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
                     min: 0,
                     max: (UserPreferences.landscapeSideRatios.length - 1)
                         .toDouble(),
-                    divisions:
-                        UserPreferences.landscapeSideRatios.length - 1,
+                    divisions: UserPreferences.landscapeSideRatios.length - 1,
                     label: _sideRatioLabel(_sideRatio),
                     onChanged: _loaded
                         ? (value) {
                             setState(() => _sideRatioIndex = value.round());
-                            UserPreferences.saveLandscapeSideRatio(
-                                _sideRatio);
+                            UserPreferences.saveLandscapeSideRatio(_sideRatio);
                           }
                         : null,
                   ),
@@ -915,6 +910,40 @@ class _ArticleReaderSettingsPageState extends State<ArticleReaderSettingsPage> {
       );
 }
 
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+            child: Text(
+              title,
+              style: TextStyle(
+                color: AppPalette.of(context).muted,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          _SettingsCard(
+            children: [
+              for (var index = 0; index < children.length; index++) ...[
+                children[index],
+                if (index != children.length - 1)
+                  const Divider(height: 1, indent: 56),
+              ],
+            ],
+          ),
+        ],
+      );
+}
+
 class _SettingsCard extends StatelessWidget {
   const _SettingsCard({required this.children});
 
@@ -925,6 +954,73 @@ class _SettingsCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Column(children: children),
       );
+}
+
+class _ProfileEntryLayoutTile extends StatelessWidget {
+  const _ProfileEntryLayoutTile({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: palette.primary.withOpacity(.11),
+                foregroundColor: palette.primary,
+                child: const Icon(Icons.view_agenda_outlined, size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '我的页面样式',
+                      style: TextStyle(
+                        color: palette.muted,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '选择功能入口的排列方式',
+                      style: TextStyle(color: palette.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SegmentedButton<ProfileEntryLayout>(
+            segments: const [
+              ButtonSegment(
+                value: ProfileEntryLayout.list,
+                label: Text('列表'),
+                icon: Icon(Icons.view_list_rounded, size: 18),
+              ),
+              ButtonSegment(
+                value: ProfileEntryLayout.card,
+                label: Text('卡片'),
+                icon: Icon(Icons.grid_view_rounded, size: 18),
+              ),
+            ],
+            selected: {controller.profileEntryLayout},
+            showSelectedIcon: false,
+            onSelectionChanged: (selection) {
+              controller.setProfileEntryLayout(selection.first);
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SettingsTile extends StatelessWidget {
@@ -975,6 +1071,9 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   final _name = TextEditingController();
   final _bio = TextEditingController();
   int _gender = 0;
+  late String _initialName;
+  String _initialBio = '';
+  int _initialGender = 0;
   var _genderInitialized = false;
   var _isSaving = false;
   var _isUploadingAvatar = false;
@@ -984,6 +1083,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     super.initState();
     final session = widget.controller.session;
     _name.text = session?.displayName ?? '';
+    _initialName = _name.text.trim();
     _loadGender();
   }
 
@@ -1029,13 +1129,18 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     try {
       final profile = await widget.controller.userProfile(userId);
       if (!mounted) return;
+      final bio = profile.bio == '暂无简介' ? '' : profile.bio;
+      final gender = switch (profile.gender) {
+        'male' || '男' || '1' => 1,
+        'female' || '女' || '2' => 2,
+        'other' || '其他' || '3' => 3,
+        _ => 0,
+      };
       setState(() {
-        _bio.text = profile.bio == '暂无简介' ? '' : profile.bio;
-        _gender = switch (profile.gender) {
-          'male' || '男' || '1' => 1,
-          'female' || '女' || '2' => 2,
-          _ => 0,
-        };
+        _bio.text = bio;
+        _gender = gender;
+        _initialBio = bio.trim();
+        _initialGender = gender;
         _genderInitialized = true;
       });
     } catch (_) {
@@ -1046,17 +1151,34 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   Future<void> _save() async {
     if (_isSaving) return;
     final name = _name.text.trim();
-    if (name.isEmpty) {
+    final bio = _bio.text.trim();
+    final nameChanged = name != _initialName;
+    final bioChanged = bio != _initialBio;
+    final genderChanged = _gender != _initialGender;
+    if (nameChanged && name.isEmpty) {
       _toast('昵称不能为空');
+      return;
+    }
+    if (!nameChanged && !bioChanged && !genderChanged) {
+      _toast('没有需要保存的修改');
       return;
     }
     setState(() => _isSaving = true);
     try {
       final controller = widget.controller;
-      await controller.updateUserName(name);
-      await controller.updateUserGender(_gender);
-      await controller.updateUserBio(_bio.text.trim());
-      await controller.refreshSession();
+      if (nameChanged) {
+        await controller.updateUserName(name);
+        await controller.refreshSession();
+        _initialName = name;
+      }
+      if (genderChanged) {
+        await controller.updateUserGender(_gender);
+        _initialGender = _gender;
+      }
+      if (bioChanged) {
+        await controller.updateUserBio(bio);
+        _initialBio = bio;
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('资料已更新')));
@@ -1097,6 +1219,14 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
           children: [
+            Text(
+              '只会保存发生变化的项目，可单独修改任意一项。',
+              style: TextStyle(
+                color: AppPalette.of(context).muted,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 14),
             Row(
               children: [
                 CircleAvatar(

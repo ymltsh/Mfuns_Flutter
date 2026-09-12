@@ -2,6 +2,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_config.dart';
 
+enum ProfileEntryLayout { list, card }
+
 /// 用户偏好设置（默认清晰度、弹幕开关/透明度/字号），本地持久化。
 class UserPreferences {
   static const _keyDefaultQuality = 'pref.default_quality';
@@ -16,12 +18,33 @@ class UserPreferences {
   static const _keyShowDislike = 'pref.player_show_dislike';
   static const _keyLandscapeSideRatio = 'pref.landscape_side_ratio';
   static const _keyLatestMarkedIds = 'pref.latest_marked_ids';
+  static const _keyProfileEntryLayout = 'pref.profile_entry_layout';
 
   /// 横屏播放页右侧简介/评论栏宽度占整屏宽的比例，可选 1/2、1/3、1/4、1/5。
   static const landscapeSideRatios = [1 / 2, 1 / 3, 1 / 4, 1 / 5];
 
   /// 默认比例：右侧简介/评论栏占整屏 1/3。
   static const defaultLandscapeSideRatio = 1 / 3;
+
+  /// “我的”页面功能入口布局，默认使用更易扫读的列表。
+  static Future<ProfileEntryLayout> loadProfileEntryLayout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return switch (prefs.getString(_keyProfileEntryLayout)) {
+        'card' => ProfileEntryLayout.card,
+        _ => ProfileEntryLayout.list,
+      };
+    } catch (_) {
+      return ProfileEntryLayout.list;
+    }
+  }
+
+  static Future<void> saveProfileEntryLayout(ProfileEntryLayout layout) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyProfileEntryLayout, layout.name);
+    } catch (_) {}
+  }
 
   /// 自定义 GitHub 加速地址（用于更新清单与下载），默认官方加速站。
   static Future<String> loadAcceleratorBase() async {
@@ -215,8 +238,7 @@ class UserPreferences {
   static Future<Set<String>> loadLatestMarkedIds() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return (prefs.getStringList(_keyLatestMarkedIds) ?? const [])
-          .toSet();
+      return (prefs.getStringList(_keyLatestMarkedIds) ?? const []).toSet();
     } catch (_) {
       return <String>{};
     }

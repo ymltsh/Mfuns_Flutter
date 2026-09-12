@@ -182,11 +182,19 @@ class DownloadTask {
 
   /// 归一化清晰度标识：小写、仅保留字母数字与 `p`/`k`。
   static String normalizeQualityKey(String quality) {
-    final normalized = quality
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+    final normalized =
+        quality.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
     return normalized.isEmpty ? 'default' : normalized;
+  }
+
+  /// 从接口的清晰度名称与标签生成稳定任务键，例如 `360P + 流畅` → `360p`。
+  static String qualityKeyFromLabels(String name, String label) {
+    final source = '$name $label';
+    final match = RegExp(r'(?<!\d)(\d{3,4})\s*[pP]?(?!\d)').firstMatch(source);
+    if (match != null) return normalizeQualityKey('${match.group(1)}p');
+    if (name.isNotEmpty) return normalizeQualityKey(name);
+    if (label.isNotEmpty) return normalizeQualityKey(label);
+    return 'default';
   }
 
   double get progress {
@@ -198,8 +206,7 @@ class DownloadTask {
 
   int get totalPartCount => parts.length;
 
-  int get completedPartCount =>
-      parts.where((part) => part.isPlayable).length;
+  int get completedPartCount => parts.where((part) => part.isPlayable).length;
 
   /// 该分P是否已可离线播放。
   bool isPartPlayable(int part) =>

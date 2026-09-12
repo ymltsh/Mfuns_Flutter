@@ -9,6 +9,7 @@ void main() {
       'title': '测试投稿',
       'status': 1,
       'created_at': 1786000000,
+      'cover': '/static/list-cover.jpg',
     });
     expect(item.id, 99);
     expect(item.resourceId, 12345);
@@ -16,6 +17,7 @@ void main() {
     expect(item.status, 1);
     expect(item.statusLabel, '已发布');
     expect(item.createdAt, isNotNull);
+    expect(item.cover, 'https://cdn2.mfuns.net/static/list-cover.jpg');
   });
 
   test('parses submission detail from a nested contribute object', () {
@@ -25,10 +27,13 @@ void main() {
         'resource_id': 12345,
         'title': '深入理解 Flutter',
         'content': '<p>正文内容</p>',
+        'content_format': 'html',
         'status': 2,
         'category_id': 44,
         'tags': ['Flutter', '教程'],
         'cover': '/static/cover.jpg',
+        'videos': '[{"type":"direct","content":7788,"title":"第一集",'
+            '"meta":{"duration":120},"transcode_status":1}]',
       },
     });
     expect(detail.id, 99);
@@ -38,6 +43,17 @@ void main() {
     expect(detail.categoryId, 44);
     expect(detail.tags, ['Flutter', '教程']);
     expect(detail.cover, 'https://cdn2.mfuns.net/static/cover.jpg');
+    expect(detail.rawContent, '<p>正文内容</p>');
+    expect(detail.contentFormat, 'html');
+    expect(detail.videos, hasLength(1));
+    expect(detail.videos.single.content, 7788);
+    expect(detail.videos.single.toJson(), {
+      'transcode_status': 1,
+      'type': 'direct',
+      'content': 7788,
+      'title': '第一集',
+      'meta': {'duration': 120},
+    });
   });
 
   test('maps all submission statuses to labels', () {

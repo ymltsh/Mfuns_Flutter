@@ -234,6 +234,8 @@ class _SubmissionCard extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
+              _SubmissionCover(url: item.cover),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -293,6 +295,39 @@ class _SubmissionCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SubmissionCover extends StatelessWidget {
+  const _SubmissionCover({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget placeholder() => Container(
+          color: AppPalette.of(context).placeholder,
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.image_outlined,
+            color: AppPalette.of(context).muted,
+          ),
+        );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 96,
+        height: 60,
+        child: url.isEmpty
+            ? placeholder()
+            : Image.network(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => placeholder(),
+              ),
       ),
     );
   }

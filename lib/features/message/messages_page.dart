@@ -24,19 +24,25 @@ class MessageListPage extends StatefulWidget {
 }
 
 class MessageListPageState extends State<MessageListPage> {
+  final _scrollController = ScrollController();
   List<MessageConversation>? _items;
   String? _error;
+  var _page = 1;
+  var _hasMore = true;
+  var _isLoadingMore = false;
   int _lastDmUnread = -1;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     widget.controller.addListener(_onControllerChanged);
     reload();
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
@@ -50,12 +56,22 @@ class MessageListPageState extends State<MessageListPage> {
     reload();
   }
 
+  /// 滚动到底部附近时加载下一页会话。
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMore();
+    }
+  }
+
   Future<void> reload() async {
     try {
-      final items = await widget.controller.messageConversations();
+      final items = await widget.controller.messageConversations(page: 1);
       if (!mounted) return;
       setState(() {
         _items = items;
+        _page = 1;
+        _hasMore = items.isNotEmpty;
         _error = null;
       });
     } catch (error) {
@@ -63,6 +79,31 @@ class MessageListPageState extends State<MessageListPage> {
       setState(() {
         if (_items == null) _error = '加载会话失败：$error';
       });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
+    final current = _items;
+    if (current == null || current.isEmpty) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final next =
+          await widget.controller.messageConversations(page: _page + 1);
+      if (!mounted) return;
+      setState(() {
+        final latest = _items ?? current;
+        final known = latest.map((item) => item.userId).toSet();
+        final additions = next
+            .where((item) => known.add(item.userId))
+            .toList(growable: false);
+        _items = [...latest, ...additions];
+        _page++;
+        _hasMore = next.isNotEmpty && additions.isNotEmpty;
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -108,14 +149,24 @@ class MessageListPageState extends State<MessageListPage> {
       color: AppPalette.of(context).primary,
       onRefresh: reload,
       child: ListView.separated(
+        controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-        itemCount: items.length,
+        itemCount: items.length + 1,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (context, index) => _ConversationCard(
-          item: items[index],
-          onTap: () => _openConversation(items[index]),
-        ),
+        itemBuilder: (context, index) {
+          if (index >= items.length) {
+            return _ListLoadMoreFooter(
+              loading: _isLoadingMore,
+              hasMore: _hasMore,
+              doneText: '没有更多会话了',
+            );
+          }
+          return _ConversationCard(
+            item: items[index],
+            onTap: () => _openConversation(items[index]),
+          );
+        },
       ),
     );
   }
@@ -214,9 +265,13 @@ class MessageDetailPage extends StatefulWidget {
 
 class _MessageDetailPageState extends State<MessageDetailPage> {
   final _inputKey = GlobalKey<InlineEmojiInputState>();
+  final _scrollController = ScrollController();
   List<MessageRecord>? _items;
   String? _error;
   var _isSending = false;
+  var _hasMore = true;
+  var _isLoadingMore = false;
+  String? _nextCursor;
   int _lastDmUnread = -1;
   UserProfile? _peer;
 
@@ -225,6 +280,7 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     widget.controller.addListener(_onControllerChanged);
     _reload();
     _loadPeer();
@@ -240,6 +296,7 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
@@ -252,12 +309,22 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
     _reload();
   }
 
+  /// 逆序列表滚动到顶部（更早的历史）附近时加载更早的一页。
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadMore();
+    }
+  }
+
   Future<void> _reload() async {
     try {
-      final items = await widget.controller.messageRecord(widget.peerId);
+      final page = await widget.controller.messageRecord(widget.peerId);
       if (!mounted) return;
       setState(() {
-        _items = items;
+        _items = page.items;
+        _hasMore = page.hasMore;
+        _nextCursor = page.nextCursor;
         _error = null;
       });
       // 拉取会话记录后服务端视为已读，同步刷新未读与小红点。
@@ -267,6 +334,41 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
       setState(() {
         if (_items == null) _error = '加载聊天记录失败：$error';
       });
+    }
+  }
+
+  /// 以当前最旧一条消息的 id 作为 `msg_id` 游标，向前加载更早的历史，
+  /// 追加到列表头部（逆序列表的顶部）。
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
+    final current = _items;
+    if (current == null || current.isEmpty) return;
+    final cursor = _nextCursor;
+    if (cursor == null || cursor.isEmpty) {
+      setState(() => _hasMore = false);
+      return;
+    }
+    setState(() => _isLoadingMore = true);
+    try {
+      final page =
+          await widget.controller.messageRecord(widget.peerId, msgId: cursor);
+      if (!mounted) return;
+      setState(() {
+        final latest = _items ?? current;
+        final known = latest.map((item) => item.id).toSet();
+        final older = page.items
+            .where((item) => item.id.isEmpty || known.add(item.id))
+            .toList(growable: false);
+        _items = [...older, ...latest];
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore &&
+            older.isNotEmpty &&
+            page.nextCursor != null &&
+            page.nextCursor != cursor;
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -318,12 +420,20 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
                 return const _MessageState(message: '和 TA 说点什么吧');
               }
               return ListView.separated(
+                controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                 reverse: true,
-                itemCount: items.length,
+                itemCount: items.length + 1,
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
+                  if (index >= items.length) {
+                    return _ListLoadMoreFooter(
+                      loading: _isLoadingMore,
+                      hasMore: _hasMore,
+                      doneText: '没有更早的消息了',
+                    );
+                  }
                   final record = items[items.length - 1 - index];
                   final isMine = _myId != null && record.uid == _myId;
                   return _MessageBubble(
@@ -587,6 +697,46 @@ class _MessageState extends StatelessWidget {
           ),
         ),
       );
+}
+
+/// 列表尾部（或逆序列表顶部）的分页加载指示：加载中转圈，没有更多时提示。
+class _ListLoadMoreFooter extends StatelessWidget {
+  const _ListLoadMoreFooter({
+    required this.loading,
+    required this.hasMore,
+    required this.doneText,
+  });
+
+  final bool loading;
+  final bool hasMore;
+  final String doneText;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
+        ),
+      );
+    }
+    if (!hasMore) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Text(doneText,
+              style:
+                  TextStyle(color: AppPalette.of(context).muted, fontSize: 12)),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  }
 }
 
 String _msgTime(DateTime value) {

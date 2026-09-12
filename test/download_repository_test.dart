@@ -30,8 +30,10 @@ void main() {
   group('创建任务', () {
     test('创建新任务（视频级）并写入存储', () async {
       final task = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
       ]));
       expect(task.taskId, 'v1_1080p');
       expect(task.status, DownloadStatus.pending);
@@ -44,11 +46,14 @@ void main() {
 
     test('相同 videoId+quality 复用同一任务（新分P合并追加）', () async {
       final first = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
       ]));
       final second = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 3, url: 'https://cdn.example.com/p3.mp4'),
+        const DownloadPartSource(
+            part: 3, url: 'https://cdn.example.com/p3.mp4'),
       ]));
       expect(second.taskId, first.taskId);
       // 同一任务，分P合并：P1/P2（原有）+ P3（追加）。
@@ -81,8 +86,10 @@ void main() {
 
     test('已存在任务时追加新分P（补下）', () async {
       final task = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
       ]));
       await File(task.parts[0].tempFilePath).create(recursive: true);
       await File(task.parts[0].tempFilePath).writeAsBytes(List.filled(5, 1));
@@ -94,9 +101,12 @@ void main() {
 
       // 补下 P3：任务合并 P3 并回到 pending，P1/P2 保持 completed。
       final merged = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
-        const DownloadPartSource(part: 3, url: 'https://cdn.example.com/p3.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 3, url: 'https://cdn.example.com/p3.mp4'),
       ]));
       expect(merged.status, DownloadStatus.pending);
       expect(merged.parts, hasLength(3));
@@ -108,14 +118,18 @@ void main() {
 
     test('追加分P不重复添加已存在分P', () async {
       final task = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
       ]));
       await File(task.parts.single.tempFilePath).create(recursive: true);
-      await File(task.parts.single.tempFilePath).writeAsBytes(List.filled(5, 1));
+      await File(task.parts.single.tempFilePath)
+          .writeAsBytes(List.filled(5, 1));
       await repository.completePart(task, 1);
       final merged = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
       ]));
       expect(merged.parts, hasLength(2));
       expect(merged.parts.where((p) => p.part == 1), hasLength(1));
@@ -125,8 +139,10 @@ void main() {
   group('更新与查询', () {
     test('更新分P进度并汇总到任务', () async {
       final task = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
       ]));
       await repository.updatePartProgress(task, 1,
           downloadedBytes: 100, totalBytes: 1000, speed: 500.0);
@@ -175,8 +191,10 @@ void main() {
   group('启动恢复', () {
     test('completed 且文件完好 → 保持 completed', () async {
       var task = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
       ]));
       for (final part in task.parts) {
         await File(part.tempFilePath).create(recursive: true);
@@ -197,8 +215,10 @@ void main() {
 
     test('completed 但部分分P文件缺失 → 该分P补下，任务回 pending', () async {
       var task = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
       ]));
       for (final part in task.parts) {
         await File(part.tempFilePath).create(recursive: true);
@@ -224,8 +244,10 @@ void main() {
 
     test('completed 但全部文件丢失 → 清理无效记录', () async {
       var task = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
       ]));
       for (final part in task.parts) {
         await File(part.tempFilePath).create(recursive: true);
@@ -303,8 +325,7 @@ void main() {
       await File(task.parts.single.tempFilePath)
           .writeAsBytes(List.filled(10, 1));
       // 手动创建一个不属于任何任务的孤儿文件。
-      final orphan = File(
-          '${testStorage.root.path}${Platform.pathSeparator}9'
+      final orphan = File('${testStorage.root.path}${Platform.pathSeparator}9'
           '${Platform.pathSeparator}ghost.mp4');
       await orphan.create(recursive: true);
 
@@ -348,20 +369,55 @@ void main() {
 
     test('部分分P完成时只返回已完成分P的文件', () async {
       final task = await repository.createTask(makeRequest(parts: [
-        const DownloadPartSource(part: 1, url: 'https://cdn.example.com/p1.mp4'),
-        const DownloadPartSource(part: 2, url: 'https://cdn.example.com/p2.mp4'),
+        const DownloadPartSource(
+            part: 1, url: 'https://cdn.example.com/p1.mp4'),
+        const DownloadPartSource(
+            part: 2, url: 'https://cdn.example.com/p2.mp4'),
       ]));
       await File(task.parts[0].tempFilePath).create(recursive: true);
       await File(task.parts[0].tempFilePath).writeAsBytes(List.filled(5, 1));
       final updated = await repository.completePart(task, 1);
       expect(updated!.status, DownloadStatus.pending);
 
-      final p1 = await repository.localFileFor(
-          videoId: 1, part: 1, quality: '1080p');
-      final p2 = await repository.localFileFor(
-          videoId: 1, part: 2, quality: '1080p');
+      final p1 =
+          await repository.localFileFor(videoId: 1, part: 1, quality: '1080p');
+      final p2 =
+          await repository.localFileFor(videoId: 1, part: 2, quality: '1080p');
       expect(p1, updated.parts[0].filePath);
       expect(p2, isNull);
+    });
+  });
+
+  group('桌面文件存储', () {
+    test('任务元数据写入 JSON 后可由新实例恢复', () async {
+      final metadata = File(
+        '${testStorage.root.path}${Platform.pathSeparator}tasks.json',
+      );
+      final firstStore = FileDownloadTaskStore(
+        fileProvider: () async => metadata,
+      );
+      final firstRepository = DownloadRepository(
+        store: firstStore,
+        storage: testStorage.storage(),
+      );
+      await firstRepository.initialize();
+      final created = await firstRepository.createTask(makeRequest());
+      await firstRepository.setTaskStatus(created, DownloadStatus.paused);
+      await firstRepository.disposeStore();
+
+      final secondStore = FileDownloadTaskStore(
+        fileProvider: () async => metadata,
+      );
+      final secondRepository = DownloadRepository(
+        store: secondStore,
+        storage: testStorage.storage(),
+      );
+      await secondRepository.initialize();
+
+      expect(secondRepository.tasks, hasLength(1));
+      expect(secondRepository.tasks.single.taskId, created.taskId);
+      expect(secondRepository.tasks.single.status, DownloadStatus.paused);
+      await secondRepository.disposeStore();
     });
   });
 }

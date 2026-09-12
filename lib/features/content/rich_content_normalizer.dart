@@ -17,23 +17,7 @@ String normalizeRichContent(String source) {
       final decoded = jsonDecode(value);
       final ops = decoded is Map<String, dynamic> ? decoded['ops'] : null;
       if (ops is List) {
-        final buffer = StringBuffer();
-        for (final op in ops.whereType<Map<String, dynamic>>()) {
-          final insert = op['insert'];
-          if (insert is String) {
-            buffer.write(insert.trimRight());
-          } else if (insert is Map<String, dynamic>) {
-            final sticker = insert['sticker'];
-            if (sticker is String && sticker.isNotEmpty) {
-              buffer.write(
-                  '![sticker:$sticker](https://resource.mfuns.net/image/sticker/x.png)');
-            }
-          }
-        }
-        return buffer
-            .toString()
-            .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-            .trim();
+        return _quillToMarkdown(ops);
       }
     } on FormatException {
       // Fall through to text rendering below.
@@ -44,6 +28,72 @@ String normalizeRichContent(String source) {
   return _renderChildren(root.nodes)
       .replaceAll(RegExp(r'\n{3,}'), '\n\n')
       .trim();
+}
+
+String _quillToMarkdown(List<dynamic> ops) {
+  final output = StringBuffer();
+  final line = StringBuffer();
+
+  void finishLine(Map<String, dynamic> attributes) {
+    final content = line.toString();
+    line.clear();
+    if (attributes['header'] != null) {
+      final level = (int.tryParse('${attributes['header']}') ?? 1).clamp(1, 6);
+      final prefix = List<String>.filled(level, '#').join();
+      output.writeln('$prefix $content');
+    } else if (attributes['list'] == 'ordered') {
+      output.writeln('1. $content');
+    } else if (attributes['list'] != null) {
+      output.writeln('- $content');
+    } else if (attributes['blockquote'] == true) {
+      output.writeln('> $content');
+    } else if (attributes['code-block'] == true) {
+      output.write('```\n$content\n```\n');
+    } else {
+      output.writeln(content);
+    }
+  }
+
+  for (final op in ops.whereType<Map<String, dynamic>>()) {
+    final attributes = _asAttributes(op['attributes']);
+    final insert = op['insert'];
+    if (insert is Map<String, dynamic>) {
+      final sticker = insert['sticker'];
+      if (sticker is String && sticker.isNotEmpty) {
+        line.write(
+          '![sticker:$sticker]('
+          'https://resource.mfuns.net/image/sticker/x.png)',
+        );
+      }
+      final image = safeHttpUri('${insert['image'] ?? ''}');
+      if (image != null) line.write('![图片]($image)');
+      continue;
+    }
+    if (insert is! String) continue;
+    final pieces = insert.split('\n');
+    for (var index = 0; index < pieces.length; index++) {
+      if (pieces[index].isNotEmpty) {
+        line.write(_formatQuillInline(pieces[index], attributes));
+      }
+      if (index < pieces.length - 1) finishLine(attributes);
+    }
+  }
+  if (line.isNotEmpty) finishLine(const {});
+  return output.toString().replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+}
+
+Map<String, dynamic> _asAttributes(Object? value) =>
+    value is Map<String, dynamic> ? value : const {};
+
+String _formatQuillInline(String text, Map<String, dynamic> attributes) {
+  var result = text;
+  if (attributes['code'] == true) result = '`$result`';
+  if (attributes['bold'] == true) result = '**$result**';
+  if (attributes['italic'] == true) result = '*$result*';
+  if (attributes['strike'] == true) result = '~~$result~~';
+  final link = safeHttpUri('${attributes['link'] ?? ''}');
+  if (link != null) result = '[$result]($link)';
+  return result;
 }
 
 String _renderChildren(Iterable<dom.Node> nodes) =>

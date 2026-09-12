@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../config/app_config.dart';
@@ -11,6 +11,19 @@ import 'download_storage.dart';
 import 'download_status.dart';
 import 'download_task.dart';
 import 'download_transport.dart';
+
+typedef DownloadSourceResolver = Future<List<DownloadPartSource>> Function(
+  int videoId,
+  String quality,
+);
+
+DownloadTaskStore _defaultTaskStore() {
+  if (kIsWeb) return InMemoryDownloadTaskStore();
+  if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+    return SqfliteDownloadTaskStore();
+  }
+  return FileDownloadTaskStore();
+}
 
 /// 任务控制块：暂停/取消时置位并中断进行中的请求。
 class _TaskControl {
@@ -29,9 +42,10 @@ class DownloadManager {
     DownloadTransport? transport,
     DownloadEnvironment? environment,
     DownloadPolicy? initialPolicy,
+    this.sourceResolver,
   })  : _repository = repository ??
             DownloadRepository(
-              store: SqfliteDownloadTaskStore(),
+              store: _defaultTaskStore(),
               storage: DownloadStorage(),
             ),
         _transport = transport ?? HttpClientDownloadTransport(),
@@ -46,6 +60,7 @@ class DownloadManager {
   final DownloadTransport _transport;
   final DownloadEnvironment _environment;
   DownloadPolicy _policy;
+  DownloadSourceResolver? sourceResolver;
   final bool _initialPolicyProvided;
 
   final Map<String, _TaskControl> _controls = {};
@@ -387,8 +402,12 @@ class DownloadManager {
     var task = await _repository.task(taskId);
     if (task == null) return;
     final control = _controls.putIfAbsent(taskId, _TaskControl.new);
-    await _repository.setTaskStatus(task, DownloadStatus.downloading);
     try {
+      // 播放地址带短期签名。任务排队、App 重启或手动重试后，持久化的
+      // URL 可能已经失效；开始传输前尽量刷新，刷新失败时仍可尝试原地址。
+      await _refreshPartSources(taskId);
+      task = await _repository.task(taskId) ?? task;
+      await _repository.setTaskStatus(task, DownloadStatus.downloading);
       while (true) {
         if (control.wantsStop) throw const DownloadCancelledException();
         final latest = await _repository.task(taskId);
@@ -500,10 +519,12 @@ class DownloadManager {
   ) async {
     final headers = _mediaHeaders();
     var retries = 0;
+    var refreshedAfterRejection = false;
     while (true) {
       if (control.wantsStop) throw const DownloadCancelledException();
       try {
-        final result = await _downloadPartAttempt(taskId, part, headers, control);
+        final result =
+            await _downloadPartAttempt(taskId, part, headers, control);
         if (result) return true;
         // 本次响应结束但未达总大小（服务器提前截断）：续传重试。
         if (retries >= maxAutoRetries) {
@@ -516,11 +537,29 @@ class DownloadManager {
         await Future<void>.delayed(_retryDelay(retries));
       } on DownloadException catch (error) {
         if (control.wantsStop) throw const DownloadCancelledException();
+        if (!refreshedAfterRejection &&
+            (error.kind == DownloadErrorKind.auth ||
+                error.kind == DownloadErrorKind.notFound)) {
+          refreshedAfterRejection = true;
+          if (await _refreshPartSources(taskId)) continue;
+        }
         if (!error.isTransient || retries >= maxAutoRetries) rethrow;
         // 瞬时网络错误（断网/超时）：指数退避后自动续传。
         retries++;
         await Future<void>.delayed(_retryDelay(retries));
       }
+    }
+  }
+
+  Future<bool> _refreshPartSources(String taskId) async {
+    final resolver = sourceResolver;
+    final task = await _repository.task(taskId);
+    if (resolver == null || task == null) return false;
+    try {
+      final sources = await resolver(task.videoId, task.quality);
+      return _repository.updatePartSources(taskId, sources);
+    } catch (_) {
+      return false;
     }
   }
 
@@ -533,7 +572,8 @@ class DownloadManager {
   ) async {
     final task = await _repository.task(taskId);
     if (task == null) throw const DownloadCancelledException();
-    final currentPart = task.parts.where((p) => p.part == part.part).firstOrNull;
+    final currentPart =
+        task.parts.where((p) => p.part == part.part).firstOrNull;
     if (currentPart == null) throw const DownloadCancelledException();
     if (currentPart.isPlayable) return true;
     // 断点：以 .part 文件实际大小为准（覆盖记录，避免记录与文件不一致）。
@@ -615,8 +655,7 @@ class DownloadManager {
       final rangeTotal = connection.contentRangeTotal;
       final total = (rangeTotal != null && rangeTotal > 0)
           ? rangeTotal
-          : (connection.contentLength != null &&
-                  connection.contentLength! >= 0)
+          : (connection.contentLength != null && connection.contentLength! >= 0)
               ? offset + connection.contentLength!
               : currentPart.totalBytes;
 

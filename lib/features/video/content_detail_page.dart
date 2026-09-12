@@ -69,6 +69,8 @@ class VideoDetailPage extends StatefulWidget {
 class _VideoDetailPageState extends State<VideoDetailPage>
     with SingleTickerProviderStateMixin {
   final _playerKey = GlobalKey<_MfunsVideoPlayerState>();
+  final _commentSectionKey = GlobalKey<_CommentSectionState>();
+  final _commentComposerKey = GlobalKey<_CommentComposerBarState>();
   late final Future<ContentDetail> _detail;
   late final Future<List<VideoQuality>>? _qualities;
   late final Future<List<ContentPreview>> _related;
@@ -204,9 +206,10 @@ class _VideoDetailPageState extends State<VideoDetailPage>
               child: SingleChildScrollView(
                 key: PageStorageKey<String>(
                     'content-comment-${widget.preview.id}'),
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 36),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 160),
                 child: detail.commentAreaId != null
                     ? _CommentSection(
+                        key: _commentSectionKey,
                         controller: widget.controller,
                         areaId: detail.commentAreaId!,
                       )
@@ -217,6 +220,28 @@ class _VideoDetailPageState extends State<VideoDetailPage>
               controller: _tabController,
               children: [introTab, commentTab],
             );
+            final commentComposer = detail.commentAreaId == null
+                ? null
+                : _CommentComposerBar(
+                    key: _commentComposerKey,
+                    controller: widget.controller,
+                    areaId: detail.commentAreaId!,
+                    onSubmitted: () =>
+                        _commentSectionKey.currentState?.reload(),
+                  );
+            Widget tabBody() => Stack(
+                  children: [
+                    Positioned.fill(child: tabView),
+                    if (commentComposer != null)
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Offstage(
+                          offstage: _activeTab != 1,
+                          child: commentComposer,
+                        ),
+                      ),
+                  ],
+                );
             // 横屏自动分栏：左侧播放器（黑底，占剩余宽度），右侧简介/评论
             // 栏宽度按设置占整屏 1/2、1/3、1/4 或 1/5（默认 1/3）。
             final isLandscape =
@@ -237,7 +262,7 @@ class _VideoDetailPageState extends State<VideoDetailPage>
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         tabs,
-                        Expanded(child: tabView),
+                        Expanded(child: tabBody()),
                       ],
                     ),
                   ),
@@ -255,7 +280,7 @@ class _VideoDetailPageState extends State<VideoDetailPage>
                   child: player,
                 ),
                 tabs,
-                Expanded(child: tabView),
+                Expanded(child: tabBody()),
               ],
             );
           },
@@ -301,6 +326,8 @@ class FeedDetailPage extends StatefulWidget {
 
 class _FeedDetailPageState extends State<FeedDetailPage> {
   late Future<FeedDetail> _detail;
+  final _commentSectionKey = GlobalKey<_CommentSectionState>();
+  final _commentComposerKey = GlobalKey<_CommentComposerBarState>();
 
   @override
   void initState() {
@@ -359,11 +386,13 @@ class _FeedDetailPageState extends State<FeedDetailPage> {
               comments: feed.comments,
               views: feed.views,
             );
-            return _landscapeCentered(
+            final commentAreaId = detail.commentAreaId;
+            final content = _landscapeCentered(
               context,
               ListView(
                 key: PageStorageKey<String>('feed-detail-${feed.id}'),
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+                padding: EdgeInsets.fromLTRB(
+                    16, 14, 16, commentAreaId == null ? 32 : 160),
                 children: [
                   _FeedAuthorCard(
                     feed: feed,
@@ -409,15 +438,32 @@ class _FeedDetailPageState extends State<FeedDetailPage> {
                     ),
                   ],
                   const SizedBox(height: 24),
-                  if (detail.commentAreaId != null)
+                  if (commentAreaId != null)
                     _CommentSection(
+                      key: _commentSectionKey,
                       controller: widget.controller,
-                      areaId: detail.commentAreaId!,
+                      areaId: commentAreaId,
                     )
                   else
                     const _ArticleCommentUnavailable(),
                 ],
               ),
+            );
+            if (commentAreaId == null) return content;
+            return Stack(
+              children: [
+                Positioned.fill(child: content),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: _CommentComposerBar(
+                    key: _commentComposerKey,
+                    controller: widget.controller,
+                    areaId: commentAreaId,
+                    onSubmitted: () =>
+                        _commentSectionKey.currentState?.reload(),
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -591,6 +637,8 @@ class ArticleDetailPage extends StatefulWidget {
 class _ArticleDetailPageState extends State<ArticleDetailPage> {
   late Future<ContentDetail> _detail;
   final _scrollController = ScrollController();
+  final _commentSectionKey = GlobalKey<_CommentSectionState>();
+  final _commentComposerKey = GlobalKey<_CommentComposerBarState>();
   var _scrollbarEnabled = false;
 
   @override
@@ -649,13 +697,15 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
               );
             }
             final detail = snapshot.requireData;
+            final commentAreaId = detail.commentAreaId;
             final articleList = _landscapeCentered(
               context,
               ListView(
                 controller: _scrollController,
                 key: PageStorageKey<String>(
                     'article-detail-${detail.preview.id}'),
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+                padding: EdgeInsets.fromLTRB(
+                    16, 14, 16, commentAreaId == null ? 32 : 160),
                 children: [
                   _ArticleInfoCard(
                     detail: detail,
@@ -698,10 +748,11 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                     ),
                   ],
                   const SizedBox(height: 24),
-                  if (detail.commentAreaId != null)
+                  if (commentAreaId != null)
                     _CommentSection(
+                      key: _commentSectionKey,
                       controller: widget.controller,
-                      areaId: detail.commentAreaId!,
+                      areaId: commentAreaId,
                     )
                   else
                     const _ArticleCommentUnavailable(),
@@ -710,14 +761,52 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
             );
             return Stack(
               children: [
-                Positioned.fill(child: articleList),
+                Positioned.fill(
+                  child: ArticleReaderScrollScope(
+                    disableAutomaticScrollbar: _scrollbarEnabled,
+                    child: articleList,
+                  ),
+                ),
                 if (_scrollbarEnabled)
-                  _ArticleProgressSlider(controller: _scrollController),
+                  ArticleProgressSlider(controller: _scrollController),
+                if (commentAreaId != null)
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: _CommentComposerBar(
+                      key: _commentComposerKey,
+                      controller: widget.controller,
+                      areaId: commentAreaId,
+                      onSubmitted: () =>
+                          _commentSectionKey.currentState?.reload(),
+                    ),
+                  ),
               ],
             );
           },
         ),
       );
+}
+
+/// 自定义阅读进度滑块启用时，关闭桌面端 MaterialScrollBehavior 自动添加的
+/// 垂直 Scrollbar，避免系统滚动条与阅读滑块在文章右侧重复显示。
+class ArticleReaderScrollScope extends StatelessWidget {
+  const ArticleReaderScrollScope({
+    super.key,
+    required this.disableAutomaticScrollbar,
+    required this.child,
+  });
+
+  final bool disableAutomaticScrollbar;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!disableAutomaticScrollbar) return child;
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: child,
+    );
+  }
 }
 
 /// 横屏时限制内容宽度并居中，避免文章/动态行宽过长。
@@ -814,20 +903,22 @@ class _ArticleCommentUnavailable extends StatelessWidget {
 }
 
 /// 长文章阅读进度滑块：竖向拖拽跳转进度，无操作时自动隐藏。
-class _ArticleProgressSlider extends StatefulWidget {
-  const _ArticleProgressSlider({required this.controller});
+class ArticleProgressSlider extends StatefulWidget {
+  const ArticleProgressSlider({super.key, required this.controller});
 
   final ScrollController controller;
 
   @override
-  State<_ArticleProgressSlider> createState() => _ArticleProgressSliderState();
+  State<ArticleProgressSlider> createState() => _ArticleProgressSliderState();
 }
 
-class _ArticleProgressSliderState extends State<_ArticleProgressSlider> {
+class _ArticleProgressSliderState extends State<ArticleProgressSlider> {
   static const _autoHideDelay = Duration(milliseconds: 2500);
   static const _edgeInset = 14.0;
   static const _thumbHeight = 26.0;
   static const _trackWidth = 4.0;
+  static const _hitWidth = 16.0;
+  static const _overlayWidth = 88.0;
 
   Timer? _hideTimer;
   var _visible = false;
@@ -905,28 +996,23 @@ class _ArticleProgressSliderState extends State<_ArticleProgressSlider> {
     position.jumpTo(progress * position.maxScrollExtent);
   }
 
-  // 拇指拖动偏移：记录按下点相对拇指中心的偏移，拖动时保持该偏移，
-  // 拇指随手指移动（标准滚动条行为）。
-  double _grabOffsetY = 0;
-
-  void _startThumbDrag(double localY, double hitHeight) {
+  void _startThumbDrag() {
     if (!_overflowing) return;
     _dragExtent = widget.controller.position.maxScrollExtent;
     _pendingJumpTarget = null;
-    _grabOffsetY = localY - hitHeight / 2;
     _hideTimer?.cancel();
     setState(() => _dragging = true);
   }
 
-  void _updateThumbDrag(double localY, double hitHeight, double height) {
+  void _updateThumbDrag(DragUpdateDetails details, double height) {
     if (!_dragging) return;
     final usable = height - _edgeInset * 2;
     if (usable <= 0) return;
-    final thumbTop = (_edgeInset + _progress * usable) - _thumbHeight / 2;
-    final fingerY = thumbTop + localY;
-    final progress = ((fingerY - _grabOffsetY - _edgeInset) / usable)
-        .clamp(0.0, 1.0)
-        .toDouble();
+    // DragUpdateDetails.localPosition 以正在移动的拇指自身为坐标系，直接用它
+    // 反推轨道位置会在第一帧跳变。增量不受 RenderBox 移动影响，按轨道可用
+    // 高度折算即可保持手指与拇指同步。
+    final progress =
+        (_progress + details.delta.dy / usable).clamp(0.0, 1.0).toDouble();
     _setProgress(progress);
     _scheduleJump(progress * _dragExtent);
   }
@@ -942,19 +1028,20 @@ class _ArticleProgressSliderState extends State<_ArticleProgressSlider> {
       _pendingJumpTarget = null;
       if (pending == null || !mounted || !_overflowing) return;
       final position = widget.controller.position;
-      if ((position.pixels - pending).abs() < 0.5) return;
-      position.jumpTo(pending);
+      final target = pending.clamp(0.0, position.maxScrollExtent).toDouble();
+      if ((position.pixels - target).abs() < 0.5) return;
+      position.jumpTo(target);
     });
   }
 
   void _endThumbDrag() {
     final pending = _pendingJumpTarget;
     _pendingJumpTarget = null;
-    _grabOffsetY = 0;
     if (mounted && pending != null && _overflowing) {
       final position = widget.controller.position;
-      if ((position.pixels - pending).abs() >= 0.5) {
-        position.jumpTo(pending);
+      final target = pending.clamp(0.0, position.maxScrollExtent).toDouble();
+      if ((position.pixels - target).abs() >= 0.5) {
+        position.jumpTo(target);
       }
     }
     if (!mounted) return;
@@ -978,7 +1065,7 @@ class _ArticleProgressSliderState extends State<_ArticleProgressSlider> {
       top: 0,
       bottom: 0,
       right: 0,
-      width: 16,
+      width: _overlayWidth,
       child: AnimatedOpacity(
         opacity: _visible ? 1 : 0,
         duration: const Duration(milliseconds: 200),
@@ -989,38 +1076,48 @@ class _ArticleProgressSliderState extends State<_ArticleProgressSlider> {
               final height = constraints.maxHeight;
               final usable = height - _edgeInset * 2;
               final thumbCenterY = (_edgeInset + _progress * usable)
-                  .clamp(0.0, usable)
+                  .clamp(_edgeInset, height - _edgeInset)
                   .toDouble();
               final thumbTop = (thumbCenterY - _thumbHeight / 2)
-                  .clamp(0.0, usable)
+                  .clamp(0.0, height - _thumbHeight)
                   .toDouble();
               final labelTop =
                   (thumbCenterY - 18).clamp(2.0, height - 38).toDouble();
               const thumbHitHeight = _thumbHeight + 8;
               return Stack(
+                clipBehavior: Clip.none,
                 children: [
                   // 轨道：点击跳转进度；不参与拖动，滑动交给列表。
-                  Positioned.fill(
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    right: 0,
+                    width: _hitWidth,
                     child: GestureDetector(
+                      key: const ValueKey('article-progress-track'),
                       behavior: HitTestBehavior.opaque,
                       onTapDown: (details) =>
                           _seekTo(details.localPosition.dy, height),
                       child: Stack(
-                        alignment: Alignment.center,
                         children: [
-                          Container(
-                            width: _trackWidth,
-                            height: height,
-                            decoration: BoxDecoration(
-                              color:
-                                  theme.colorScheme.onSurface.withOpacity(.12),
-                              borderRadius: BorderRadius.circular(2),
+                          Positioned(
+                            top: _edgeInset,
+                            bottom: _edgeInset,
+                            left: (_hitWidth - _trackWidth) / 2,
+                            child: Container(
+                              width: _trackWidth,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.onSurface
+                                    .withOpacity(.12),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
                           Positioned(
-                            top: 0,
+                            top: _edgeInset,
+                            left: (_hitWidth - _trackWidth) / 2,
                             width: _trackWidth,
-                            height: thumbCenterY,
+                            height: _progress * usable,
                             child: Container(
                               decoration: BoxDecoration(
                                 color: theme.colorScheme.primary,
@@ -1035,19 +1132,20 @@ class _ArticleProgressSliderState extends State<_ArticleProgressSlider> {
                   // 拇指：唯一可拖动的部位，保持按下点相对拇指中心的偏移。
                   Positioned(
                     top: thumbTop - 4,
-                    left: 0,
                     right: 0,
+                    width: _hitWidth,
                     height: thumbHitHeight,
                     child: GestureDetector(
+                      key: const ValueKey('article-progress-thumb-hit'),
                       behavior: HitTestBehavior.opaque,
-                      onVerticalDragStart: (details) => _startThumbDrag(
-                          details.localPosition.dy, thumbHitHeight),
-                      onVerticalDragUpdate: (details) => _updateThumbDrag(
-                          details.localPosition.dy, thumbHitHeight, height),
+                      onVerticalDragStart: (_) => _startThumbDrag(),
+                      onVerticalDragUpdate: (details) =>
+                          _updateThumbDrag(details, height),
                       onVerticalDragEnd: (_) => _endThumbDrag(),
                       onVerticalDragCancel: _endThumbDrag,
                       child: Center(
                         child: Container(
+                          key: const ValueKey('article-progress-thumb'),
                           width: 12,
                           height: _thumbHeight,
                           decoration: BoxDecoration(
@@ -1067,7 +1165,7 @@ class _ArticleProgressSliderState extends State<_ArticleProgressSlider> {
                   ),
                   if (_dragging)
                     Positioned(
-                      right: 30,
+                      right: 26,
                       top: labelTop,
                       child: IgnorePointer(
                         child: Container(
@@ -1078,6 +1176,7 @@ class _ArticleProgressSliderState extends State<_ArticleProgressSlider> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
+                            key: const ValueKey('article-progress-label'),
                             '${(_progress * 100).round()}%',
                             style: TextStyle(
                               color: theme.colorScheme.onInverseSurface,
@@ -1666,8 +1765,7 @@ class _VideoActionsState extends State<_VideoActions> {
               ListTile(
                 title: Text(removing ? '取消收藏：选择要移出的收藏夹' : '选择收藏夹'),
                 subtitle: Text(
-                  removing ? '仅从所选收藏夹移除，其他收藏夹中的收藏不受影响'
-                      : '收藏后可在“我的收藏”中查看',
+                  removing ? '仅从所选收藏夹移除，其他收藏夹中的收藏不受影响' : '收藏后可在“我的收藏”中查看',
                   style: TextStyle(
                       color: AppPalette.of(context).muted, fontSize: 12),
                 ),
@@ -1703,8 +1801,7 @@ class _VideoActionsState extends State<_VideoActions> {
       await _loadStatus();
       await widget.controller.loadFavoriteFolders();
       if (!mounted) return;
-      _notice(
-          removing ? '已从「${folder.name}」取消收藏' : '已收藏到「${folder.name}」');
+      _notice(removing ? '已从「${folder.name}」取消收藏' : '已收藏到「${folder.name}」');
     } catch (error) {
       _notice(_favorite ? '取消收藏失败：$error' : '收藏失败：$error');
     } finally {
@@ -4908,7 +5005,11 @@ class _MentionUserDialogState extends State<_MentionUserDialog> {
 }
 
 class _CommentSection extends StatefulWidget {
-  const _CommentSection({required this.controller, required this.areaId});
+  const _CommentSection({
+    super.key,
+    required this.controller,
+    required this.areaId,
+  });
 
   final AppController controller;
   final int areaId;
@@ -4919,8 +5020,6 @@ class _CommentSection extends StatefulWidget {
 
 class _CommentSectionState extends State<_CommentSection> {
   late Future<List<CommunityComment>> _comments;
-  final _inputKey = GlobalKey<InlineEmojiInputState>();
-  var _isSending = false;
 
   @override
   void initState() {
@@ -4928,10 +5027,72 @@ class _CommentSectionState extends State<_CommentSection> {
     _comments = widget.controller.comments(widget.areaId);
   }
 
-  void _reload() =>
+  void reload() =>
       setState(() => _comments = widget.controller.comments(widget.areaId));
 
-  /// 点击 @ 弹出用户搜索弹窗，把选中的用户以 `[@id:用户名]` 标记插入输入框。
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('评论区', style: Theme.of(context).textTheme.titleLarge),
+              const Spacer(),
+              IconButton(
+                tooltip: '刷新评论',
+                onPressed: reload,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            ],
+          ),
+          FutureBuilder<List<CommunityComment>>(
+            future: _comments,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const _InlineLoading(label: '正在加载评论');
+              }
+              if (snapshot.hasError) {
+                return Text('评论加载失败：${snapshot.error}');
+              }
+              final comments = snapshot.data ?? const <CommunityComment>[];
+              if (comments.isEmpty) return const Text('暂无评论，来抢沙发吧');
+              return Column(
+                children: comments
+                    .map((comment) => _CommentCard(
+                          controller: widget.controller,
+                          comment: comment,
+                          onDeleted: reload,
+                        ))
+                    .toList(),
+              );
+            },
+          ),
+        ],
+      );
+}
+
+/// 固定在详情页底部的评论编辑器，与可滚动的评论列表分离。
+class _CommentComposerBar extends StatefulWidget {
+  const _CommentComposerBar({
+    super.key,
+    required this.controller,
+    required this.areaId,
+    required this.onSubmitted,
+  });
+
+  final AppController controller;
+  final int areaId;
+  final VoidCallback onSubmitted;
+
+  @override
+  State<_CommentComposerBar> createState() => _CommentComposerBarState();
+}
+
+class _CommentComposerBarState extends State<_CommentComposerBar> {
+  final _inputKey = GlobalKey<InlineEmojiInputState>();
+  var _isSending = false;
+  var _isInputFocused = false;
+
   Future<void> _pickMention() async {
     final mention = await _askMentionUser(context, widget.controller);
     if (mention == null) return;
@@ -4954,7 +5115,7 @@ class _CommentSectionState extends State<_CommentSection> {
       await widget.controller
           .createComment(areaId: widget.areaId, spans: spans, images: images);
       input.clear();
-      _reload();
+      widget.onSubmitted();
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('评论已发布')));
@@ -4970,92 +5131,107 @@ class _CommentSectionState extends State<_CommentSection> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('评论区', style: Theme.of(context).textTheme.titleLarge),
-              const Spacer(),
-              IconButton(
-                tooltip: '刷新评论',
-                onPressed: _reload,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-            ],
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final input = Focus(
+      onFocusChange: (focused) {
+        if (focused == _isInputFocused) return;
+        setState(() => _isInputFocused = focused);
+      },
+      child: InlineEmojiInput(
+        key: _inputKey,
+        hintText: '说点什么…',
+        onUploadImage: widget.controller.uploadImage,
+        onSearchUser: widget.controller.searchUsers,
+      ),
+    );
+    Widget imageButton() => IconButton(
+          tooltip: '添加图片',
+          onPressed: () => _inputKey.currentState?.pickImage(),
+          icon: Icon(Icons.image_outlined, color: primary),
+        );
+    Widget mentionButton() => IconButton(
+          tooltip: '@ 用户',
+          onPressed: _pickMention,
+          icon: Icon(Icons.alternate_email, color: primary),
+        );
+    Widget emojiButton() => IconButton(
+          tooltip: '表情包',
+          onPressed: () => _inputKey.currentState?.pickEmoji(),
+          icon: Icon(Icons.emoji_emotions_outlined, color: primary),
+        );
+    Widget sendButton() => IconButton.filled(
+          tooltip: '发布评论',
+          onPressed: _isSending ? null : _submit,
+          icon: _isSending
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.send_rounded),
+        );
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Material(
+          elevation: 10,
+          color: AppPalette.of(context).surface,
+          shadowColor: Colors.black38,
+          borderRadius: BorderRadius.circular(18),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(6, 4, 8, 4),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 440) {
+                  return AnimatedSize(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    alignment: Alignment.bottomCenter,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(child: input),
+                            const SizedBox(width: 6),
+                            sendButton(),
+                          ],
+                        ),
+                        if (_isInputFocused)
+                          Row(
+                            children: [
+                              imageButton(),
+                              mentionButton(),
+                              emojiButton(),
+                            ],
+                          ),
+                      ],
+                    ),
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    imageButton(),
+                    mentionButton(),
+                    emojiButton(),
+                    Expanded(child: input),
+                    const SizedBox(width: 6),
+                    sendButton(),
+                  ],
+                );
+              },
+            ),
           ),
-          InlineEmojiInput(
-            key: _inputKey,
-            hintText: '说点什么…',
-            onUploadImage: widget.controller.uploadImage,
-            onSearchUser: widget.controller.searchUsers,
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              IconButton(
-                tooltip: '添加图片',
-                onPressed: () => _inputKey.currentState?.pickImage(),
-                icon: Icon(
-                  Icons.image_outlined,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 2),
-              IconButton(
-                tooltip: '@ 用户',
-                onPressed: _pickMention,
-                icon: Icon(
-                  Icons.alternate_email,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 2),
-              IconButton(
-                tooltip: '表情包',
-                onPressed: () => _inputKey.currentState?.pickEmoji(),
-                icon: Icon(
-                  Icons.emoji_emotions_outlined,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const Spacer(),
-              FilledButton(
-                onPressed: _isSending ? null : _submit,
-                child: _isSending
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('发布'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          FutureBuilder<List<CommunityComment>>(
-            future: _comments,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const _InlineLoading(label: '正在加载评论');
-              }
-              if (snapshot.hasError) {
-                return Text('评论加载失败：${snapshot.error}');
-              }
-              final comments = snapshot.data ?? const <CommunityComment>[];
-              if (comments.isEmpty) return const Text('暂无评论，来抢沙发吧');
-              return Column(
-                children: comments
-                    .map((comment) => _CommentCard(
-                          controller: widget.controller,
-                          comment: comment,
-                          onDeleted: _reload,
-                        ))
-                    .toList(),
-              );
-            },
-          ),
-        ],
-      );
+        ),
+      ),
+    );
+  }
 }
 
 class _CommentSpans extends StatelessWidget {

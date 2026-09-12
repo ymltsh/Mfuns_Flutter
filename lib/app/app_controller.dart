@@ -142,6 +142,7 @@ class AppController extends ChangeNotifier {
   List<LevelSection> _levelSections = const [];
   bool _isLoadingLevelSections = false;
   bool _autoSignIn = false;
+  ProfileEntryLayout _profileEntryLayout = ProfileEntryLayout.list;
   Timer? _autoSignTimer;
   int _autoSignAttemptedDay = 0;
 
@@ -208,6 +209,14 @@ class AppController extends ChangeNotifier {
   bool get isLoadingFavorites => _isLoadingFavorites;
   bool get hasMoreHistory => _hasMoreHistory;
   bool get isLoadingMoreHistory => _isLoadingMoreHistory;
+
+  /// 浏览历史总量。接口未给出总数且分页尚未全部加载时返回 null，UI 应显示省略号，
+  /// 不能把当前已加载条数误当成总量。
+  int? get historyTotalCount =>
+      _historyTotal ??
+      (_historyLoaded && _historyError == null && !_hasMoreHistory
+          ? _history.length
+          : null);
   List<BackpackItem> get backpack => _backpack;
   bool get isLoadingBackpack => _isLoadingBackpack;
   String? get backpackError => _backpackError;
@@ -222,8 +231,10 @@ class AppController extends ChangeNotifier {
   List<LevelSection> get levelSections => _levelSections;
   bool get isLoadingLevelSections => _isLoadingLevelSections;
   bool get autoSignIn => _autoSignIn;
+  ProfileEntryLayout get profileEntryLayout => _profileEntryLayout;
 
   Future<void> initialize() async {
+    _profileEntryLayout = await UserPreferences.loadProfileEntryLayout();
     _isRestoringSession = true;
     notifyListeners();
     try {
@@ -305,6 +316,14 @@ class AppController extends ChangeNotifier {
       _maybeAutoSign();
     }
     notifyListeners();
+  }
+
+  /// 切换“我的”页面功能入口的布局并持久化。
+  Future<void> setProfileEntryLayout(ProfileEntryLayout layout) async {
+    if (_profileEntryLayout == layout) return;
+    _profileEntryLayout = layout;
+    notifyListeners();
+    await UserPreferences.saveProfileEntryLayout(layout);
   }
 
   /// 自动签到：应用启动时（以及运行期间每天零点后）检查今日签到状态，
@@ -767,26 +786,32 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  double? _historyCursor;
+  String? _historyCursor;
   bool _hasMoreHistory = false;
   bool _isLoadingMoreHistory = false;
+  bool _historyLoaded = false;
+  int? _historyTotal;
   List<BackpackItem> _backpack = const [];
   bool _isLoadingBackpack = false;
   String? _backpackError;
 
   Future<void> loadHistory() async {
     _isLoadingHistory = true;
+    _historyLoaded = false;
+    _historyTotal = null;
     _historyError = null;
     notifyListeners();
     try {
       final page = await _home.getHistory();
       _history = page.items;
       _historyCursor = page.nextStartTime;
-      _hasMoreHistory = page.items.isNotEmpty && page.nextStartTime != null;
+      _hasMoreHistory = page.hasMore;
+      _historyTotal = page.total;
     } on MfunsApiException catch (error) {
       _historyError = error.message;
     } finally {
       _isLoadingHistory = false;
+      _historyLoaded = true;
       notifyListeners();
     }
   }
@@ -798,14 +823,18 @@ class AppController extends ChangeNotifier {
     _isLoadingMoreHistory = true;
     notifyListeners();
     try {
-      final page = await _home.getHistory(startTime: _historyCursor);
-      final seen = _history.map((item) => item.id).toSet();
+      final requestedCursor = _historyCursor;
+      final page = await _home.getHistory(startTime: requestedCursor);
+      final seen = _history.map((item) => '${item.type}:${item.id}').toSet();
       final additions = page.items
-          .where((item) => !seen.contains(item.id))
+          .where((item) => seen.add('${item.type}:${item.id}'))
           .toList(growable: false);
       _history = [..._history, ...additions];
       _historyCursor = page.nextStartTime;
-      _hasMoreHistory = additions.isNotEmpty && page.nextStartTime != null;
+      _historyTotal = page.total ?? _historyTotal;
+      _hasMoreHistory = page.hasMore &&
+          additions.isNotEmpty &&
+          page.nextStartTime != requestedCursor;
     } on MfunsApiException {
       // 滚动到底可再次触发加载。
     } finally {
@@ -1046,6 +1075,8 @@ class AppController extends ChangeNotifier {
     _historyError = null;
     _historyCursor = null;
     _hasMoreHistory = false;
+    _historyLoaded = false;
+    _historyTotal = null;
     _favoriteFolders = const [];
     _favoriteItems = const [];
     _favoritesError = null;
@@ -1138,11 +1169,11 @@ class AppController extends ChangeNotifier {
   Future<List<DanmakuItem>> danmaku(int videoId, int part) =>
       _home.getDanmaku(videoId, part);
 
-  Future<List<MessageConversation>> messageConversations() =>
-      _home.getMessageConversations();
+  Future<List<MessageConversation>> messageConversations({int page = 1}) =>
+      _home.getMessageConversations(page: page);
 
-  Future<List<MessageRecord>> messageRecord(int userId) =>
-      _home.getMessageRecord(userId);
+  Future<MessageRecordsPage> messageRecord(int userId, {String? msgId}) =>
+      _home.getMessageRecord(userId, msgId: msgId);
 
   Future<void> sendMessage({
     required int toUid,
@@ -1307,6 +1338,7 @@ class AppController extends ChangeNotifier {
     required String title,
     required String content,
     required int categoryId,
+    required List<SubmissionVideoPart> videos,
     List<String> tags = const [],
     int copyright = 0,
     String cover = '',
@@ -1316,6 +1348,7 @@ class AppController extends ChangeNotifier {
           title: title,
           content: content,
           categoryId: categoryId,
+          videos: videos,
           tags: tags,
           copyright: copyright,
           cover: cover);
@@ -1339,7 +1372,7 @@ class AppController extends ChangeNotifier {
     required String title,
     required String content,
     required int categoryId,
-    required int videoLibraryId,
+    required List<SubmissionVideoPart> videos,
     List<String> tags = const [],
     int copyright = 0,
     String cover = '',
@@ -1348,7 +1381,7 @@ class AppController extends ChangeNotifier {
           title: title,
           content: content,
           categoryId: categoryId,
-          videoLibraryId: videoLibraryId,
+          videos: videos,
           tags: tags,
           copyright: copyright,
           cover: cover);
