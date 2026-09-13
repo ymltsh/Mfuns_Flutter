@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.5.2",
-    "build": 45,
-    "name": "Mfuns Flutter v1.5.2 仙后座",
+    "version": "1.5.3",
+    "build": 46,
+    "name": "Mfuns Flutter v1.5.3 仙后座",
     "date": "2026-09-13",
-    "notes": "新增\n- 关于页加入版本星座彩蛋，连续点击 Logo 7 次可解锁\n- 仙后座 CAS 全屏星图动画：群星、主星、连线与版本信息依次浮现\n优化\n- 彩蛋布局适配手机横竖屏与 Windows 窗口",
+    "notes": "修复\n- 修复我的投稿仅显示第一页的问题，文章与视频稿件均可加载完整列表\n优化\n- 投稿列表滚动接近底部时自动加载下一页，宽屏首屏不足时自动补页\n- 增加分页去重、下拉刷新、加载失败重试和末页状态提示",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.2cas/mfuns-flutter-1.5.2cas.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.2cas/mfuns-flutter-windows-1.5.2cas.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.3cas/mfuns-flutter-1.5.3cas.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.3cas/mfuns-flutter-windows-1.5.3cas.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.2cas"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.3cas"
   },
   "history": [
+    {
+      "version": "1.5.2",
+      "build": 45,
+      "name": "Mfuns Flutter v1.5.2 仙后座",
+      "date": "2026-09-13",
+      "notes": "新增\n- 关于页加入版本星座彩蛋，连续点击 Logo 7 次可解锁\n- 仙后座 CAS 全屏星图动画：群星、主星、连线与版本信息依次浮现\n优化\n- 彩蛋布局适配手机横竖屏与 Windows 窗口",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.2cas/mfuns-flutter-1.5.2cas.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.2cas/mfuns-flutter-windows-1.5.2cas.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.2cas"
+    },
     {
       "version": "1.5.1",
       "build": 44,
