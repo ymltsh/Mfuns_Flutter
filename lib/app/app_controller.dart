@@ -1276,6 +1276,19 @@ class AppController extends ChangeNotifier {
   }) =>
       _home.getSubmissions(type: type, page: page, size: size, status: status);
 
+  Future<SubmissionItemsPage> submissionPage({
+    required int type,
+    int page = 1,
+    int size = 20,
+    int? status,
+  }) =>
+      _home.getSubmissionsPage(
+        type: type,
+        page: page,
+        size: size,
+        status: status,
+      );
+
   Future<int> submissionCount(int type) => _home.getSubmissionTotal(type);
 
   /// Article + video submission counts, used by the profile stat card.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mfuns_flutter/app/app_controller.dart';
 import 'package:mfuns_flutter/app/mfuns_app.dart';
+import 'package:mfuns_flutter/core/config/app_config.dart';
 import 'package:mfuns_flutter/core/config/user_preferences.dart';
 import 'package:mfuns_flutter/core/theme/app_theme.dart';
 import 'package:mfuns_flutter/features/settings/settings_page.dart';
@@ -96,5 +97,36 @@ void main() {
     );
     expect(button.selected, {ProfileEntryLayout.card});
     expect(controller.profileEntryLayout, ProfileEntryLayout.card);
+  });
+
+  testWidgets('连续点击关于 Logo 七次解锁版本星座彩蛋', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(home: SettingsPage(controller: AppController())),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('关于'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('关于'));
+    await tester.pumpAndSettle();
+
+    final logo = find.byKey(const ValueKey('about-logo-easter-egg'));
+    expect(logo, findsOneWidget);
+    for (var i = 0; i < 7; i++) {
+      await tester.tap(logo);
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const ValueKey('constellation-codename')), findsOneWidget);
+    expect(find.text('仙后座'), findsOneWidget);
+    expect(find.text('CAS'), findsOneWidget);
+    expect(
+      find.textContaining('v${AppConfig.appVersion} (${AppConfig.appBuild})'),
+      findsOneWidget,
+    );
   });
 }

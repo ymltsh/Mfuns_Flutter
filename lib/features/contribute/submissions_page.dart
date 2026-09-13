@@ -17,30 +17,138 @@ class SubmissionsPage extends StatefulWidget {
 }
 
 class _SubmissionsPageState extends State<SubmissionsPage> {
+  static const _pageSize = 20;
+
   var _tab = 0;
-  late Future<List<SubmissionItem>> _future;
+  final _scrollController = ScrollController();
+  final List<SubmissionItem> _items = [];
+  var _nextPage = 1;
+  var _hasMore = true;
+  var _isLoading = true;
+  var _isLoadingMore = false;
+  Object? _error;
+  Object? _loadMoreError;
+  var _generation = 0;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    _scrollController.addListener(_onScroll);
+    _loadFirstPage();
   }
 
-  Future<List<SubmissionItem>> _load() =>
-      widget.controller.submissions(type: _tab);
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
+  }
 
-  Future<void> _reload() async {
-    final next = _load();
-    setState(() => _future = next);
-    await next;
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.extentAfter < 320) _loadMore();
+  }
+
+  Future<void> _loadFirstPage() async {
+    final generation = ++_generation;
+    final type = _tab;
+    final previousNextPage = _nextPage;
+    final previousHasMore = _hasMore;
+    setState(() {
+      _isLoading = true;
+      _isLoadingMore = false;
+      _error = null;
+      _loadMoreError = null;
+      _nextPage = 1;
+      _hasMore = true;
+    });
+    try {
+      final result = await widget.controller.submissionPage(
+        type: type,
+        page: 1,
+        size: _pageSize,
+      );
+      if (!mounted || generation != _generation || type != _tab) return;
+      setState(() {
+        _items
+          ..clear()
+          ..addAll(result.items);
+        _nextPage = 2;
+        _hasMore = result.hasMore;
+        _isLoading = false;
+      });
+      _scheduleLoadMoreIfNeeded();
+    } catch (error) {
+      if (!mounted || generation != _generation || type != _tab) return;
+      setState(() {
+        if (_items.isEmpty) {
+          _error = error;
+        } else {
+          _nextPage = previousNextPage;
+          _hasMore = previousHasMore;
+        }
+        _isLoading = false;
+      });
+      if (_items.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('刷新失败：$error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoading || _isLoadingMore || !_hasMore) return;
+    final generation = _generation;
+    final type = _tab;
+    final page = _nextPage;
+    setState(() {
+      _isLoadingMore = true;
+      _loadMoreError = null;
+    });
+    try {
+      final result = await widget.controller.submissionPage(
+        type: type,
+        page: page,
+        size: _pageSize,
+      );
+      if (!mounted || generation != _generation || type != _tab) return;
+      final knownIds = _items.map((item) => item.id).toSet();
+      setState(() {
+        _items.addAll(
+          result.items.where((item) => knownIds.add(item.id)),
+        );
+        _nextPage = page + 1;
+        _hasMore = result.hasMore;
+        _isLoadingMore = false;
+      });
+      _scheduleLoadMoreIfNeeded();
+    } catch (error) {
+      if (!mounted || generation != _generation || type != _tab) return;
+      setState(() {
+        _loadMoreError = error;
+        _isLoadingMore = false;
+      });
+    }
+  }
+
+  Future<void> _reload() => _loadFirstPage();
+
+  void _scheduleLoadMoreIfNeeded() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      if (_scrollController.position.extentAfter < 320) _loadMore();
+    });
   }
 
   void _selectTab(int value) {
     if (_tab == value) return;
     setState(() {
       _tab = value;
-      _future = _load();
+      _items.clear();
     });
+    _loadFirstPage();
   }
 
   void _openEditor() {
@@ -56,6 +164,87 @@ class _SubmissionsPageState extends State<SubmissionsPage> {
         .then((changed) {
       if (changed == true) _reload();
     });
+  }
+
+  Widget _buildBody(AppPalette palette) {
+    if (_isLoading && _items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && _items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '加载失败：$_error',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppPalette.of(context).muted),
+              ),
+              const SizedBox(height: 10),
+              TextButton.icon(
+                onPressed: _reload,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('重试'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.edit_note_outlined,
+              color: AppPalette.of(context).muted,
+              size: 44,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '还没有投稿',
+              style: TextStyle(color: AppPalette.of(context).muted),
+            ),
+            const SizedBox(height: 6),
+            TextButton.icon(
+              onPressed: _openEditor,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('发布第一篇投稿'),
+            ),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      color: palette.primary,
+      onRefresh: _reload,
+      child: ListView.separated(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        itemCount: _items.length + 1,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          if (index == _items.length) {
+            return _SubmissionListFooter(
+              hasMore: _hasMore,
+              loading: _isLoadingMore,
+              error: _loadMoreError,
+              onRetry: _loadMore,
+            );
+          }
+          return _SubmissionCard(
+            item: _items[index],
+            type: _tab,
+            controller: widget.controller,
+            onChanged: _reload,
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -87,75 +276,63 @@ class _SubmissionsPageState extends State<SubmissionsPage> {
               onTap: _selectTab,
             ),
             Expanded(
-              child: FutureBuilder<List<SubmissionItem>>(
-                future: _future,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('加载失败：${snapshot.error}',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    color: AppPalette.of(context).muted)),
-                            const SizedBox(height: 10),
-                            TextButton.icon(
-                                onPressed: _reload,
-                                icon: const Icon(Icons.refresh_rounded),
-                                label: const Text('重试')),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-                  final items = snapshot.data ?? const <SubmissionItem>[];
-                  if (items.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.edit_note_outlined,
-                              color: AppPalette.of(context).muted, size: 44),
-                          const SizedBox(height: 10),
-                          Text('还没有投稿',
-                              style: TextStyle(
-                                  color: AppPalette.of(context).muted)),
-                          const SizedBox(height: 6),
-                          TextButton.icon(
-                              onPressed: _openEditor,
-                              icon: const Icon(Icons.add_rounded),
-                              label: const Text('发布第一篇投稿')),
-                        ],
-                      ),
-                    );
-                  }
-                  return RefreshIndicator(
-                    color: palette.primary,
-                    onRefresh: _reload,
-                    child: ListView.separated(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) => _SubmissionCard(
-                        item: items[index],
-                        type: _tab,
-                        controller: widget.controller,
-                        onChanged: _reload,
-                      ),
-                    ),
-                  );
-                },
-              ),
+              child: _buildBody(palette),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SubmissionListFooter extends StatelessWidget {
+  const _SubmissionListFooter({
+    required this.hasMore,
+    required this.loading,
+    required this.error,
+    required this.onRetry,
+  });
+
+  final bool hasMore;
+  final bool loading;
+  final Object? error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = AppPalette.of(context).muted;
+    if (loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: SizedBox.square(
+            dimension: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    if (error != null) {
+      return Center(
+        child: TextButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('加载更多失败，点击重试'),
+        ),
+      );
+    }
+    if (hasMore) {
+      return Center(
+        child: TextButton(
+          onPressed: onRetry,
+          child: const Text('加载更多'),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: Text('已加载全部投稿', style: TextStyle(color: muted)),
       ),
     );
   }

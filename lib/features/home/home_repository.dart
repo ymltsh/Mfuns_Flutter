@@ -496,6 +496,45 @@ class VideoUploadAuth {
 }
 
 /// A submission (投稿) from `/v1/contribute/list`.
+class SubmissionItemsPage {
+  const SubmissionItemsPage({
+    required this.items,
+    required this.hasMore,
+    this.total,
+  });
+
+  final List<SubmissionItem> items;
+  final bool hasMore;
+  final int? total;
+
+  factory SubmissionItemsPage.fromData(
+    Object? data, {
+    required int page,
+    required int size,
+  }) {
+    final root = _asMap(data);
+    final nested = _asMap(root['data']);
+    final rawList = data is List
+        ? data
+        : root['list'] ?? root['items'] ?? nested['list'] ?? nested['items'];
+    final items = rawList is List
+        ? rawList
+            .whereType<Map<String, dynamic>>()
+            .map(SubmissionItem.fromJson)
+            .where((item) => item.id != 0)
+            .toList(growable: false)
+        : const <SubmissionItem>[];
+    final total = _asInt(root['total'] ?? nested['total']);
+    return SubmissionItemsPage(
+      items: items,
+      total: total,
+      hasMore: total != null
+          ? page * size < total
+          : rawList is List && rawList.length >= size,
+    );
+  }
+}
+
 class SubmissionItem {
   const SubmissionItem({
     required this.id,
@@ -1873,6 +1912,20 @@ class HomeRepository {
     int page = 1,
     int size = 20,
     int? status,
+  }) async =>
+      (await getSubmissionsPage(
+        type: type,
+        page: page,
+        size: size,
+        status: status,
+      ))
+          .items;
+
+  Future<SubmissionItemsPage> getSubmissionsPage({
+    required int type,
+    int page = 1,
+    int size = 20,
+    int? status,
   }) async {
     final response = await _client.get('/v1/contribute/list', query: {
       'type': type,
@@ -1880,14 +1933,11 @@ class HomeRepository {
       'size': size,
       if (status != null) 'status': status,
     });
-    final root = _asMap(response.data);
-    final rawList = response.data is List ? response.data : root['list'];
-    if (rawList is! List) return const [];
-    return rawList
-        .whereType<Map<String, dynamic>>()
-        .map(SubmissionItem.fromJson)
-        .where((item) => item.id != 0)
-        .toList(growable: false);
+    return SubmissionItemsPage.fromData(
+      response.data,
+      page: page,
+      size: size,
+    );
   }
 
   /// Total submission count for one type (0 = article, 1 = video), read

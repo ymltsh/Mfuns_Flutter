@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_link_handler.dart';
 import 'download_settings_page.dart';
 import 'network_diagnostics_page.dart';
+import 'widgets/version_constellation_dialog.dart';
 
 const _genderOptions = <int, String>{0: '保密', 1: '男', 2: '女', 3: '其他'};
 
@@ -28,6 +30,69 @@ const _qualityOptions = <String>[
 String _qualityLabel(String value) => value.isEmpty ? '自动' : value;
 
 String _sideRatioLabel(double ratio) => '1/${(1 / ratio).round()}';
+
+class _AboutLogoEasterEgg extends StatefulWidget {
+  const _AboutLogoEasterEgg({required this.onUnlocked});
+
+  final VoidCallback onUnlocked;
+
+  @override
+  State<_AboutLogoEasterEgg> createState() => _AboutLogoEasterEggState();
+}
+
+class _AboutLogoEasterEggState extends State<_AboutLogoEasterEgg> {
+  static const _requiredTaps = 7;
+
+  Timer? _resetTimer;
+  var _tapCount = 0;
+  var _unlocked = false;
+
+  void _handleTap() {
+    if (_unlocked) return;
+    _resetTimer?.cancel();
+    setState(() => _tapCount++);
+    if (_tapCount >= _requiredTaps) {
+      _unlocked = true;
+      widget.onUnlocked();
+      return;
+    }
+    // Long pauses start a new sequence and keep accidental taps unobtrusive.
+    _resetTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _tapCount = 0);
+    });
+  }
+
+  @override
+  void dispose() {
+    _resetTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: 'Mfuns Flutter Logo',
+        button: true,
+        child: GestureDetector(
+          key: const ValueKey('about-logo-easter-egg'),
+          behavior: HitTestBehavior.opaque,
+          onTap: _handleTap,
+          child: TweenAnimationBuilder<double>(
+            key: ValueKey(_tapCount),
+            duration: const Duration(milliseconds: 150),
+            tween: Tween(begin: 0.9, end: 1),
+            curve: Curves.easeOutBack,
+            builder: (context, scale, child) =>
+                Transform.scale(scale: scale, child: child),
+            child: Image.asset(
+              'assets/logo.png',
+              width: 42,
+              height: 42,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      );
+}
 
 /// 设置页：按账号、内容体验、网络和应用支持分组展示。
 class SettingsPage extends StatefulWidget {
@@ -287,8 +352,18 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       applicationName: 'Mfuns Flutter',
       applicationVersion: AppConfig.appVersion,
-      applicationIcon: Image.asset('assets/logo.png',
-          width: 42, height: 42, fit: BoxFit.contain),
+      applicationIcon: _AboutLogoEasterEgg(
+        onUnlocked: () => showGeneralDialog<void>(
+          context: context,
+          barrierColor: Colors.black,
+          barrierDismissible: false,
+          barrierLabel: '版本星座彩蛋',
+          transitionDuration: const Duration(milliseconds: 300),
+          pageBuilder: (_, __, ___) => const VersionConstellationDialog(),
+          transitionBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+      ),
       children: [
         const Text('Mfuns Flutter，由社区支持的Material Design风格的Mfuns客户端。'),
         const SizedBox(height: 14),

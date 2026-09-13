@@ -64,4 +64,53 @@ void main() {
     expect(submissionStatusLabel(4), '被驳回修改');
     expect(submissionStatusLabel(5), '定时发布');
   });
+
+  test('submission page uses total to determine whether another page exists',
+      () {
+    final first = SubmissionItemsPage.fromData(
+      {
+        'list': [
+          {'id': 3, 'title': '稿件 3'},
+          {'id': 2, 'title': '稿件 2'},
+        ],
+        'total': 3,
+      },
+      page: 1,
+      size: 2,
+    );
+    final last = SubmissionItemsPage.fromData(
+      {
+        'list': [
+          {'id': 1, 'title': '稿件 1'},
+        ],
+        'total': 3,
+      },
+      page: 2,
+      size: 2,
+    );
+
+    expect(first.items.map((item) => item.id), [3, 2]);
+    expect(first.hasMore, isTrue);
+    expect(first.total, 3);
+    expect(last.hasMore, isFalse);
+  });
+
+  test('submission page supports nested data and missing total fallback', () {
+    final page = SubmissionItemsPage.fromData(
+      {
+        'data': {
+          'list': [
+            {'id': 2},
+            {'id': 1},
+          ],
+        },
+      },
+      page: 1,
+      size: 2,
+    );
+
+    expect(page.items, hasLength(2));
+    expect(page.total, isNull);
+    expect(page.hasMore, isTrue);
+  });
 }
