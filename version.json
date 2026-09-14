@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.5.3",
-    "build": 46,
-    "name": "Mfuns Flutter v1.5.3 仙后座",
-    "date": "2026-09-13",
-    "notes": "修复\n- 修复我的投稿仅显示第一页的问题，文章与视频稿件均可加载完整列表\n优化\n- 投稿列表滚动接近底部时自动加载下一页，宽屏首屏不足时自动补页\n- 增加分页去重、下拉刷新、加载失败重试和末页状态提示",
+    "version": "1.5.4",
+    "build": 47,
+    "name": "Mfuns Flutter v1.5.4 仙后座",
+    "date": "2026-09-15",
+    "notes": "优化\n- 重做横屏播放器控制层，优化分 P、清晰度、进度、倍速与音量操作\n- Windows 全屏播放新增键盘快捷键：空格播放/暂停、方向键快进与音量、M 静音、Esc 退出\n- 优化竖屏异形视频显示：极宽与极高画面保持原始比例，控制区域不再压缩或占满首屏\n- 评论回复支持分页加载、失败重试与去重\n- 视频封面缺失时使用黑色背景，减少视觉干扰",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.3cas/mfuns-flutter-1.5.3cas.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.3cas/mfuns-flutter-windows-1.5.3cas.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.4/mfuns-flutter-1.5.4.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.4/mfuns-flutter-windows-1.5.4.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.3cas"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.4"
   },
   "history": [
+    {
+      "version": "1.5.3",
+      "build": 46,
+      "name": "Mfuns Flutter v1.5.3 仙后座",
+      "date": "2026-09-13",
+      "notes": "修复\n- 修复我的投稿仅显示第一页的问题，文章与视频稿件均可加载完整列表\n优化\n- 投稿列表滚动接近底部时自动加载下一页，宽屏首屏不足时自动补页\n- 增加分页去重、下拉刷新、加载失败重试和末页状态提示",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.3cas/mfuns-flutter-1.5.3cas.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.3cas/mfuns-flutter-windows-1.5.3cas.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.3cas"
+    },
     {
       "version": "1.5.2",
       "build": 45,
