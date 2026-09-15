@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.5.5",
-    "build": 49,
-    "name": "Mfuns Flutter v1.5.5 仙后座",
+    "version": "1.5.6",
+    "build": 50,
+    "name": "Mfuns Flutter v1.5.6 仙后座",
     "date": "2026-09-15",
-    "notes": "新增\n- 文章、视频和动态支持分享转发到动态\n- 设置新增后台通知服务开关，默认开启\n优化\n- Android 支持沉浸式导航栏小白条\n- 页面滑动时 Tab 选择器跟随手势进度，切换更顺滑\n修复\n- 修复评论内容换行未正确渲染\n- 修复从 Mfuns 网页点击 APP 打开后未进入对应动态详情",
+    "notes": "新增\n- 支持手机号验证码登录\n- 主题外观支持选择图片作为应用背景，可自适应显示并调节不透明度\n优化\n- 点赞通知中的过长源内容增加省略号提示\n修复\n- 修复转发动态引用的源动态显示未命名内容且无法正常打开的问题",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.5cas/mfuns-flutter-1.5.5cas.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.5cas/mfuns-flutter-windows-1.5.5cas.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.6/mfuns-flutter-1.5.6.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.6/mfuns-flutter-windows-1.5.6.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.5cas"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.6"
   },
   "history": [
+    {
+      "version": "1.5.5",
+      "build": 49,
+      "name": "Mfuns Flutter v1.5.5 仙后座",
+      "date": "2026-09-15",
+      "notes": "新增\n- 文章、视频和动态支持分享转发到动态\n- 设置新增后台通知服务开关，默认开启\n优化\n- Android 支持沉浸式导航栏小白条\n- 页面滑动时 Tab 选择器跟随手势进度，切换更顺滑\n修复\n- 修复评论内容换行未正确渲染\n- 修复从 Mfuns 网页点击 APP 打开后未进入对应动态详情",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.5cas/mfuns-flutter-1.5.5cas.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.5cas/mfuns-flutter-windows-1.5.5cas.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.5cas"
+    },
     {
       "version": "1.5.5",
       "build": 48,
