@@ -52,6 +52,10 @@ void main() {
     await tester.tap(find.text('主题外观'));
     await tester.pumpAndSettle();
 
+    expect(find.text('应用背景'), findsOneWidget);
+    expect(find.text('默认网格'), findsOneWidget);
+    expect(find.text('选择图片'), findsOneWidget);
+
     await tester.tap(find.text('深色'));
     await tester.pump();
     var button = tester.widget<SegmentedButton<AppThemeMode>>(

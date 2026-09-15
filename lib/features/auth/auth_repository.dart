@@ -39,8 +39,33 @@ class AuthRepository {
       'account': account,
       'password': password,
     });
+    return _completeLogin(login);
+  }
+
+  /// 向手机号发送登录验证码。成功时返回服务端提示文案。
+  Future<String> sendLoginCode({required String phone}) async {
+    final response = await _client.postJson('/v1/auth/send_login_code', {
+      'phone': phone,
+    });
+    return response.message;
+  }
+
+  /// 使用手机号与短信验证码登录。
+  Future<UserSession> loginBySms({
+    required String phone,
+    required String code,
+  }) async {
+    final login = await _client.postJson('/v1/auth/login_by_sms', {
+      'phone': phone,
+      'code': int.parse(code),
+    });
+    return _completeLogin(login);
+  }
+
+  Future<UserSession> _completeLogin(ApiResponse login) async {
     final loginData = _asMap(login.data);
-    final token = loginData['access_token']?.toString() ?? '';
+    final token =
+        (loginData['access_token'] ?? loginData['token'])?.toString() ?? '';
     if (token.isEmpty) {
       throw const MfunsApiException('登录响应中没有 access_token');
     }

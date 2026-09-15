@@ -102,6 +102,42 @@ void main() {
     expect(feed.resource?.isVideo, isTrue);
   });
 
+  test('parses a forwarded feed resource as a readable source feed', () {
+    final feed = TimelineFeed.fromJson({
+      'id': 277984,
+      'resource_type': 3,
+      'content': '<p>补充说明</p>',
+      'extra_type': 2,
+      'extra': {
+        'resource': {
+          'id': 277983,
+          'resource_id': 277983,
+          'resource_type': 3,
+          'content': '<p>异环，启动！</p><p>源动态正文</p>',
+          'views': 18,
+          'floor_count': 2,
+          'like_status': {
+            'like': {'count': 3, 'is_active': false},
+          },
+          'user': {
+            'id': 7,
+            'name': '源动态作者',
+            'avatar': '/static/avatar.jpg',
+          },
+        },
+      },
+    });
+
+    expect(feed.resource, isNotNull);
+    expect(feed.resource!.id, 277983);
+    expect(feed.resource!.isFeed, isTrue);
+    expect(feed.resource!.title, '异环，启动！\n源动态正文');
+    expect(feed.resource!.author, '源动态作者');
+    expect(feed.resource!.views, 18);
+    expect(feed.resource!.likes, 3);
+    expect(feed.resource!.comments, 2);
+  });
+
   test('parses images from the new_reply_list extra payload', () {
     final feed = TimelineFeed.fromJson({
       'id': 17,

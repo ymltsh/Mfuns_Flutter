@@ -617,8 +617,9 @@ class _FeedResourceCard extends StatelessWidget {
           title: Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
           subtitle: Text('${item.views} 浏览 · ${item.likes} 赞'),
           onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-              builder: (_) =>
-                  ContentDetailPage(controller: controller, preview: item))),
+              builder: (_) => item.isFeed
+                  ? FeedDetailPage(controller: controller, feedId: item.id)
+                  : ContentDetailPage(controller: controller, preview: item))),
         ),
       );
 }

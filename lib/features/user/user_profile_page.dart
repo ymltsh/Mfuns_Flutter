@@ -643,11 +643,11 @@ class _UserFeedCard extends StatelessWidget {
       );
 }
 
-/// 自动同步动态的类型标识（文章/视频）。
+/// 动态引用资源的类型标识。
 class _FeedTypeTag extends StatelessWidget {
-  const _FeedTypeTag({required this.isVideo});
+  const _FeedTypeTag({required this.type});
 
-  final bool isVideo;
+  final int type;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -656,7 +656,12 @@ class _FeedTypeTag extends StatelessWidget {
           color: _palette(context).primary.withOpacity(.1),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(isVideo ? '视频' : '文章',
+        child: Text(
+            type == 3
+                ? '动态'
+                : type == 1
+                    ? '视频'
+                    : '文章',
             style: TextStyle(
                 color: _palette(context).primary,
                 fontSize: 10.5,
@@ -675,8 +680,9 @@ class _ProfileResourceCard extends StatelessWidget {
   Widget build(BuildContext context) => InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) =>
-                ContentDetailPage(controller: controller, preview: item))),
+            builder: (_) => item.isFeed
+                ? FeedDetailPage(controller: controller, feedId: item.id)
+                : ContentDetailPage(controller: controller, preview: item))),
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
@@ -715,7 +721,7 @@ class _ProfileResourceCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Row(
                       children: [
-                        _FeedTypeTag(isVideo: item.isVideo),
+                        _FeedTypeTag(type: item.type),
                         const SizedBox(width: 6),
                         Text('${item.likes} 赞 · ${item.views} 浏览',
                             style: TextStyle(

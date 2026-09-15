@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
 import '../../core/theme/app_theme.dart';
@@ -26,25 +29,85 @@ class _LoginSheet extends StatefulWidget {
 class _LoginSheetState extends State<_LoginSheet> {
   final _account = TextEditingController();
   final _password = TextEditingController();
+  final _phone = TextEditingController();
+  final _code = TextEditingController();
+  var _mode = _LoginMode.password;
   var _obscurePassword = true;
+  Timer? _codeTimer;
+  var _codeSeconds = 0;
 
   @override
   void dispose() {
     _account.dispose();
     _password.dispose();
+    _phone.dispose();
+    _code.dispose();
+    _codeTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _login() async {
-    if (_account.text.trim().isEmpty || _password.text.isEmpty) return;
-    final error = await widget.controller.login(_account.text, _password.text);
+    final String? error;
+    if (_mode == _LoginMode.password) {
+      if (_account.text.trim().isEmpty) {
+        _notice('请输入账号');
+        return;
+      }
+      if (_password.text.isEmpty) {
+        _notice('请输入密码');
+        return;
+      }
+      error = await widget.controller.login(_account.text, _password.text);
+    } else {
+      final phone = _phone.text.trim();
+      final code = _code.text.trim();
+      if (!_isPhone(phone)) {
+        _notice('请输入正确的 11 位手机号');
+        return;
+      }
+      if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+        _notice('请输入 6 位验证码');
+        return;
+      }
+      error = await widget.controller.loginBySms(phone, code);
+    }
     if (!mounted) return;
     if (error == null) {
       Navigator.of(context).pop();
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    _notice(error);
   }
+
+  Future<void> _sendCode() async {
+    final phone = _phone.text.trim();
+    if (!_isPhone(phone)) {
+      _notice('请输入正确的 11 位手机号');
+      return;
+    }
+    final error = await widget.controller.sendLoginCode(phone);
+    if (!mounted) return;
+    if (error != null) {
+      _notice(error);
+      return;
+    }
+    _notice('验证码已发送');
+    _codeTimer?.cancel();
+    setState(() => _codeSeconds = 60);
+    _codeTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _codeSeconds <= 1) {
+        timer.cancel();
+        if (mounted) setState(() => _codeSeconds = 0);
+        return;
+      }
+      setState(() => _codeSeconds--);
+    });
+  }
+
+  bool _isPhone(String value) => RegExp(r'^1\d{10}$').hasMatch(value);
+
+  void _notice(String message) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(message)));
 
   /// 一键切换已保存账号：成功即关闭登录面板。
   Future<void> _switchTo(StoredAccount account) async {
@@ -146,31 +209,111 @@ class _LoginSheetState extends State<_LoginSheet> {
                       const SizedBox(height: 14),
                     ] else
                       const SizedBox(height: 22),
-                    TextField(
-                      controller: _account,
-                      keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.username],
-                      decoration: const InputDecoration(
-                          labelText: '用户名 / ID / 邮箱 / 手机号'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _password,
-                      obscureText: _obscurePassword,
-                      autofillHints: const [AutofillHints.password],
-                      onSubmitted: (_) => _login(),
-                      decoration: InputDecoration(
-                        labelText: '密码',
-                        suffixIcon: IconButton(
-                          tooltip: _obscurePassword ? '显示密码' : '隐藏密码',
-                          icon: Icon(_obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined),
-                          onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword),
-                        ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: SegmentedButton<_LoginMode>(
+                        segments: const [
+                          ButtonSegment(
+                            value: _LoginMode.password,
+                            icon: Icon(Icons.lock_outline_rounded),
+                            label: Text('密码登录'),
+                          ),
+                          ButtonSegment(
+                            value: _LoginMode.sms,
+                            icon: Icon(Icons.sms_outlined),
+                            label: Text('验证码登录'),
+                          ),
+                        ],
+                        selected: {_mode},
+                        onSelectionChanged: controller.isLoggingIn
+                            ? null
+                            : (selection) =>
+                                setState(() => _mode = selection.first),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    if (_mode == _LoginMode.password) ...[
+                      TextField(
+                        controller: _account,
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.username],
+                        decoration: const InputDecoration(
+                            labelText: '用户名 / ID / 邮箱 / 手机号'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _password,
+                        obscureText: _obscurePassword,
+                        autofillHints: const [AutofillHints.password],
+                        onSubmitted: (_) => _login(),
+                        decoration: InputDecoration(
+                          labelText: '密码',
+                          suffixIcon: IconButton(
+                            tooltip: _obscurePassword ? '显示密码' : '隐藏密码',
+                            icon: Icon(_obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined),
+                            onPressed: () => setState(
+                                () => _obscurePassword = !_obscurePassword),
+                          ),
+                        ),
+                      ),
+                    ] else ...[
+                      TextField(
+                        key: const ValueKey('sms-login-phone'),
+                        controller: _phone,
+                        keyboardType: TextInputType.phone,
+                        autofillHints: const [AutofillHints.telephoneNumber],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(11),
+                        ],
+                        decoration: const InputDecoration(labelText: '手机号'),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              key: const ValueKey('sms-login-code'),
+                              controller: _code,
+                              keyboardType: TextInputType.number,
+                              autofillHints: const [AutofillHints.oneTimeCode],
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(6),
+                              ],
+                              onSubmitted: (_) => _login(),
+                              decoration:
+                                  const InputDecoration(labelText: '验证码'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            height: 56,
+                            child: OutlinedButton(
+                              key: const ValueKey('sms-send-code'),
+                              onPressed: controller.isSendingLoginCode ||
+                                      controller.isLoggingIn ||
+                                      _codeSeconds > 0
+                                  ? null
+                                  : _sendCode,
+                              child: controller.isSendingLoginCode
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : Text(_codeSeconds > 0
+                                      ? '${_codeSeconds}s 后重发'
+                                      : '获取验证码'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     SizedBox(
                       width: double.infinity,
@@ -185,7 +328,8 @@ class _LoginSheetState extends State<_LoginSheet> {
                                 width: 20,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2, color: Colors.white))
-                            : const Text('登录'),
+                            : Text(
+                                _mode == _LoginMode.password ? '登录' : '验证码登录'),
                       ),
                     ),
                   ],
@@ -198,6 +342,8 @@ class _LoginSheetState extends State<_LoginSheet> {
     );
   }
 }
+
+enum _LoginMode { password, sms }
 
 /// 已保存账号的一键切换行（游客登录面板内）。
 class _SavedAccountRow extends StatelessWidget {

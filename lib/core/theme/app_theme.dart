@@ -184,6 +184,11 @@ ThemeData buildAppTheme(Color seed,
 class ThemeSettings {
   static const _key = 'app_theme_seed';
   static const _modeKey = 'app_theme_mode';
+  static const _backgroundImageKey = 'app_background_image';
+  static const _backgroundOpacityKey = 'app_background_opacity';
+
+  /// 自定义背景图的默认透明度，兼顾图片辨识度与前景内容可读性。
+  static const defaultBackgroundOpacity = 0.35;
 
   static Future<Color> load() async {
     try {
@@ -220,6 +225,48 @@ class ThemeSettings {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_modeKey, mode.index);
+    } catch (_) {
+      // 保存失败时忽略，仅本次会话生效
+    }
+  }
+
+  static Future<String> loadBackgroundImage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_backgroundImageKey)?.trim() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static Future<void> saveBackgroundImage(String path) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (path.trim().isEmpty) {
+        await prefs.remove(_backgroundImageKey);
+      } else {
+        await prefs.setString(_backgroundImageKey, path.trim());
+      }
+    } catch (_) {
+      // 保存失败时忽略，仅本次会话生效
+    }
+  }
+
+  static Future<double> loadBackgroundOpacity() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return (prefs.getDouble(_backgroundOpacityKey) ??
+              defaultBackgroundOpacity)
+          .clamp(0.0, 1.0);
+    } catch (_) {
+      return defaultBackgroundOpacity;
+    }
+  }
+
+  static Future<void> saveBackgroundOpacity(double opacity) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_backgroundOpacityKey, opacity.clamp(0.0, 1.0));
     } catch (_) {
       // 保存失败时忽略，仅本次会话生效
     }

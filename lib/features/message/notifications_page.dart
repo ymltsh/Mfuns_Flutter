@@ -706,6 +706,8 @@ class _NotifyCardState extends State<_NotifyCard> {
                       const SizedBox(height: 6),
                       Text(
                         item.text.isEmpty ? '（空通知）' : item.text,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             color: AppPalette.of(context).muted, height: 1.4),
                       ),

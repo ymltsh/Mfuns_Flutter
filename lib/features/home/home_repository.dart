@@ -36,6 +36,7 @@ class ContentPreview {
   final DateTime? createdAt;
 
   bool get isVideo => type == 1;
+  bool get isFeed => type == 3;
 
   factory ContentPreview.fromJson(Map<String, dynamic> json) {
     final resource = _asMap(json['resource_info']);
@@ -163,6 +164,40 @@ ContentPreview? _feedResource(
 ) {
   final extraResource = _asMap(_asMap(source['extra'])['resource']);
   if (extraResource.isNotEmpty) {
+    final resourceType = _asResourceType(
+        extraResource['type'] ?? extraResource['resource_type']);
+    if (resourceType == 3) {
+      final resourceUser = _asMap(extraResource['user']);
+      final resourceLike = _asMap(_asMap(extraResource['like_status'])['like']);
+      final rawContent =
+          '${extraResource['title'] ?? extraResource['content'] ?? extraResource['summary'] ?? ''}';
+      final title = _toPlainText(rawContent).trim();
+      final images = _feedImages(
+          extraResource['images'] ?? _asMap(extraResource['extra'])['images']);
+      return ContentPreview(
+        id: _asInt(extraResource['id'] ?? extraResource['resource_id']) ?? 0,
+        title: title.isEmpty ? '动态内容' : title,
+        summary: title,
+        cover: images.firstOrNull ?? _coverUrl(extraResource['cover']),
+        author:
+            '${resourceUser['name'] ?? resourceUser['username'] ?? extraResource['user_name'] ?? ''}',
+        category: '动态',
+        type: 3,
+        likes:
+            _asInt(extraResource['like_count'] ?? resourceLike['count']) ?? 0,
+        comments: _asInt(extraResource['comment_count'] ??
+                extraResource['floor_count'] ??
+                extraResource['floor_num']) ??
+            0,
+        views:
+            _asInt(extraResource['view_count'] ?? extraResource['views']) ?? 0,
+        authorId: _asInt(resourceUser['id'] ??
+            resourceUser['user_id'] ??
+            extraResource['user_id']),
+        authorAvatar: _coverUrl(resourceUser['avatar'] ?? resourceUser['face']),
+        createdAt: _asDateTime(extraResource['created_at']),
+      );
+    }
     return ContentPreview.fromJson(extraResource);
   }
   if (!autoSync) return null;

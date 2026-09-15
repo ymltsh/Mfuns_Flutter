@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../core/config/user_preferences.dart';
 import '../core/navigation/app_route_observer.dart';
+import '../core/theme/app_background_storage.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/content_link_handler.dart';
 import '../core/widgets/content_spans.dart';
@@ -45,6 +49,8 @@ class MfunsApp extends StatefulWidget {
 class _MfunsAppState extends State<MfunsApp> {
   Color _seed = const Color(0xFF5094B2);
   ThemeMode _mode = ThemeMode.system;
+  String _backgroundImagePath = '';
+  double _backgroundOpacity = ThemeSettings.defaultBackgroundOpacity;
 
   @override
   void initState() {
@@ -55,6 +61,12 @@ class _MfunsAppState extends State<MfunsApp> {
     });
     ThemeSettings.loadMode().then((mode) {
       if (mounted) setState(() => _mode = _themeModeOf(mode));
+    });
+    ThemeSettings.loadBackgroundImage().then((path) {
+      if (mounted) setState(() => _backgroundImagePath = path);
+    });
+    ThemeSettings.loadBackgroundOpacity().then((opacity) {
+      if (mounted) setState(() => _backgroundOpacity = opacity);
     });
   }
 
@@ -68,6 +80,17 @@ class _MfunsAppState extends State<MfunsApp> {
     ThemeSettings.saveMode(mode);
   }
 
+  void _setBackgroundImage(String path) {
+    setState(() => _backgroundImagePath = path);
+    ThemeSettings.saveBackgroundImage(path);
+  }
+
+  void _setBackgroundOpacity(double opacity) {
+    final value = opacity.clamp(0.0, 1.0);
+    setState(() => _backgroundOpacity = value);
+    ThemeSettings.saveBackgroundOpacity(value);
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Mfuns Flutter',
@@ -77,11 +100,17 @@ class _MfunsAppState extends State<MfunsApp> {
         theme: buildAppTheme(_seed),
         darkTheme: buildAppTheme(_seed, brightness: Brightness.dark),
         themeMode: _mode,
-        builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
-          value: appSystemUiOverlayStyle(
-            brightness: Theme.of(context).brightness,
+        builder: (context, child) => _AppBackgroundScope(
+          imagePath: _backgroundImagePath,
+          opacity: _backgroundOpacity,
+          onImageChanged: _setBackgroundImage,
+          onOpacityChanged: _setBackgroundOpacity,
+          child: AnnotatedRegion<SystemUiOverlayStyle>(
+            value: appSystemUiOverlayStyle(
+              brightness: Theme.of(context).brightness,
+            ),
+            child: child ?? const SizedBox.shrink(),
           ),
-          child: child ?? const SizedBox.shrink(),
         ),
         home: _HomeShell(
           controller: widget.controller,
@@ -91,6 +120,30 @@ class _MfunsAppState extends State<MfunsApp> {
           onModeChanged: _setMode,
         ),
       );
+}
+
+class _AppBackgroundScope extends InheritedWidget {
+  const _AppBackgroundScope({
+    required this.imagePath,
+    required this.opacity,
+    required this.onImageChanged,
+    required this.onOpacityChanged,
+    required super.child,
+  });
+
+  final String imagePath;
+  final double opacity;
+  final ValueChanged<String> onImageChanged;
+  final ValueChanged<double> onOpacityChanged;
+
+  static _AppBackgroundScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_AppBackgroundScope>();
+
+  static _AppBackgroundScope of(BuildContext context) => maybeOf(context)!;
+
+  @override
+  bool updateShouldNotify(_AppBackgroundScope oldWidget) =>
+      imagePath != oldWidget.imagePath || opacity != oldWidget.opacity;
 }
 
 ThemeMode _themeModeOf(AppThemeMode mode) => switch (mode) {
@@ -1012,6 +1065,10 @@ class _TimelinePageState extends State<_TimelinePage>
   }
 
   void _openContentDetail(ContentPreview preview) {
+    if (preview.isFeed) {
+      _openFeedDetail(preview.id);
+      return;
+    }
     Navigator.of(context).push(MaterialPageRoute<void>(
         builder: (_) => ContentDetailPage(
             controller: widget.controller, preview: preview)));
@@ -1970,11 +2027,11 @@ class _TimelineFeedCard extends StatelessWidget {
       );
 }
 
-/// 自动同步动态的类型标识（文章/视频）。
+/// 动态引用资源的类型标识。
 class _FeedTypeTag extends StatelessWidget {
-  const _FeedTypeTag({required this.isVideo});
+  const _FeedTypeTag({required this.type});
 
-  final bool isVideo;
+  final int type;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1983,7 +2040,12 @@ class _FeedTypeTag extends StatelessWidget {
           color: _palette(context).primary.withOpacity(.1),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: Text(isVideo ? '视频' : '文章',
+        child: Text(
+            type == 3
+                ? '动态'
+                : type == 1
+                    ? '视频'
+                    : '文章',
             style: TextStyle(
                 color: _palette(context).primary,
                 fontSize: 10.5,
@@ -2038,7 +2100,7 @@ class _TimelineResourceCard extends StatelessWidget {
                         const Spacer(),
                         Row(
                           children: [
-                            _FeedTypeTag(isVideo: item.isVideo),
+                            _FeedTypeTag(type: item.type),
                             const SizedBox(width: 6),
                             Text('${item.views} 浏览 · ${item.likes} 赞',
                                 style: TextStyle(
@@ -2526,6 +2588,7 @@ class _ThemeSheet extends StatefulWidget {
 class _ThemeSheetState extends State<_ThemeSheet> {
   late final TextEditingController _hex;
   late AppThemeMode _selectedMode;
+  var _isPickingBackground = false;
 
   static const swatches = <Color>[
     Color(0xFF5094B2), // 希露菲青（默认）
@@ -2591,10 +2654,56 @@ class _ThemeSheetState extends State<_ThemeSheet> {
     Navigator.of(context).pop();
   }
 
+  Future<void> _pickBackground() async {
+    if (_isPickingBackground) return;
+    final scope = _AppBackgroundScope.of(context);
+    final oldPath = scope.imagePath;
+    setState(() => _isPickingBackground = true);
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 4096,
+        maxHeight: 4096,
+        imageQuality: 92,
+      );
+      if (picked == null) return;
+      final savedPath = await AppBackgroundStorage.importImage(picked);
+      if (!mounted) {
+        await AppBackgroundStorage.removeManagedImage(savedPath);
+        return;
+      }
+      scope.onImageChanged(savedPath);
+      if (oldPath != savedPath) {
+        await AppBackgroundStorage.removeManagedImage(oldPath);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('应用背景已更新')));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('选择背景失败：$error')));
+      }
+    } finally {
+      if (mounted) setState(() => _isPickingBackground = false);
+    }
+  }
+
+  Future<void> _clearBackground() async {
+    final scope = _AppBackgroundScope.of(context);
+    final oldPath = scope.imagePath;
+    scope.onImageChanged('');
+    await AppBackgroundStorage.removeManagedImage(oldPath);
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = _palette(context);
     final seed = widget.seed;
+    final background = _AppBackgroundScope.of(context);
+    final hasBackground = background.imagePath.isNotEmpty &&
+        File(background.imagePath).existsSync();
     return _RaisedSheet(
       dragHandle: true,
       child: Column(
@@ -2643,6 +2752,68 @@ class _ThemeSheetState extends State<_ThemeSheet> {
               widget.onModeChanged(mode);
             },
           ),
+          const SizedBox(height: 18),
+          Text('应用背景',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: palette.ink)),
+          const SizedBox(height: 10),
+          _BackgroundPreview(
+            imagePath: hasBackground ? background.imagePath : '',
+            opacity: background.opacity,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isPickingBackground ? null : _pickBackground,
+                  icon: _isPickingBackground
+                      ? const SizedBox.square(
+                          dimension: 17,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.image_outlined),
+                  label: Text(hasBackground ? '更换图片' : '选择图片'),
+                ),
+              ),
+              if (hasBackground) ...[
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: _clearBackground,
+                  icon: const Icon(Icons.grid_4x4_rounded),
+                  label: const Text('恢复网格'),
+                ),
+              ],
+            ],
+          ),
+          if (hasBackground) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('图片不透明度', style: TextStyle(color: palette.muted)),
+                Expanded(
+                  child: Slider(
+                    value: background.opacity,
+                    min: 0,
+                    max: 1,
+                    divisions: 20,
+                    label: '${(background.opacity * 100).round()}%',
+                    onChanged: background.onOpacityChanged,
+                  ),
+                ),
+                SizedBox(
+                  width: 42,
+                  child: Text(
+                    '${(background.opacity * 100).round()}%',
+                    textAlign: TextAlign.end,
+                    style: TextStyle(color: palette.ink),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 18),
           Text('主题颜色',
               style: TextStyle(
@@ -2720,6 +2891,65 @@ class _ThemeSheetState extends State<_ThemeSheet> {
           const SizedBox(height: 14),
           Text('选择后即生效', style: TextStyle(color: palette.muted, fontSize: 12)),
         ],
+      ),
+    );
+  }
+}
+
+class _BackgroundPreview extends StatelessWidget {
+  const _BackgroundPreview({
+    required this.imagePath,
+    required this.opacity,
+  });
+
+  final String imagePath;
+  final double opacity;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _palette(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        height: 112,
+        width: double.infinity,
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (imagePath.isEmpty)
+              CustomPaint(
+                painter: _DiamondPatternPainter(color: palette.divider),
+              )
+            else
+              Opacity(
+                opacity: opacity,
+                child: Image.file(
+                  File(imagePath),
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, __, ___) => CustomPaint(
+                    painter: _DiamondPatternPainter(color: palette.divider),
+                  ),
+                ),
+              ),
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Container(
+                margin: const EdgeInsets.all(9),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: palette.surface.withOpacity(.88),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  imagePath.isEmpty ? '默认网格' : '自适应填充预览',
+                  style: TextStyle(fontSize: 12, color: palette.ink),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2857,7 +3087,7 @@ class _ProfileGuestBody extends StatelessWidget {
       _ProfileAction(
         icon: Icons.palette_outlined,
         title: '主题外观',
-        subtitle: '模式与主题颜色',
+        subtitle: '模式、颜色与应用背景',
         onTap: () => _showThemeSheet(
           context,
           themeSeed,
@@ -2963,7 +3193,7 @@ class _ProfileMemberBody extends StatelessWidget {
       _ProfileAction(
         icon: Icons.palette_outlined,
         title: '主题外观',
-        subtitle: '模式与主题颜色',
+        subtitle: '模式、颜色与应用背景',
         onTap: () => _showThemeSheet(
           context,
           themeSeed,
@@ -4125,10 +4355,35 @@ class _PatternBackground extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => CustomPaint(
-        painter: _DiamondPatternPainter(color: _palette(context).divider),
-        child: child,
-      );
+  Widget build(BuildContext context) {
+    final palette = _palette(context);
+    final background = _AppBackgroundScope.maybeOf(context);
+    final imagePath = background?.imagePath ?? '';
+    final hasImage = imagePath.isNotEmpty && File(imagePath).existsSync();
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (!hasImage)
+          CustomPaint(
+            painter: _DiamondPatternPainter(color: palette.divider),
+          )
+        else
+          Opacity(
+            opacity: background!.opacity,
+            child: Image.file(
+              File(imagePath),
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) => CustomPaint(
+                painter: _DiamondPatternPainter(color: palette.divider),
+              ),
+            ),
+          ),
+        child,
+      ],
+    );
+  }
 }
 
 class _DiamondPatternPainter extends CustomPainter {

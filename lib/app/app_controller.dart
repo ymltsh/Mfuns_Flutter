@@ -114,6 +114,7 @@ class AppController extends ChangeNotifier {
   bool _isSearching = false;
   bool _isSearchingUser = false;
   bool _isLoggingIn = false;
+  bool _isSendingLoginCode = false;
   bool _isRestoringSession = false;
   bool _isLoadingHotRankings = false;
   bool _isLoadingCategories = false;
@@ -193,6 +194,7 @@ class AppController extends ChangeNotifier {
   bool get isSearching => _isSearching;
   bool get isSearchingUser => _isSearchingUser;
   bool get isLoggingIn => _isLoggingIn;
+  bool get isSendingLoginCode => _isSendingLoginCode;
   bool get isRestoringSession => _isRestoringSession;
   bool get isLoadingHotRankings => _isLoadingHotRankings;
   bool get isLoadingCategories => _isLoadingCategories;
@@ -961,11 +963,20 @@ class AppController extends ChangeNotifier {
   }
 
   Future<String?> login(String account, String password) async {
+    return _runLogin(
+        () => _auth.login(account: account.trim(), password: password));
+  }
+
+  Future<String?> loginBySms(String phone, String code) async {
+    return _runLogin(
+        () => _auth.loginBySms(phone: phone.trim(), code: code.trim()));
+  }
+
+  Future<String?> _runLogin(Future<UserSession> Function() authenticate) async {
     _isLoggingIn = true;
     notifyListeners();
     try {
-      final session =
-          await _auth.login(account: account.trim(), password: password);
+      final session = await authenticate();
       _session = session;
       // 同一账号重复登录时更新已有快照与凭证，其余账号保持不变。
       await _commitActiveSession();
@@ -976,6 +987,22 @@ class AppController extends ChangeNotifier {
       return error.message;
     } finally {
       _isLoggingIn = false;
+      notifyListeners();
+    }
+  }
+
+  /// 请求短信登录验证码。返回 null 表示发送成功，否则返回用户可见错误。
+  Future<String?> sendLoginCode(String phone) async {
+    if (_isSendingLoginCode) return '验证码正在发送，请稍候…';
+    _isSendingLoginCode = true;
+    notifyListeners();
+    try {
+      await _auth.sendLoginCode(phone: phone.trim());
+      return null;
+    } on MfunsApiException catch (error) {
+      return error.message;
+    } finally {
+      _isSendingLoginCode = false;
       notifyListeners();
     }
   }
