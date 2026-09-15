@@ -82,6 +82,27 @@ void main() {
     expect(comment.content, '@少女乌斯QWQ');
   });
 
+  test('preserves line breaks across separate quill insert operations', () {
+    final comment = CommunityComment.fromJson({
+      'id': 107,
+      'content': '{"ops":[{"insert":"第一行\\n"},{"insert":"第二行\\n\\n第三行\\n"}]}',
+    });
+
+    expect(comment.spans, hasLength(1));
+    expect(comment.spans.single.text, '第一行\n第二行\n\n第三行');
+    expect(comment.content, '第一行\n第二行\n\n第三行');
+  });
+
+  test('preserves paragraph and br line breaks in html comments', () {
+    final comment = CommunityComment.fromJson({
+      'id': 108,
+      'content': '<p>第一行<br>第二行</p><p>第三行</p>',
+    });
+
+    expect(comment.spans.single.text, '第一行\n第二行\n第三行');
+    expect(comment.content, '第一行\n第二行\n第三行');
+  });
+
   test('converts mention markers in text to mention spans', () {
     final spans = commentSpansFromText('[@少女乌斯]来啦 [s-1]');
     expect(spans, hasLength(3));

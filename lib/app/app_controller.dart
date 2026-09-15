@@ -142,6 +142,7 @@ class AppController extends ChangeNotifier {
   List<LevelSection> _levelSections = const [];
   bool _isLoadingLevelSections = false;
   bool _autoSignIn = false;
+  bool _backgroundNotifications = true;
   ProfileEntryLayout _profileEntryLayout = ProfileEntryLayout.list;
   Timer? _autoSignTimer;
   int _autoSignAttemptedDay = 0;
@@ -231,6 +232,7 @@ class AppController extends ChangeNotifier {
   List<LevelSection> get levelSections => _levelSections;
   bool get isLoadingLevelSections => _isLoadingLevelSections;
   bool get autoSignIn => _autoSignIn;
+  bool get backgroundNotifications => _backgroundNotifications;
   ProfileEntryLayout get profileEntryLayout => _profileEntryLayout;
 
   Future<void> initialize() async {
@@ -247,8 +249,33 @@ class AppController extends ChangeNotifier {
     }
     _latestMarkedIds.addAll(await UserPreferences.loadLatestMarkedIds());
     await Future.wait([refreshHome(), loadCategories(), loadLevelSections()]);
-    if (_session != null) _startUnreadPolling();
+    await _initBackgroundNotifications();
     await _initAutoSign();
+  }
+
+  Future<void> _initBackgroundNotifications() async {
+    _backgroundNotifications =
+        await UserPreferences.loadBackgroundNotifications();
+    if (!_backgroundNotifications) return;
+    await LocalMessageNotifier.instance.init();
+    await LocalMessageNotifier.instance.requestPermission();
+    if (_session != null) _startUnreadPolling();
+  }
+
+  /// 设置后台通知服务。关闭时立即停止轮询并撤下已有消息通知。
+  Future<void> setBackgroundNotifications(bool enabled) async {
+    if (_backgroundNotifications == enabled) return;
+    _backgroundNotifications = enabled;
+    notifyListeners();
+    await UserPreferences.saveBackgroundNotifications(enabled);
+    if (!enabled) {
+      _cancelUnreadPolling();
+      await LocalMessageNotifier.instance.cancelAll();
+      return;
+    }
+    await LocalMessageNotifier.instance.init();
+    await LocalMessageNotifier.instance.requestPermission();
+    if (_session != null) _startUnreadPolling();
   }
 
   /// 从安全存储恢复多账号列表并自动登录最近使用且仍然有效的账号。
@@ -1204,7 +1231,7 @@ class AppController extends ChangeNotifier {
     try {
       final counts = await _home.getNotifyCounts();
       final previous = _lastNotifyCounts;
-      if (previous != null) {
+      if (_backgroundNotifications && previous != null) {
         if (counts.message > previous.message) {
           LocalMessageNotifier.instance
               .showDm(counts.message - previous.message);
@@ -1241,6 +1268,7 @@ class AppController extends ChangeNotifier {
 
   void _startUnreadPolling() {
     _unreadTimer?.cancel();
+    if (!_backgroundNotifications) return;
     _unreadTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       refreshUnreadCounts();
     });
@@ -1248,11 +1276,15 @@ class AppController extends ChangeNotifier {
   }
 
   void _stopUnreadPolling() {
-    _unreadTimer?.cancel();
-    _unreadTimer = null;
+    _cancelUnreadPolling();
     _unreadCount = 0;
     _notifyUnread = 0;
     _lastNotifyCounts = null;
+  }
+
+  void _cancelUnreadPolling() {
+    _unreadTimer?.cancel();
+    _unreadTimer = null;
   }
 
   Future<List<NotifyItem>> notifications({required int type, int page = 1}) =>
@@ -1405,6 +1437,17 @@ class AppController extends ChangeNotifier {
     List<String> tags = const [],
   }) =>
       _home.createFeed(content: content, images: images, tags: tags);
+
+  Future<void> forwardFeed({
+    required String content,
+    required int resourceId,
+    required int resourceType,
+  }) =>
+      _home.forwardFeed(
+        content: content,
+        resourceId: resourceId,
+        resourceType: resourceType,
+      );
 
   Future<void> updateUserName(String name) => _home.updateUserName(name);
 

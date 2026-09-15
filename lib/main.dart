@@ -61,9 +61,8 @@ void main() async {
           DownloadPartSource(part: item.part, url: item.url),
     ];
   };
-  // 消息前台通知（Notification API）：初始化通道、请求权限；
-  // 点击通知时回到根页面并跳转对应页面（私信/赞/评论/提及）。
-  await LocalMessageNotifier.instance.init(onTap: (payload) {
+  // 仅注册通知点击跳转。通知能力和权限会在用户开启“后台通知服务”后初始化。
+  LocalMessageNotifier.instance.configure(onTap: (payload) {
     _navigatorKey.currentState?.popUntil((route) => route.isFirst);
     switch (payload) {
       case LocalMessageNotifier.payloadLike:
@@ -78,7 +77,6 @@ void main() async {
         controller.openMessagesTab();
     }
   });
-  await LocalMessageNotifier.instance.requestPermission();
   runApp(MfunsApp(controller: controller, navigatorKey: _navigatorKey));
   // 链接唤醒：mfuns:// 协议与 mfuns.net / mfuns.wgen.top 深链打开对应页面。
   LinkRouter(controller: controller, navigatorKey: _navigatorKey).start();

@@ -18,6 +18,7 @@ import '../../core/media/media_notification.dart';
 import '../../core/media/playback_coordinator.dart';
 import '../../core/media/playback_log.dart';
 import '../../core/media/playback_source.dart';
+import '../../core/media/player_viewport.dart';
 import '../../core/navigation/app_route_observer.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_link_handler.dart';
@@ -29,6 +30,7 @@ import '../content/export/comment_collector.dart';
 import '../content/rich_content_card.dart';
 import '../download/download_picker_sheet.dart';
 import '../download/widgets/download_button.dart';
+import '../feed/feed_compose_page.dart';
 import '../home/home_repository.dart';
 import '../home/tag_articles_page.dart';
 import '../settings/network_diagnostics_page.dart';
@@ -176,6 +178,7 @@ class _VideoDetailPageState extends State<VideoDetailPage>
                       );
             final tabs = _DetailTabs(
               activeTab: _activeTab,
+              animation: _tabController.animation,
               commentCount: detail.preview.comments,
               onChanged: (value) => _tabController.animateTo(value),
               onSendDanmaku: detail.preview.isVideo
@@ -1262,6 +1265,7 @@ class _DanmakuComposeSheetState extends State<_DanmakuComposeSheet> {
 class _DetailTabs extends StatelessWidget {
   const _DetailTabs({
     required this.activeTab,
+    this.animation,
     required this.commentCount,
     required this.onChanged,
     this.onSendDanmaku,
@@ -1270,6 +1274,7 @@ class _DetailTabs extends StatelessWidget {
   });
 
   final int activeTab;
+  final Animation<double>? animation;
   final int commentCount;
   final ValueChanged<int> onChanged;
   final VoidCallback? onSendDanmaku;
@@ -1277,48 +1282,56 @@ class _DetailTabs extends StatelessWidget {
   final bool danmakuOn;
 
   @override
-  Widget build(BuildContext context) => Material(
-        color: Theme.of(context).colorScheme.surface,
-        elevation: 2,
-        child: SizedBox(
-          height: 46,
-          child: Row(
-            children: [
-              _DetailTab(
-                label: '简介',
-                selected: activeTab == 0,
-                onTap: () => onChanged(0),
-              ),
-              _DetailTab(
-                label: '评论 $commentCount',
-                selected: activeTab == 1,
-                onTap: () => onChanged(1),
-              ),
-              const Spacer(),
-              TextButton(onPressed: onSendDanmaku, child: const Text('发弹幕')),
-              IconButton(
-                tooltip: danmakuOn ? '关闭弹幕' : '开启弹幕',
-                onPressed: onToggleDanmaku,
-                icon: Icon(danmakuOn
-                    ? Icons.subtitles_rounded
-                    : Icons.subtitles_off_rounded),
-              ),
-              const SizedBox(width: 4),
-            ],
+  Widget build(BuildContext context) {
+    Widget buildTabs(double position) => Material(
+          color: Theme.of(context).colorScheme.surface,
+          elevation: 2,
+          child: SizedBox(
+            height: 46,
+            child: Row(
+              children: [
+                _DetailTab(
+                  label: '简介',
+                  selectedStrength: (1 - position.abs()).clamp(0.0, 1.0),
+                  onTap: () => onChanged(0),
+                ),
+                _DetailTab(
+                  label: '评论 $commentCount',
+                  selectedStrength: (1 - (position - 1).abs()).clamp(0.0, 1.0),
+                  onTap: () => onChanged(1),
+                ),
+                const Spacer(),
+                TextButton(onPressed: onSendDanmaku, child: const Text('发弹幕')),
+                IconButton(
+                  tooltip: danmakuOn ? '关闭弹幕' : '开启弹幕',
+                  onPressed: onToggleDanmaku,
+                  icon: Icon(danmakuOn
+                      ? Icons.subtitles_rounded
+                      : Icons.subtitles_off_rounded),
+                ),
+                const SizedBox(width: 4),
+              ],
+            ),
           ),
-        ),
-      );
+        );
+    final animation = this.animation;
+    if (animation == null) return buildTabs(activeTab.toDouble());
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) => buildTabs(animation.value),
+    );
+  }
 }
 
 class _DetailTab extends StatelessWidget {
   const _DetailTab({
     required this.label,
-    required this.selected,
+    required this.selectedStrength,
     required this.onTap,
   });
 
   final String label;
-  final bool selected;
+  final double selectedStrength;
   final VoidCallback? onTap;
 
   @override
@@ -1331,18 +1344,21 @@ class _DetailTab extends StatelessWidget {
             children: [
               Text(label,
                   style: TextStyle(
-                    color: selected
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: Color.lerp(
+                        Theme.of(context).colorScheme.onSurfaceVariant,
+                        Theme.of(context).colorScheme.primary,
+                        selectedStrength),
+                    fontWeight: FontWeight.lerp(
+                        FontWeight.w500, FontWeight.w700, selectedStrength),
                   )),
               const SizedBox(height: 6),
               Container(
                 width: 42,
                 height: 3,
-                color: selected
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.transparent,
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withOpacity(selectedStrength),
               ),
             ],
           ),
@@ -1820,6 +1836,26 @@ class _VideoActionsState extends State<_VideoActions> {
     if (mounted) _notice('链接已复制');
   }
 
+  Future<void> _forwardToFeed() async {
+    if (!_ensureSignedIn()) return;
+    final resourceTitle =
+        _resourceType == 3 ? widget.preview.summary : widget.preview.title;
+    final forwarded = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => FeedForwardPage(
+          controller: widget.controller,
+          resourceId: widget.preview.id,
+          resourceType: _resourceType,
+          resourceTitle: resourceTitle,
+          resourceCover: widget.preview.cover,
+        ),
+      ),
+    );
+    if (forwarded == true) {
+      widget.controller.loadFeeds();
+    }
+  }
+
   /// 文章（非动态）且正文非空时，在「更多」中提供导出入口。
   bool get _canExportArticle =>
       !widget.preview.isVideo &&
@@ -1835,6 +1871,14 @@ class _VideoActionsState extends State<_VideoActions> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            ListTile(
+              leading: const Icon(Icons.repeat_rounded),
+              title: const Text('转发到动态'),
+              subtitle: Text('添加转发理由并分享到时间线',
+                  style: TextStyle(
+                      color: AppPalette.of(context).muted, fontSize: 12)),
+              onTap: () => Navigator.of(sheetContext).pop('forward'),
+            ),
             if (_canExportArticle) ...[
               ListTile(
                 leading: const Icon(Icons.ios_share_rounded),
@@ -1870,6 +1914,7 @@ class _VideoActionsState extends State<_VideoActions> {
       ),
     );
     if (!mounted || action == null) return;
+    if (action == 'forward') await _forwardToFeed();
     if (action == 'copy') await _copyLink();
     if (action == 'refresh') await _loadStatus();
     if (action == 'delete') await _confirmDeleteFeed();
@@ -2778,6 +2823,11 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
       statusBarBrightness: Brightness.dark,
+      systemStatusBarContrastEnforced: false,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+      systemNavigationBarContrastEnforced: false,
     ));
     _loadPreferences();
     _ticker = Timer.periodic(const Duration(milliseconds: 350), (_) {
@@ -2946,7 +2996,7 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
     _ticker?.cancel();
     _controlsTimer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark);
+    // 返回页面后由路由树中的 AnnotatedRegion 恢复当前主题的系统栏样式。
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     if (_wakelockHeld) {
       _wakelockHeld = false;
@@ -3351,26 +3401,40 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
             .take(12)
             .toList(growable: false)
         : const <DanmakuItem>[];
-    // 常规（横屏比例）视频最多占屏幕高度 2/3；竖屏比例视频（高大于宽）
-    // 缩放到正常 16:9 比例的播放框（黑边居中），避免固定播放器占用过多
-    // 显示区域、遮挡下方内容。横屏布局中播放器撑满左栏不受影响。
-    final aspectRatio = value?.aspectRatio ?? 16 / 9;
+    final rawAspectRatio = value?.aspectRatio ?? 16 / 9;
+    final aspectRatio =
+        rawAspectRatio.isFinite && rawAspectRatio > 0 ? rawAspectRatio : 16 / 9;
     final screenSize = MediaQuery.sizeOf(context);
-    final maxHeight = screenSize.height * 2 / 3;
-    final portraitCap = screenSize.width * 9 / 16;
-    final heightCap =
-        aspectRatio < 1 && portraitCap < maxHeight ? portraitCap : maxHeight;
     final topInset = MediaQuery.paddingOf(context).top;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final naturalVideoHeight = constraints.maxWidth / aspectRatio;
-        final videoHeight =
-            naturalVideoHeight > heightCap ? heightCap : naturalVideoHeight;
-        final videoWidth = videoHeight * aspectRatio;
         final availableHeight = constraints.maxHeight;
-        final surfaceHeight =
-            availableHeight.isFinite ? availableHeight : videoHeight;
+        late final double surfaceHeight;
+        late final double videoWidth;
+        late final double videoHeight;
+        if (availableHeight.isFinite) {
+          // 横屏分栏时播放器视口由左栏约束决定，画面只做 contain 适配。
+          surfaceHeight = availableHeight;
+          final surfaceAspect = constraints.maxWidth / surfaceHeight;
+          videoWidth = aspectRatio >= surfaceAspect
+              ? constraints.maxWidth
+              : surfaceHeight * aspectRatio;
+          videoHeight = aspectRatio >= surfaceAspect
+              ? constraints.maxWidth / aspectRatio
+              : surfaceHeight;
+        } else {
+          // 竖屏详情页没有纵向约束：为极宽/极高视频创建稳定的控制视口，
+          // 视频画面保持原始比例并在黑色背景中居中。
+          final geometry = calculatePortraitPlayerViewport(
+            viewportWidth: constraints.maxWidth,
+            screenHeight: screenSize.height,
+            videoAspectRatio: aspectRatio,
+          );
+          surfaceHeight = geometry.surfaceHeight;
+          videoWidth = geometry.videoWidth;
+          videoHeight = geometry.videoHeight;
+        }
         return ColoredBox(
           color: Colors.black,
           child: Padding(
@@ -3395,7 +3459,7 @@ class _MfunsVideoPlayerState extends State<MfunsVideoPlayer>
                 onHorizontalDragEnd: (_) => _finishDragSeek(),
                 onHorizontalDragCancel: _finishDragSeek,
                 onVerticalDragUpdate: (details) => _handleVerticalSlide(
-                    details, MediaQuery.sizeOf(context).width, videoHeight),
+                    details, MediaQuery.sizeOf(context).width, surfaceHeight),
                 onVerticalDragEnd: (_) => _clearSlideFeedback(),
                 onVerticalDragCancel: _clearSlideFeedback,
                 child: Stack(
@@ -3808,6 +3872,8 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
   var _brightness = .5;
   var _brightnessAvailable = true;
   late double _playbackSpeed;
+  late String _defaultQuality;
+  late bool _autoPlay;
   late VideoPlayerController _player;
   late VideoQuality? _selectedQuality;
   late List<DanmakuItem> _danmaku;
@@ -3832,9 +3898,12 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
     _showDanmaku = widget.showDanmaku;
     _volume = widget.volume;
     _playbackSpeed = widget.playbackSpeed;
+    _defaultQuality = widget.defaultQuality;
+    _autoPlay = widget.autoPlay;
     _player = widget.player;
     _selectedQuality = widget.selectedQuality;
     _danmaku = widget.danmaku;
+    HardwareKeyboard.instance.addHandler(_handleHardwareKey);
     _loadBrightness();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     SystemChrome.setPreferredOrientations(const [
@@ -3866,6 +3935,7 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
     _hideTimer?.cancel();
     _ticker?.cancel();
     _danmakuInput.dispose();
+    HardwareKeyboard.instance.removeHandler(_handleHardwareKey);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     if (_isDesktop) {
@@ -3940,10 +4010,120 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
   void _scheduleHide() {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && _player.value.isPlaying) {
+      if (mounted &&
+          _player.value.isPlaying &&
+          !_showOptions &&
+          !_showDanmakuComposer &&
+          !_isSeeking) {
         setState(() => _controlsVisible = false);
       }
     });
+  }
+
+  void _showControls({bool restartTimer = true}) {
+    if (!_controlsVisible && mounted) {
+      setState(() => _controlsVisible = true);
+    }
+    if (restartTimer) _scheduleHide();
+  }
+
+  void _toggleControls() {
+    setState(() {
+      _controlsVisible = !_controlsVisible;
+      if (!_controlsVisible) {
+        _showOptions = false;
+        _showDanmakuComposer = false;
+      }
+    });
+    if (_controlsVisible) _scheduleHide();
+  }
+
+  void _toggleOptions() {
+    final opening = !_showOptions;
+    setState(() {
+      _showDanmakuComposer = false;
+      _showOptions = opening;
+      _controlsVisible = true;
+    });
+    if (opening) {
+      _hideTimer?.cancel();
+    } else {
+      _scheduleHide();
+    }
+  }
+
+  void _toggleDanmakuComposer() {
+    final opening = !_showDanmakuComposer;
+    setState(() {
+      _showOptions = false;
+      _showDanmakuComposer = opening;
+      _controlsVisible = true;
+    });
+    if (opening) {
+      _hideTimer?.cancel();
+    } else {
+      _scheduleHide();
+    }
+  }
+
+  Future<void> _togglePlayback() async {
+    if (_player.value.isPlaying) {
+      await MfunsPlaybackCoordinator.instance.requestPause();
+    } else {
+      await MfunsPlaybackCoordinator.instance.requestPlay();
+    }
+    if (mounted) _showControls();
+  }
+
+  bool _handleHardwareKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      if (_showOptions || _showDanmakuComposer) {
+        setState(() {
+          _showOptions = false;
+          _showDanmakuComposer = false;
+        });
+        _scheduleHide();
+      } else {
+        _close();
+      }
+      return true;
+    }
+    // 输入弹幕时保留空格、方向键和字母键的文本编辑语义。
+    if (_showDanmakuComposer) return false;
+    if (key == LogicalKeyboardKey.space ||
+        key == LogicalKeyboardKey.mediaPlayPause) {
+      if (event is KeyDownEvent) _togglePlayback();
+    } else if (key == LogicalKeyboardKey.arrowLeft) {
+      _seekBy(-10);
+    } else if (key == LogicalKeyboardKey.arrowRight) {
+      _seekBy(10);
+    } else if (key == LogicalKeyboardKey.arrowUp) {
+      _changeVolume(.05);
+    } else if (key == LogicalKeyboardKey.arrowDown) {
+      _changeVolume(-.05);
+    } else if (key == LogicalKeyboardKey.keyM) {
+      if (event is KeyDownEvent) {
+        _setVolume(_volume == 0 ? .7 : 0);
+      }
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _changeVolume(double delta) => _setVolume(_volume + delta);
+
+  Future<void> _setVolume(double value) async {
+    final next = value.clamp(0.0, 1.0).toDouble();
+    setState(() {
+      _volume = next;
+      _controlsVisible = true;
+      _slideFeedback = _SlideFeedback(brightness: false, value: next);
+    });
+    await _player.setVolume(next);
+    _scheduleHide();
   }
 
   Future<void> _loadBrightness() async {
@@ -4048,10 +4228,7 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
         backgroundColor: Colors.black,
         body: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () {
-            setState(() => _controlsVisible = !_controlsVisible);
-            if (_controlsVisible) _scheduleHide();
-          },
+          onTap: _toggleControls,
           onDoubleTapDown: (details) => _doubleTapX = details.localPosition.dx,
           onDoubleTap: () {
             final width = MediaQuery.sizeOf(context).width;
@@ -4120,7 +4297,7 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                   colors: [
                                     Color(0x99000000),
                                     Colors.transparent,
-                                    Color(0xaa000000)
+                                    Color(0xaa000000),
                                   ],
                                 ),
                               ),
@@ -4142,13 +4319,32 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                             onPressed: _close,
                                           ),
                                           Expanded(
-                                            child: Text(widget.title,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  widget.title,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
                                                     color: Colors.white,
-                                                    fontWeight:
-                                                        FontWeight.w600)),
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 15,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  'P${_selectedQuality?.part ?? 1} · ${_selectedQuality == null ? '默认' : _qualityDisplayLabel(_selectedQuality!)}',
+                                                  maxLines: 1,
+                                                  style: const TextStyle(
+                                                    color: Colors.white60,
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                           IconButton(
                                             color: Colors.white,
@@ -4161,11 +4357,7 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                                 : Icons.subtitles_off_rounded),
                                           ),
                                           TextButton(
-                                            onPressed: () => setState(() {
-                                              _showOptions = false;
-                                              _showDanmakuComposer =
-                                                  !_showDanmakuComposer;
-                                            }),
+                                            onPressed: _toggleDanmakuComposer,
                                             style: TextButton.styleFrom(
                                               foregroundColor: Colors.white,
                                               padding:
@@ -4179,54 +4371,59 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                           IconButton(
                                             color: Colors.white,
                                             tooltip: '播放器设置',
-                                            onPressed: () => setState(() {
-                                              _showDanmakuComposer = false;
-                                              _showOptions = !_showOptions;
-                                            }),
+                                            onPressed: _toggleOptions,
                                             icon: const Icon(
                                                 Icons.settings_rounded),
                                           ),
-                                          PopupMenuButton<int>(
-                                            tooltip: '分 P',
-                                            initialValue:
-                                                _selectedQuality?.part,
-                                            onSelected: (part) {
-                                              final next = _matchingPartQuality(
-                                                  widget.qualities,
-                                                  _selectedQuality,
-                                                  part);
-                                              if (next != null) {
-                                                _queueQualitySelect(next);
-                                              }
-                                            },
-                                            itemBuilder: (context) {
-                                              final parts = widget.qualities
+                                          if (widget.qualities
                                                   .map(
                                                       (quality) => quality.part)
                                                   .toSet()
-                                                  .toList()
-                                                ..sort();
-                                              return parts
-                                                  .map((part) => PopupMenuItem(
-                                                        value: part,
-                                                        child: Text('P$part'),
-                                                      ))
-                                                  .toList();
-                                            },
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 9,
-                                                      vertical: 8),
-                                              child: Text(
-                                                'P${_selectedQuality?.part ?? 1}',
-                                                style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontWeight:
-                                                        FontWeight.w800),
+                                                  .length >
+                                              1)
+                                            PopupMenuButton<int>(
+                                              tooltip: '分 P',
+                                              initialValue:
+                                                  _selectedQuality?.part,
+                                              onSelected: (part) {
+                                                final next =
+                                                    _matchingPartQuality(
+                                                        widget.qualities,
+                                                        _selectedQuality,
+                                                        part);
+                                                if (next != null) {
+                                                  _queueQualitySelect(next);
+                                                }
+                                              },
+                                              itemBuilder: (context) {
+                                                final parts = widget.qualities
+                                                    .map((quality) =>
+                                                        quality.part)
+                                                    .toSet()
+                                                    .toList()
+                                                  ..sort();
+                                                return parts
+                                                    .map((part) =>
+                                                        PopupMenuItem(
+                                                          value: part,
+                                                          child: Text('P$part'),
+                                                        ))
+                                                    .toList();
+                                              },
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 9,
+                                                        vertical: 8),
+                                                child: Text(
+                                                  'P${_selectedQuality?.part ?? 1}',
+                                                  style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w800),
+                                                ),
                                               ),
                                             ),
-                                          ),
                                           PopupMenuButton<VideoQuality>(
                                             tooltip: '清晰度',
                                             initialValue: _selectedQuality,
@@ -4244,8 +4441,24 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                                       ),
                                                     ))
                                                 .toList(),
-                                            icon: const Icon(Icons.hd_rounded,
-                                                color: Colors.white),
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 9,
+                                                vertical: 8,
+                                              ),
+                                              child: Text(
+                                                _selectedQuality == null
+                                                    ? '默认'
+                                                    : _qualityDisplayLabel(
+                                                        _selectedQuality!,
+                                                      ),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -4266,17 +4479,22 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                           setState(() => _playbackSpeed = next);
                                           await _player.setPlaybackSpeed(next);
                                         },
-                                        defaultQuality: widget.defaultQuality,
+                                        defaultQuality: _defaultQuality,
                                         availableQualities: widget.qualities
                                             .map(_qualityDisplayLabel)
                                             .toSet()
                                             .toList(growable: false),
-                                        onDefaultQualityChanged: (label) =>
-                                            UserPreferences.saveDefaultQuality(
-                                                label),
-                                        autoPlay: widget.autoPlay,
-                                        onAutoPlayChanged: (value) =>
-                                            UserPreferences.saveAutoPlay(value),
+                                        onDefaultQualityChanged: (label) {
+                                          setState(
+                                              () => _defaultQuality = label);
+                                          UserPreferences.saveDefaultQuality(
+                                              label);
+                                        },
+                                        autoPlay: _autoPlay,
+                                        onAutoPlayChanged: (value) {
+                                          setState(() => _autoPlay = value);
+                                          UserPreferences.saveAutoPlay(value);
+                                        },
                                       ),
                                     ),
                                   if (_showDanmakuComposer)
@@ -4290,6 +4508,7 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                             Expanded(
                                               child: TextField(
                                                 controller: _danmakuInput,
+                                                autofocus: true,
                                                 maxLength: 100,
                                                 style: const TextStyle(
                                                     color: Colors.white,
@@ -4337,19 +4556,8 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                               backgroundColor: Colors.black54,
                                               foregroundColor: Colors.white,
                                             ),
-                                            iconSize: 54,
-                                            onPressed: () async {
-                                              if (value.isPlaying) {
-                                                await MfunsPlaybackCoordinator
-                                                    .instance
-                                                    .requestPause();
-                                              } else {
-                                                await MfunsPlaybackCoordinator
-                                                    .instance
-                                                    .requestPlay();
-                                              }
-                                              _scheduleHide();
-                                            },
+                                            iconSize: 46,
+                                            onPressed: _togglePlayback,
                                             icon: Icon(value.isPlaying
                                                 ? Icons.pause_rounded
                                                 : Icons.play_arrow_rounded),
@@ -4361,26 +4569,35 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                     bottom: 4,
                                     child: SafeArea(
                                       top: false,
-                                      child: Row(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text(_formatDuration(position),
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 11)),
-                                          Expanded(
+                                          SliderTheme(
+                                            data: SliderTheme.of(context)
+                                                .copyWith(
+                                              trackHeight: 3,
+                                              thumbShape:
+                                                  const RoundSliderThumbShape(
+                                                enabledThumbRadius: 6,
+                                              ),
+                                              overlayShape:
+                                                  const RoundSliderOverlayShape(
+                                                overlayRadius: 15,
+                                              ),
+                                            ),
                                             child: Slider(
                                               activeColor: Theme.of(context)
                                                   .colorScheme
                                                   .primary,
-                                              inactiveColor: Colors.white38,
+                                              inactiveColor: Colors.white30,
                                               value: duration.inMilliseconds ==
                                                       0
                                                   ? 0
                                                   : position.inMilliseconds
                                                       .clamp(
-                                                          0,
-                                                          duration
-                                                              .inMilliseconds)
+                                                        0,
+                                                        duration.inMilliseconds,
+                                                      )
                                                       .toDouble(),
                                               max: duration.inMilliseconds == 0
                                                   ? 1
@@ -4388,25 +4605,121 @@ class _FullscreenVideoOverlayState extends State<_FullscreenVideoOverlay> {
                                                       .toDouble(),
                                               onChanged: (milliseconds) {
                                                 _player.seekTo(Duration(
-                                                    milliseconds:
-                                                        milliseconds.round()));
+                                                  milliseconds:
+                                                      milliseconds.round(),
+                                                ));
+                                              },
+                                              onChangeStart: (_) {
+                                                _hideTimer?.cancel();
+                                                setState(
+                                                    () => _isSeeking = true);
+                                              },
+                                              onChangeEnd: (_) {
+                                                setState(
+                                                    () => _isSeeking = false);
                                                 _scheduleHide();
                                               },
-                                              onChangeStart: (_) => setState(
-                                                  () => _isSeeking = true),
-                                              onChangeEnd: (_) => setState(
-                                                  () => _isSeeking = false),
                                             ),
                                           ),
-                                          Text(_formatDuration(duration),
-                                              style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 11)),
-                                          IconButton(
-                                            color: Colors.white,
-                                            icon: const Icon(
-                                                Icons.fullscreen_exit_rounded),
-                                            onPressed: _close,
+                                          Row(
+                                            children: [
+                                              IconButton(
+                                                color: Colors.white,
+                                                tooltip: value.isPlaying
+                                                    ? '暂停（空格）'
+                                                    : '播放（空格）',
+                                                onPressed: _togglePlayback,
+                                                icon: Icon(value.isPlaying
+                                                    ? Icons.pause_rounded
+                                                    : Icons.play_arrow_rounded),
+                                              ),
+                                              IconButton(
+                                                color: Colors.white,
+                                                tooltip: '后退 10 秒（←）',
+                                                onPressed: () => _seekBy(-10),
+                                                icon: const Icon(
+                                                    Icons.replay_10_rounded),
+                                              ),
+                                              IconButton(
+                                                color: Colors.white,
+                                                tooltip: '前进 10 秒（→）',
+                                                onPressed: () => _seekBy(10),
+                                                icon: const Icon(
+                                                    Icons.forward_10_rounded),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '${_formatDuration(position)} / ${_formatDuration(duration)}',
+                                                style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              PopupMenuButton<double>(
+                                                tooltip: '播放速度',
+                                                initialValue: _playbackSpeed,
+                                                onSelected: (next) async {
+                                                  setState(() =>
+                                                      _playbackSpeed = next);
+                                                  await _player
+                                                      .setPlaybackSpeed(next);
+                                                  _scheduleHide();
+                                                },
+                                                itemBuilder: (context) => [
+                                                  for (final speed in [
+                                                    .5,
+                                                    .75,
+                                                    1.0,
+                                                    1.25,
+                                                    1.5,
+                                                    2.0,
+                                                  ])
+                                                    PopupMenuItem(
+                                                      value: speed,
+                                                      child: Text('${speed}x'),
+                                                    ),
+                                                ],
+                                                child: Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 8,
+                                                  ),
+                                                  child: Text(
+                                                    '${_playbackSpeed}x',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                color: Colors.white,
+                                                tooltip: _volume == 0
+                                                    ? '取消静音（M）'
+                                                    : '静音（M）',
+                                                onPressed: () => _setVolume(
+                                                  _volume == 0 ? .7 : 0,
+                                                ),
+                                                icon: Icon(_volume == 0
+                                                    ? Icons.volume_off_rounded
+                                                    : _volume < .5
+                                                        ? Icons
+                                                            .volume_down_rounded
+                                                        : Icons
+                                                            .volume_up_rounded),
+                                              ),
+                                              IconButton(
+                                                color: Colors.white,
+                                                tooltip: '退出全屏（Esc）',
+                                                icon: const Icon(Icons
+                                                    .fullscreen_exit_rounded),
+                                                onPressed: _close,
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),
@@ -5384,6 +5697,10 @@ class _CommentCardState extends State<_CommentCard> {
 
   List<CommunityComment>? _replies;
   var _repliesLoading = false;
+  var _repliesLoadingMore = false;
+  var _replyPage = 0;
+  var _hasMoreReplies = false;
+  String? _repliesError;
 
   /// 本地新增/删除回复的数量，用于修正顶部“N 条回复”计数。
   int _replyDelta = 0;
@@ -5454,24 +5771,62 @@ class _CommentCardState extends State<_CommentCard> {
             UserProfilePage(controller: widget.controller, userId: userId)));
   }
 
-  Future<void> _loadReplies() async {
-    setState(() => _repliesLoading = true);
+  int get _replyTotal {
+    final total = widget.comment.replyCount + _replyDelta;
+    return total < 0 ? 0 : total;
+  }
+
+  Future<void> _loadReplies({bool loadMore = false}) async {
+    if (_repliesLoading || _repliesLoadingMore) return;
+    final page = loadMore ? _replyPage + 1 : 1;
+    setState(() {
+      if (loadMore) {
+        _repliesLoadingMore = true;
+      } else {
+        _repliesLoading = true;
+        _replies = const [];
+        _replyPage = 0;
+        _hasMoreReplies = false;
+      }
+      _repliesError = null;
+    });
     try {
-      final list = await widget.controller.commentReplies(widget.comment.id);
+      final list = await widget.controller.commentReplies(
+        widget.comment.id,
+        page: page,
+      );
       if (!mounted) return;
       setState(() {
-        _replies = list;
+        final previous = loadMore
+            ? (_replies ?? const <CommunityComment>[])
+            : const <CommunityComment>[];
+        final merged = mergeCommentReplyPages(previous, list);
+        final addedCount = merged.length - previous.length;
+        _replies = merged;
+        _replyPage = page;
+        _hasMoreReplies = addedCount > 0 && merged.length < _replyTotal;
         _repliesLoading = false;
+        _repliesLoadingMore = false;
       });
-    } catch (_) {
-      if (mounted) setState(() => _repliesLoading = false);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _repliesLoading = false;
+        _repliesLoadingMore = false;
+        _repliesError = '回复加载失败：$error';
+      });
     }
   }
 
   /// 展开/收起二级评论列表。
   void _toggleReplies() {
     if (_replies != null) {
-      setState(() => _replies = null);
+      setState(() {
+        _replies = null;
+        _repliesError = null;
+        _replyPage = 0;
+        _hasMoreReplies = false;
+      });
       return;
     }
     _loadReplies();
@@ -5789,7 +6144,9 @@ class _CommentCardState extends State<_CommentCard> {
                           padding: EdgeInsets.symmetric(vertical: 6),
                           child: LinearProgressIndicator(),
                         ),
-                      if (_replies!.isEmpty)
+                      if (_replies!.isEmpty &&
+                          !_repliesLoading &&
+                          _repliesError == null)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Text('暂无回复',
@@ -5797,8 +6154,9 @@ class _CommentCardState extends State<_CommentCard> {
                                   color: AppPalette.of(context).muted,
                                   fontSize: 12.5)),
                         )
-                      else
+                      else if (_replies!.isNotEmpty)
                         ..._replies!.map((reply) => _CommentReplyTile(
+                              key: ValueKey('comment-reply-${reply.id}'),
                               controller: widget.controller,
                               rootCommentId: widget.comment.id,
                               reply: reply,
@@ -5807,12 +6165,56 @@ class _CommentCardState extends State<_CommentCard> {
                               onDeleted: () {
                                 if (!mounted) return;
                                 setState(() {
-                                  _replies?.removeWhere(
-                                      (item) => item.id == reply.id);
+                                  _replies = removeCommentReply(
+                                    _replies ?? const <CommunityComment>[],
+                                    reply.id,
+                                  );
                                   _replyDelta--;
+                                  _hasMoreReplies =
+                                      _replies!.length < _replyTotal;
                                 });
                               },
                             )),
+                      if (_repliesError != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _repliesError!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => _loadReplies(
+                                  loadMore: _replyPage > 0,
+                                ),
+                                child: const Text('重试'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (_repliesLoadingMore)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      else if (_hasMoreReplies)
+                        TextButton.icon(
+                          onPressed: () => _loadReplies(loadMore: true),
+                          icon: const Icon(Icons.expand_more_rounded),
+                          label: Text(
+                            '加载更多回复（已显示 ${_replies!.length}/$_replyTotal）',
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -5824,9 +6226,31 @@ class _CommentCardState extends State<_CommentCard> {
   }
 }
 
+/// 合并楼中楼分页结果并按评论 ID 去重。返回新列表，调用方无需依赖源列表
+/// 是否可增长。
+List<CommunityComment> mergeCommentReplyPages(
+  List<CommunityComment> existing,
+  List<CommunityComment> incoming,
+) {
+  final ids = existing.map((comment) => comment.id).toSet();
+  return [
+    ...existing,
+    ...incoming.where((comment) => ids.add(comment.id)),
+  ];
+}
+
+/// 删除成功后以不可变方式替换楼中楼列表，避免对 Repository 返回的
+/// fixed-length list 调用 remove/removeWhere。
+List<CommunityComment> removeCommentReply(
+  List<CommunityComment> replies,
+  int commentId,
+) =>
+    replies.where((comment) => comment.id != commentId).toList(growable: false);
+
 /// 二级评论（回复）：头像 + 昵称 + 内容 + 点赞/回复/删除操作，长按可复制或删除。
 class _CommentReplyTile extends StatefulWidget {
   const _CommentReplyTile({
+    super.key,
     required this.controller,
     required this.rootCommentId,
     required this.reply,

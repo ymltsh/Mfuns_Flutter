@@ -4,6 +4,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const Color _defaultSeed = Color(0xFF5094B2);
 
+/// Edge-to-edge 系统栏样式。导航栏保持透明，让页面背景延伸到 Android
+/// 手势导航条（“小白条”）后方；图标颜色随主题切换以维持可读性。
+SystemUiOverlayStyle appSystemUiOverlayStyle({
+  required Brightness brightness,
+  Brightness statusBarIconBrightness = Brightness.light,
+}) {
+  final navigationIconBrightness =
+      brightness == Brightness.dark ? Brightness.light : Brightness.dark;
+  return SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: statusBarIconBrightness,
+    statusBarBrightness: statusBarIconBrightness == Brightness.light
+        ? Brightness.dark
+        : Brightness.light,
+    systemStatusBarContrastEnforced: false,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarIconBrightness: navigationIconBrightness,
+    systemNavigationBarContrastEnforced: false,
+  );
+}
+
 /// 主题模式：跟随系统 / 强制浅色 / 强制深色。
 enum AppThemeMode { system, light, dark }
 
@@ -130,7 +152,10 @@ ThemeData buildAppTheme(Color seed,
       foregroundColor: Colors.white,
       elevation: 0,
       surfaceTintColor: Colors.transparent,
-      systemOverlayStyle: SystemUiOverlayStyle.light,
+      systemOverlayStyle: appSystemUiOverlayStyle(
+        brightness: brightness,
+        statusBarIconBrightness: Brightness.light,
+      ),
     ),
     cardTheme: CardTheme(
       elevation: 0,

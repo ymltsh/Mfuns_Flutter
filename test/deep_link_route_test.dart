@@ -37,6 +37,7 @@ void main() {
 
   test('parseMfunsLink handles mfuns.wgen.top and mfuns.net domains', () {
     final cases = <String, (String, int)>{
+      'mfuns://net.mfuns.app.asuka/feed/277432': ('feed', 277432),
       'https://m.mfuns.net/video/60751': ('video', 60751),
       'https://www.mfuns.net/article/122326': ('article', 122326),
       'https://mfuns.wgen.top/article/122326': ('article', 122326),

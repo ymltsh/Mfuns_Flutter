@@ -57,10 +57,10 @@ void main() {
     });
     expect(comment.spans.length, 2);
     expect(comment.spans[0].isSticker, isFalse);
-    expect(comment.spans[0].text, 'HELLO _............');
+    expect(comment.spans[0].text, 'HELLO\n_............');
     expect(comment.spans[1].isSticker, isTrue);
     expect(comment.spans[1].stickerKey, 's-1');
-    expect(comment.content, 'HELLO _............');
+    expect(comment.content, 'HELLO\n_............');
   });
 
   test('derives the sticker key from src when alt is missing', () {
@@ -83,8 +83,7 @@ void main() {
         'images': ['/static/af1adc8e.jpg'],
       },
     });
-    expect(comment.images,
-        ['https://cdn2.mfuns.net/static/af1adc8e.jpg']);
+    expect(comment.images, ['https://cdn2.mfuns.net/static/af1adc8e.jpg']);
     expect(comment.content, '看这张图');
   });
 
@@ -99,8 +98,7 @@ void main() {
   });
 
   test('converts [pack-id] text markers into sticker spans', () {
-    final spans =
-        commentSpansFromText('[s-1]你好呀[family-2]，[stick-3]');
+    final spans = commentSpansFromText('[s-1]你好呀[family-2]，[stick-3]');
     expect(spans.length, 5);
     expect(spans[0].isSticker, isTrue);
     expect(spans[0].stickerKey, 's-1');
@@ -166,17 +164,29 @@ void main() {
       's': {
         'name': '冲鸭头像',
         'list': {
-          '1': {'url': 'https://resource.mfuns.net/image/sticker/s/1.png', 'size': 50},
-          '2': {'url': 'https://resource.mfuns.net/image/sticker/s/2.png', 'size': 50},
+          '1': {
+            'url': 'https://resource.mfuns.net/image/sticker/s/1.png',
+            'size': 50
+          },
+          '2': {
+            'url': 'https://resource.mfuns.net/image/sticker/s/2.png',
+            'size': 50
+          },
         },
       },
       'family': {
         'name': 'Family',
         'list': {
-          '1': {'url': 'https://resource.mfuns.net/image/sticker/family/1.png', 'size': 60},
+          '1': {
+            'url': 'https://resource.mfuns.net/image/sticker/family/1.png',
+            'size': 60
+          },
         },
       },
-    }, ['(￣-￣)つロ', '(°▽°)']);
+    }, [
+      '(￣-￣)つロ',
+      '(°▽°)'
+    ]);
     expect(data.packs.length, 2);
     expect(data.packs.first.key, 's');
     expect(data.packs.first.name, '冲鸭头像');

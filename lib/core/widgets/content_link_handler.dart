@@ -29,20 +29,31 @@ MfunsLinkTarget? parseMfunsLink(String url) {
   final scheme = uri.scheme.toLowerCase();
   if (scheme == 'mfuns') {
     // mfuns://video/60751、mfuns://article/122326、mfuns://feed/273061、
-    // mfuns://mv60751
-    final authority = uri.authority;
+    // mfuns://mv60751，以及官网使用的
+    // mfuns://net.mfuns.app.asuka/feed/273061。
+    final authority = uri.authority.toLowerCase();
     if (authority.startsWith('mv')) {
       final id = int.tryParse(authority.substring(2));
       if (id != null && id > 0) {
         return MfunsLinkTarget(type: 'video', id: id);
       }
     }
-    final id = int.tryParse(uri.path.replaceAll('/', ''));
-    if (id != null && id > 0 &&
-        (authority == 'video' ||
-            authority == 'article' ||
-            authority == 'feed')) {
-      return MfunsLinkTarget(type: authority, id: id);
+    final segments =
+        uri.pathSegments.where((segment) => segment.isNotEmpty).toList();
+    final type =
+        authority == 'video' || authority == 'article' || authority == 'feed'
+            ? authority
+            : segments.firstOrNull?.toLowerCase();
+    final idText = type == authority
+        ? segments.firstOrNull
+        : segments.length >= 2
+            ? segments[1]
+            : null;
+    final id = int.tryParse(idText ?? '');
+    if (id != null &&
+        id > 0 &&
+        (type == 'video' || type == 'article' || type == 'feed')) {
+      return MfunsLinkTarget(type: type!, id: id);
     }
     return null;
   }

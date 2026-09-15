@@ -34,7 +34,12 @@ void main() {
     ]));
     expect(_linkTexts(tester), ['https://a.com/b/c', 'www.example.com']);
     expect(find.textContaining('，以及'), findsOneWidget);
-    expect(find.text('。'), findsOneWidget);
+    final richText = tester
+        .widgetList<Text>(find.byType(Text))
+        .where((text) => text.textSpan != null)
+        .map((text) => text.textSpan!.toPlainText())
+        .join();
+    expect(richText, contains('。'));
   });
 
   testWidgets('plain text without links renders unchanged', (tester) async {
@@ -52,7 +57,8 @@ void main() {
     expect(find.byIcon(Icons.emoji_emotions_outlined), findsOneWidget);
   });
 
-  testWidgets('LinkText renders inline links with tap callback', (tester) async {
+  testWidgets('LinkText renders inline links with tap callback',
+      (tester) async {
     String? tapped;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
@@ -72,7 +78,9 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: ContentSpans(
-          spans: const [CommentSpan.text('看看 https://m.mfuns.net/article/122326')],
+          spans: const [
+            CommentSpan.text('看看 https://m.mfuns.net/article/122326')
+          ],
           onLinkTap: (url) => tapped = url,
         ),
       ),
@@ -129,6 +137,7 @@ void main() {
       'mfuns://video/60751': ('video', 60751),
       'mfuns://article/122326': ('article', 122326),
       'mfuns://feed/273061': ('feed', 273061),
+      'mfuns://net.mfuns.app.asuka/feed/277432': ('feed', 277432),
       'mfuns://mv60751': ('video', 60751),
       'https://mfuns.net/mv60751': ('video', 60751),
       'https://www.mfuns.net/video/60751': ('video', 60751),

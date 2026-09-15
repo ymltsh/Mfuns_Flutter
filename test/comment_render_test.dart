@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mfuns_flutter/core/widgets/content_spans.dart';
 import 'package:mfuns_flutter/features/home/home_repository.dart';
 
 Widget _host(List<CommentSpan> spans, String content) => MaterialApp(
@@ -49,6 +50,19 @@ void main() {
     });
     await tester.pumpWidget(_host(comment.spans, comment.content));
     expect(find.textContaining('1111'), findsOneWidget);
+  });
+
+  testWidgets('ContentSpans renders comment line breaks in one text flow',
+      (tester) async {
+    const content = '第一行\n第二行\n\n第三行';
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: ContentSpans(spans: [CommentSpan.text(content)]),
+      ),
+    ));
+
+    final text = tester.widget<Text>(find.byType(Text).first);
+    expect(text.textSpan?.toPlainText(), content);
   });
 
   testWidgets('sticker-only comment still shows the sticker placeholder',

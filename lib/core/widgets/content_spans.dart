@@ -96,72 +96,81 @@ class ContentSpans extends StatelessWidget {
       fontWeight: FontWeight.w700,
       height: baseStyle.height,
     );
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 2,
-      runSpacing: 4,
-      children: [
-        for (final span in spans)
-          if (span.isSticker)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 1),
-              child:
-                  StickerImage(stickerKey: span.stickerKey, size: stickerSize),
-            )
-          else if (span.isMention)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 1),
-              child: Text('@${span.mentionName}', style: mentionStyle),
-            )
-          else
-            ..._textSegments(
-              span.text,
-              baseStyle: baseStyle,
-              linkStyle: TextStyle(
-                color: Theme.of(context).colorScheme.primary,
-                decoration: TextDecoration.underline,
-                decorationColor:
-                    Theme.of(context).colorScheme.primary.withOpacity(.5),
-                height: 1.4,
+    return Text.rich(
+      TextSpan(
+        style: baseStyle,
+        children: [
+          for (final span in spans)
+            if (span.isSticker)
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1),
+                  child: StickerImage(
+                      stickerKey: span.stickerKey, size: stickerSize),
+                ),
+              )
+            else if (span.isMention)
+              TextSpan(
+                text: '@${span.mentionName}',
+                style: mentionStyle,
+              )
+            else
+              ..._textSegments(
+                span.text,
+                baseStyle: baseStyle,
+                linkStyle: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                  decorationColor:
+                      Theme.of(context).colorScheme.primary.withOpacity(.5),
+                  height: 1.4,
+                ),
               ),
-            ),
-      ],
+        ],
+      ),
     );
   }
 
-  List<Widget> _textSegments(
+  List<InlineSpan> _textSegments(
     String text, {
     required TextStyle baseStyle,
     required TextStyle linkStyle,
   }) {
-    if (text.isEmpty) return const [];
-    final segments = <Widget>[];
+    if (text.isEmpty) return const <InlineSpan>[];
+    final segments = <InlineSpan>[];
     var cursor = 0;
     for (final match in _findLinks(text)) {
       if (match.start > cursor) {
-        segments
-            .add(Text(text.substring(cursor, match.start), style: baseStyle));
+        segments.add(TextSpan(
+            text: text.substring(cursor, match.start), style: baseStyle));
       }
       final raw = match.raw;
       final trimmed = _trimTrailingPunctuation(raw);
       if (trimmed.isNotEmpty) {
         final tail = raw.substring(trimmed.length);
-        segments.add(_LinkText(
-          raw: trimmed,
-          target: match.target,
-          style: linkStyle,
-          onTap: onLinkTap,
+        segments.add(WidgetSpan(
+          alignment: PlaceholderAlignment.baseline,
+          baseline: TextBaseline.alphabetic,
+          child: _LinkText(
+            raw: trimmed,
+            target: match.target,
+            style: linkStyle,
+            onTap: onLinkTap,
+          ),
         ));
         if (tail.isNotEmpty) {
-          segments.add(Text(tail, style: baseStyle));
+          segments.add(TextSpan(text: tail, style: baseStyle));
         }
       }
       cursor = match.end;
     }
     if (cursor < text.length) {
-      segments.add(Text(text.substring(cursor), style: baseStyle));
+      segments.add(TextSpan(text: text.substring(cursor), style: baseStyle));
     }
-    if (segments.isEmpty) segments.add(Text(text, style: baseStyle));
+    if (segments.isEmpty) {
+      segments.add(TextSpan(text: text, style: baseStyle));
+    }
     return segments;
   }
 

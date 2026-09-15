@@ -12,6 +12,7 @@ class UserPreferences {
   static const _keyDanmakuSize = 'pref.danmaku_size';
   static const _keyAutoPlay = 'pref.autoplay';
   static const _keyAutoSignIn = 'pref.auto_sign_in';
+  static const _keyBackgroundNotifications = 'pref.background_notifications';
   static const _keyAcceleratorBase = 'pref.accelerator_base';
   static const _keyBackgroundPlay = 'pref.background_play';
   static const _keyArticleScrollbar = 'pref.article_scrollbar';
@@ -78,6 +79,23 @@ class UserPreferences {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_keyAutoSignIn, enabled);
+    } catch (_) {}
+  }
+
+  /// 后台通知轮询开关：定时检查新私信与互动并发送系统通知，默认开启。
+  static Future<bool> loadBackgroundNotifications() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyBackgroundNotifications) ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  static Future<void> saveBackgroundNotifications(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyBackgroundNotifications, enabled);
     } catch (_) {}
   }
 

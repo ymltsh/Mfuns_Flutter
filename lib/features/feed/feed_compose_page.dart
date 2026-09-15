@@ -217,3 +217,162 @@ class _FeedComposePageState extends State<FeedComposePage> {
     return path;
   }
 }
+
+/// 将文章、视频或已有动态转发到动态时间线。
+class FeedForwardPage extends StatefulWidget {
+  const FeedForwardPage({
+    super.key,
+    required this.controller,
+    required this.resourceId,
+    required this.resourceType,
+    required this.resourceTitle,
+    this.resourceCover = '',
+  });
+
+  final AppController controller;
+  final int resourceId;
+  final int resourceType;
+  final String resourceTitle;
+  final String resourceCover;
+
+  @override
+  State<FeedForwardPage> createState() => _FeedForwardPageState();
+}
+
+class _FeedForwardPageState extends State<FeedForwardPage> {
+  final _content = TextEditingController();
+  var _publishing = false;
+
+  String get _typeLabel => switch (widget.resourceType) {
+        0 => '文章',
+        1 => '视频',
+        _ => '动态',
+      };
+
+  @override
+  void dispose() {
+    _content.dispose();
+    super.dispose();
+  }
+
+  Future<void> _publish() async {
+    final content = _content.text.trim();
+    if (content.isEmpty) {
+      _notice('说点什么吧');
+      return;
+    }
+    if (_publishing) return;
+    setState(() => _publishing = true);
+    try {
+      await widget.controller.forwardFeed(
+        content: content,
+        resourceId: widget.resourceId,
+        resourceType: widget.resourceType,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已转发到动态')));
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _publishing = false);
+      _notice('转发失败：$error');
+    }
+  }
+
+  void _notice(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final title = widget.resourceTitle.trim().isEmpty
+        ? '未命名$_typeLabel'
+        : widget.resourceTitle.trim();
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('转发到动态'),
+        centerTitle: true,
+        actions: [
+          TextButton(
+            key: const ValueKey('feed-forward-submit'),
+            onPressed: _publishing ? null : _publish,
+            child: _publishing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('转发',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+        children: [
+          TextField(
+            key: const ValueKey('feed-forward-content'),
+            controller: _content,
+            autofocus: true,
+            minLines: 5,
+            maxLines: 12,
+            decoration: const InputDecoration(
+              hintText: '说说转发理由…',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            color: palette.chip,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  if (widget.resourceCover.isNotEmpty) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        widget.resourceCover,
+                        width: 68,
+                        height: 52,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_typeLabel,
+                            style: TextStyle(
+                                color: palette.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 4),
+                        Text(title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: palette.ink,
+                                fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text('转发后将出现在全站时间线',
+              style: TextStyle(color: palette.muted, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}

@@ -816,13 +816,24 @@ List<CommentSpan> _commentSpans(String raw) {
       final ops = _asMap(decoded)['ops'];
       if (ops is List) {
         final spans = <CommentSpan>[];
+        void appendText(String text) {
+          if (text.isEmpty) return;
+          if (spans.isNotEmpty &&
+              !spans.last.isSticker &&
+              !spans.last.isMention) {
+            spans[spans.length - 1] =
+                CommentSpan.text('${spans.last.text}$text');
+          } else {
+            spans.add(CommentSpan.text(text));
+          }
+        }
+
         for (final op in ops.whereType<Map<String, dynamic>>()) {
           final insert = op['insert'];
           if (insert is String) {
-            final text = insert.trimRight();
-            if (text.isNotEmpty) {
-              spans.add(CommentSpan.text(text));
-            }
+            // Quill 的每个字符串 insert 都可能携带有效换行。不能逐段
+            // trimRight，否则分成多个 op 的段落会被错误拼成一行。
+            appendText(insert.replaceAll('\r\n', '\n').replaceAll('\r', '\n'));
           } else if (insert is Map<String, dynamic>) {
             final mention = insert['mention'];
             if (mention is Map<String, dynamic>) {
@@ -836,6 +847,19 @@ List<CommentSpan> _commentSpans(String raw) {
             if (sticker is String && sticker.isNotEmpty) {
               spans.add(CommentSpan.sticker(sticker));
             }
+          }
+        }
+        // Quill 文档固定以一个换行结束；只移除这个结构性终止符，保留
+        // 用户输入的其他换行（包括连续空行）。
+        if (spans.isNotEmpty &&
+            !spans.last.isSticker &&
+            !spans.last.isMention &&
+            spans.last.text.endsWith('\n')) {
+          final text = spans.last.text.substring(0, spans.last.text.length - 1);
+          if (text.isEmpty) {
+            spans.removeLast();
+          } else {
+            spans[spans.length - 1] = CommentSpan.text(text);
           }
         }
         return spans;
@@ -893,14 +917,29 @@ String _stickerKey(String? alt, String? src) {
 /// comment and feed text reads naturally. Only fed through the html parser
 /// when an entity is actually present, so plain text stays untouched.
 String _htmlToText(String raw) {
-  final withoutTags = raw.replaceAll(RegExp(r'<[^>]*>'), ' ');
-  final collapsed = withoutTags.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (collapsed.isEmpty || !collapsed.contains('&')) return collapsed;
+  final withLineBreaks = raw
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+      .replaceAll(
+          RegExp(r'</(?:p|div|li|blockquote|h[1-6])\s*>', caseSensitive: false),
+          '\n');
+  final withoutTags = withLineBreaks.replaceAll(RegExp(r'<[^>]*>'), '');
+  var decoded = withoutTags;
   try {
-    return html_parser.parseFragment(collapsed).text?.trim() ?? collapsed;
+    if (decoded.contains('&')) {
+      decoded = html_parser.parseFragment(decoded).text ?? decoded;
+    }
   } on FormatException {
-    return collapsed;
+    // 实体格式异常时仍使用已去标签的文本。
   }
+  return decoded
+      .replaceAll('\u00a0', ' ')
+      .replaceAll('\r\n', '\n')
+      .replaceAll('\r', '\n')
+      .split('\n')
+      .map((line) => line.replaceAll(RegExp(r'[\t\f\v ]+'), ' ').trim())
+      .join('\n')
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+      .trim();
 }
 
 /// Converts plain text containing `[pack-id]` sticker markers (the format
@@ -2136,6 +2175,22 @@ class HomeRepository {
     });
   }
 
+  /// 把文章（0）、视频（1）或动态（3）转发为一条新动态。
+  Future<void> forwardFeed({
+    required String content,
+    required int resourceId,
+    required int resourceType,
+  }) async {
+    await _client.postJson(
+      '/v1/feeds/forward',
+      buildFeedForwardPayload(
+        content: content,
+        resourceId: resourceId,
+        resourceType: resourceType,
+      ),
+    );
+  }
+
   /// Resolves the comment area of a comment (notification references point
   /// at comments). Returns null when the comment is gone.
   Future<int?> getCommentAreaId(int commentId) async {
@@ -2443,6 +2498,28 @@ class HomeRepository {
     _collectCategories(item['children'], output);
     _collectCategories(item['list'], output);
   }
+}
+
+/// `/v1/feeds/forward` 请求体。独立为纯函数，保证 Quill JSON 的双层编码
+/// 与文章、视频、动态三种资源类型保持一致。
+Map<String, Object> buildFeedForwardPayload({
+  required String content,
+  required int resourceId,
+  required int resourceType,
+}) {
+  final text = content.trim();
+  if (text.isEmpty) throw ArgumentError.value(content, 'content', '转发内容不能为空');
+  if (resourceId <= 0) {
+    throw ArgumentError.value(resourceId, 'resourceId', '资源 ID 必须大于 0');
+  }
+  if (resourceType != 0 && resourceType != 1 && resourceType != 3) {
+    throw ArgumentError.value(resourceType, 'resourceType', '仅支持文章、视频或动态');
+  }
+  return {
+    'content': commentQuillJson([CommentSpan.text(text)]),
+    'resource_type': resourceType,
+    'resource_id': resourceId,
+  };
 }
 
 List<String> _toTags(Object? value) {

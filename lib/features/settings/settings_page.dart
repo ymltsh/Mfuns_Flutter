@@ -454,6 +454,29 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                             onChanged: widget.controller.setAutoSignIn,
                           ),
+                          const Divider(height: 1, indent: 56),
+                          SwitchListTile(
+                            value: widget.controller.backgroundNotifications,
+                            title: Text('后台通知服务',
+                                style: TextStyle(
+                                    color: AppPalette.of(context).muted,
+                                    fontWeight: FontWeight.w700)),
+                            subtitle: Text('定时检查新私信与互动，并发送系统通知',
+                                style: TextStyle(
+                                    color: AppPalette.of(context).muted,
+                                    fontSize: 12)),
+                            secondary: CircleAvatar(
+                              backgroundColor: AppPalette.of(context)
+                                  .primary
+                                  .withOpacity(.11),
+                              foregroundColor: AppPalette.of(context).primary,
+                              child: const Icon(
+                                  Icons.notifications_active_outlined,
+                                  size: 20),
+                            ),
+                            onChanged:
+                                widget.controller.setBackgroundNotifications,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 20),

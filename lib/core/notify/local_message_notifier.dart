@@ -13,6 +13,7 @@ class LocalMessageNotifier {
       FlutterLocalNotificationsPlugin();
   var _initialized = false;
   var _permissionRequested = false;
+  void Function(String payload)? _onTap;
 
   static const _channelId = 'com.ygen.mfuns_flutter.messages';
 
@@ -23,9 +24,14 @@ class LocalMessageNotifier {
   static const payloadMention = 'mention';
   static const payloadSystem = 'system';
 
-  /// 初始化通知通道并请求 Android 13+ 的通知权限（可重复调用）。
-  /// [onTap] 在用户点击通知时回调，参数为对应 payload（用于跳转页面）。
+  /// 预先注册通知点击回调，不会初始化平台通知能力或请求权限。
+  void configure({required void Function(String payload) onTap}) {
+    _onTap = onTap;
+  }
+
+  /// 初始化通知通道（可重复调用）。只有用户开启后台通知后才应调用。
   Future<void> init({void Function(String payload)? onTap}) async {
+    if (onTap != null) _onTap = onTap;
     if (_initialized || kIsWeb) return;
     try {
       const settings = InitializationSettings(
@@ -36,7 +42,7 @@ class LocalMessageNotifier {
         settings,
         onDidReceiveNotificationResponse: (response) {
           final payload = response.payload;
-          if (payload != null && payload.isNotEmpty) onTap?.call(payload);
+          if (payload != null && payload.isNotEmpty) _onTap?.call(payload);
         },
       );
       _initialized = true;
@@ -46,7 +52,7 @@ class LocalMessageNotifier {
       if (launch?.didNotificationLaunchApp == true &&
           payload != null &&
           payload.isNotEmpty) {
-        onTap?.call(payload);
+        _onTap?.call(payload);
       }
     } catch (_) {
       // 初始化失败不影响消息功能。
@@ -61,6 +67,13 @@ class LocalMessageNotifier {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
       await android?.requestNotificationsPermission();
+    } catch (_) {}
+  }
+
+  Future<void> cancelAll() async {
+    if (!_initialized || kIsWeb) return;
+    try {
+      await _plugin.cancelAll();
     } catch (_) {}
   }
 

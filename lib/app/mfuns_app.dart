@@ -77,6 +77,12 @@ class _MfunsAppState extends State<MfunsApp> {
         theme: buildAppTheme(_seed),
         darkTheme: buildAppTheme(_seed, brightness: Brightness.dark),
         themeMode: _mode,
+        builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+          value: appSystemUiOverlayStyle(
+            brightness: Theme.of(context).brightness,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        ),
         home: _HomeShell(
           controller: widget.controller,
           themeSeed: _seed,
@@ -200,7 +206,9 @@ class _HomeShellState extends State<_HomeShell> {
       builder: (context, _) {
         final hasUnread = widget.controller.unreadCount > 0;
         return AnnotatedRegion<SystemUiOverlayStyle>(
-          value: SystemUiOverlayStyle.light,
+          value: appSystemUiOverlayStyle(
+            brightness: Theme.of(context).brightness,
+          ),
           // 横屏时底栏自动变为左侧垂直导航，充分利用宽屏空间。
           child: isLandscape
               ? Scaffold(
@@ -589,6 +597,7 @@ class _MessageCenterPageState extends State<_MessageCenterPage>
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: _TimelineTabs(
                     index: _tab,
+                    animation: _tabController.animation,
                     labels: const ['私信', '通知'],
                     badges: widget.controller.notifyUnread > 0
                         ? const {1}
@@ -729,6 +738,7 @@ class _DiscoverPageState extends State<_DiscoverPage>
               children: [
                 _SectionTabs(
                   index: _tab,
+                  animation: _tabController.animation,
                   onChanged: (value) => _tabController.animateTo(value),
                 ),
                 // 分区标签条只在分区标签页显示。
@@ -798,49 +808,61 @@ class _DiscoverPageState extends State<_DiscoverPage>
 }
 
 class _SectionTabs extends StatelessWidget {
-  const _SectionTabs({required this.index, required this.onChanged});
+  const _SectionTabs({
+    required this.index,
+    required this.onChanged,
+    this.animation,
+  });
 
   final int index;
   final ValueChanged<int> onChanged;
+  final Animation<double>? animation;
 
   @override
-  Widget build(BuildContext context) => Container(
-        color: _palette(context).primary,
-        height: 47,
-        child: Row(
-          children: ['推荐', '排行', '分区'].asMap().entries.map((entry) {
-            final selected = entry.key == index;
-            return Expanded(
-              child: InkWell(
-                onTap: () => onChanged(entry.key),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(entry.value,
-                        style: TextStyle(
-                            color: selected
-                                ? Colors.white
-                                : Colors.white.withOpacity(.68),
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w500)),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: 28,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? _palette(context).surface
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(4),
+  Widget build(BuildContext context) {
+    Widget buildTabs(double position) => Container(
+          color: _palette(context).primary,
+          height: 47,
+          child: Row(
+            children: ['推荐', '排行', '分区'].asMap().entries.map((entry) {
+              final strength =
+                  (1 - (position - entry.key).abs()).clamp(0.0, 1.0);
+              return Expanded(
+                child: InkWell(
+                  onTap: () => onChanged(entry.key),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(entry.value,
+                          style: TextStyle(
+                              color: Color.lerp(Colors.white.withOpacity(.68),
+                                  Colors.white, strength),
+                              fontWeight: FontWeight.lerp(
+                                  FontWeight.w500, FontWeight.w700, strength))),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 28,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color:
+                              _palette(context).surface.withOpacity(strength),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            );
-          }).toList(),
-        ),
-      );
+              );
+            }).toList(),
+          ),
+        );
+    final animation = this.animation;
+    if (animation == null) return buildTabs(index.toDouble());
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) => buildTabs(animation.value),
+    );
+  }
 }
 
 class _CategoryStrip extends StatelessWidget {
@@ -1107,6 +1129,7 @@ class _TimelinePageState extends State<_TimelinePage>
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: _TimelineTabs(
                   index: _tab,
+                  animation: _tabController.animation,
                   labels: const ['时间线', '最新', '关注'],
                   order: _visualToTab,
                   onChanged: (value) =>
@@ -1548,6 +1571,7 @@ class _TimelineTabs extends StatelessWidget {
     this.labels = const ['关注', '最新', '时间线'],
     this.order,
     this.badges = const <int>{},
+    this.animation,
   });
 
   final int index;
@@ -1559,70 +1583,80 @@ class _TimelineTabs extends StatelessWidget {
 
   /// Positions (in display order) that show a red unread dot.
   final Set<int> badges;
+  final Animation<double>? animation;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: _palette(context).chip,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: List.generate(labels.length, (position) {
-            final logical =
-                (order ?? List.generate(labels.length, (i) => i))[position];
-            final selected = logical == index;
-            return Expanded(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(9),
-                onTap: () => onChanged(logical),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? _palette(context).surface
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(9),
-                    boxShadow: selected
-                        ? const [
-                            BoxShadow(color: Color(0x11000000), blurRadius: 4)
-                          ]
-                        : null,
-                  ),
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.center,
-                    children: [
-                      Text(labels[position],
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: selected
-                                  ? _palette(context).primary
-                                  : _palette(context).muted,
-                              fontWeight: selected
-                                  ? FontWeight.w800
-                                  : FontWeight.w600)),
-                      if (badges.contains(position))
-                        const Positioned(
-                          right: -6,
-                          top: -6,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
+  Widget build(BuildContext context) {
+    Widget buildTabs(double visualPosition) => Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: _palette(context).chip,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: List.generate(labels.length, (position) {
+              final logical =
+                  (order ?? List.generate(labels.length, (i) => i))[position];
+              final strength =
+                  (1 - (visualPosition - position).abs()).clamp(0.0, 1.0);
+              return Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(9),
+                  onTap: () => onChanged(logical),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: _palette(context).surface.withOpacity(strength),
+                      borderRadius: BorderRadius.circular(9),
+                      boxShadow: strength > .5
+                          ? const [
+                              BoxShadow(color: Color(0x11000000), blurRadius: 4)
+                            ]
+                          : null,
+                    ),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        Text(labels[position],
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: Color.lerp(_palette(context).muted,
+                                    _palette(context).primary, strength),
+                                fontWeight: FontWeight.lerp(FontWeight.w600,
+                                    FontWeight.w800, strength))),
+                        if (badges.contains(position))
+                          const Positioned(
+                            right: -6,
+                            top: -6,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              child: SizedBox(width: 7, height: 7),
                             ),
-                            child: SizedBox(width: 7, height: 7),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          }),
-        ),
-      );
+              );
+            }),
+          ),
+        );
+    final animation = this.animation;
+    if (animation == null) {
+      final visualIndex =
+          (order ?? List<int>.generate(labels.length, (position) => position))
+              .indexOf(index);
+      return buildTabs(visualIndex.toDouble());
+    }
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) => buildTabs(animation.value),
+    );
+  }
 }
 
 class _FollowingFeedState extends StatelessWidget {
@@ -3956,15 +3990,7 @@ class _CoverFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: item.isVideo
-                ? const [Color(0xff625ed7), Color(0xffa77de9)]
-                : const [Color(0xff5e90dd), Color(0xff95b3e6)],
-          ),
-        ),
+        color: Colors.black,
         child: Center(
             child: Icon(
                 item.isVideo
