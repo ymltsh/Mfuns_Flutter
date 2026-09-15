@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.5.4",
-    "build": 47,
-    "name": "Mfuns Flutter v1.5.4 仙后座",
+    "version": "1.5.5",
+    "build": 48,
+    "name": "Mfuns Flutter v1.5.5 仙后座",
     "date": "2026-09-15",
-    "notes": "优化\n- 重做横屏播放器控制层，优化分 P、清晰度、进度、倍速与音量操作\n- Windows 全屏播放新增键盘快捷键：空格播放/暂停、方向键快进与音量、M 静音、Esc 退出\n- 优化竖屏异形视频显示：极宽与极高画面保持原始比例，控制区域不再压缩或占满首屏\n- 评论回复支持分页加载、失败重试与去重\n- 视频封面缺失时使用黑色背景，减少视觉干扰",
+    "notes": "新增\n- 文章、视频和动态支持分享转发到动态\n- 设置新增后台通知服务开关，默认开启\n优化\n- Android 支持沉浸式导航栏小白条\n- 页面滑动时 Tab 选择器跟随手势进度，切换更顺滑\n修复\n- 修复评论内容换行未正确渲染\n- 修复从 Mfuns 网页点击 APP 打开后未进入对应动态详情",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.4/mfuns-flutter-1.5.4.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.4/mfuns-flutter-windows-1.5.4.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.5/mfuns-flutter-1.5.5.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.5/mfuns-flutter-windows-1.5.5.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.4"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.5"
   },
   "history": [
+    {
+      "version": "1.5.4",
+      "build": 47,
+      "name": "Mfuns Flutter v1.5.4 仙后座",
+      "date": "2026-09-15",
+      "notes": "优化\n- 重做横屏播放器控制层，优化分 P、清晰度、进度、倍速与音量操作\n- Windows 全屏播放新增键盘快捷键：空格播放/暂停、方向键快进与音量、M 静音、Esc 退出\n- 优化竖屏异形视频显示：极宽与极高画面保持原始比例，控制区域不再压缩或占满首屏\n- 评论回复支持分页加载、失败重试与去重\n- 视频封面缺失时使用黑色背景，减少视觉干扰",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.4/mfuns-flutter-1.5.4.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.4/mfuns-flutter-windows-1.5.4.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.4"
+    },
     {
       "version": "1.5.3",
       "build": 46,
