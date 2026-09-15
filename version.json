@@ -4,7 +4,7 @@
     "build": 49,
     "name": "Mfuns Flutter v1.5.5 仙后座",
     "date": "2026-09-15",
-    "notes": "修复\r\n- 文章、视频和动态详情页的多功能入口恢复为“更多”，避免误导为仅包含分享功能",
+    "notes": "新增\n- 文章、视频和动态支持分享转发到动态\n- 设置新增后台通知服务开关，默认开启\n优化\n- Android 支持沉浸式导航栏小白条\n- 页面滑动时 Tab 选择器跟随手势进度，切换更顺滑\n修复\n- 修复评论内容换行未正确渲染\n- 修复从 Mfuns 网页点击 APP 打开后未进入对应动态详情",
     "urls": {
       "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.5cas/mfuns-flutter-1.5.5cas.apk",
       "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.5cas/mfuns-flutter-windows-1.5.5cas.zip"
