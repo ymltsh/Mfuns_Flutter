@@ -42,4 +42,32 @@ void main() {
     expect(remaining.any((item) => item.id == 7), isFalse);
     expect(replies, hasLength(20));
   });
+
+  test('formats structured nested replies as 回复@用户：内容', () {
+    final spans = replyDisplaySpans(const [
+      CommentSpan.mention('42', '小明'),
+      CommentSpan.text(' 评论内容'),
+      CommentSpan.sticker('s-1'),
+    ]);
+
+    expect(spans, const [
+      CommentSpan.text('回复'),
+      CommentSpan.mention('42', '小明'),
+      CommentSpan.text('：'),
+      CommentSpan.text('评论内容'),
+      CommentSpan.sticker('s-1'),
+    ]);
+  });
+
+  test('formats legacy plain-text nested replies consistently', () {
+    final spans = replyDisplaySpans(const [
+      CommentSpan.text('@小明 评论内容'),
+      CommentSpan.sticker('s-1'),
+    ]);
+
+    expect(spans, const [
+      CommentSpan.text('回复@小明：评论内容'),
+      CommentSpan.sticker('s-1'),
+    ]);
+  });
 }

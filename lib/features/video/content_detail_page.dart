@@ -346,13 +346,6 @@ class _FeedDetailPageState extends State<FeedDetailPage> {
         appBar: AppBar(
           title: const Text('动态详情'),
           centerTitle: true,
-          actions: [
-            IconButton(
-              tooltip: '刷新动态',
-              onPressed: _reload,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ],
         ),
         body: FutureBuilder<FeedDetail>(
           future: _detail,
@@ -671,13 +664,6 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
         appBar: AppBar(
           title: const Text('文章详情'),
           centerTitle: true,
-          actions: [
-            IconButton(
-              tooltip: '刷新文章',
-              onPressed: _reload,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ],
         ),
         body: FutureBuilder<ContentDetail>(
           future: _detail,
@@ -5630,40 +5616,26 @@ class _CommentReplyDialogState extends State<_CommentReplyDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-        title: const Text('回复评论'),
+        titlePadding: const EdgeInsets.fromLTRB(24, 12, 8, 0),
+        title: Row(
+          children: [
+            const Expanded(child: Text('回复评论')),
+            IconButton(
+              tooltip: '关闭',
+              onPressed: _isSending ? null : () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: InlineEmojiInput(
-                    key: _inputKey,
-                    hintText: '友善交流，理性发言',
-                    fontSize: 14,
-                    initialText: widget.initialText,
-                    onSearchUser: widget.controller.searchUsers,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: '@ 用户',
-                  onPressed: _pickMention,
-                  icon: Icon(
-                    Icons.alternate_email,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                IconButton(
-                  tooltip: '表情包',
-                  onPressed: () => _inputKey.currentState?.pickEmoji(),
-                  icon: Icon(
-                    Icons.emoji_emotions_outlined,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ],
+            InlineEmojiInput(
+              key: _inputKey,
+              hintText: '友善交流，理性发言',
+              fontSize: 14,
+              initialText: widget.initialText,
+              onSearchUser: widget.controller.searchUsers,
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
@@ -5675,9 +5647,22 @@ class _CommentReplyDialogState extends State<_CommentReplyDialog> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: _isSending ? null : () => Navigator.of(context).pop(),
-            child: const Text('取消'),
+          IconButton(
+            tooltip: '@ 用户',
+            onPressed: _isSending ? null : _pickMention,
+            icon: Icon(
+              Icons.alternate_email,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          IconButton(
+            tooltip: '表情包',
+            onPressed:
+                _isSending ? null : () => _inputKey.currentState?.pickEmoji(),
+            icon: Icon(
+              Icons.emoji_emotions_outlined,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
           FilledButton(
             onPressed: _isSending ? null : _submit,
@@ -5833,8 +5818,9 @@ class _CommentCardState extends State<_CommentCard> {
     _loadReplies();
   }
 
-  /// 打开回复编辑器；[mention] 非空时代表“回复 @xxx”的二级回复，会预填 @名 前缀。
-  void _showReplyComposer({String? mention}) {
+  /// 打开回复编辑器；二级回复使用带 id 的 mention 标记，
+  /// 避免预填的 `@用户` 被当成普通文本发送。
+  void _showReplyComposer({String? mention, int? mentionId}) {
     if (widget.controller.session == null) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('请先在“我的”页面登录后再回复')));
@@ -5845,7 +5831,7 @@ class _CommentCardState extends State<_CommentCard> {
       useRootNavigator: true,
       builder: (_) => _CommentReplyDialog(
         controller: widget.controller,
-        initialText: mention == null ? '' : '@$mention ',
+        initialText: mention == null ? '' : '[@${mentionId ?? ''}:$mention] ',
         onSubmit: (spans) => widget.controller.createCommentReply(
           commentId: widget.comment.id,
           spans: spans,
@@ -6161,8 +6147,10 @@ class _CommentCardState extends State<_CommentCard> {
                               controller: widget.controller,
                               rootCommentId: widget.comment.id,
                               reply: reply,
-                              onReply: (name) =>
-                                  _showReplyComposer(mention: name),
+                              onReply: (name, userId) => _showReplyComposer(
+                                mention: name,
+                                mentionId: userId,
+                              ),
                               onDeleted: () {
                                 if (!mounted) return;
                                 setState(() {
@@ -6248,6 +6236,34 @@ List<CommunityComment> removeCommentReply(
 ) =>
     replies.where((comment) => comment.id != commentId).toList(growable: false);
 
+/// 二级回复以 mention 开头时，补全为“回复@用户：内容”的阅读语义。
+/// 保留 mention 的结构化数据，以便用户名仍可点击。
+List<CommentSpan> replyDisplaySpans(List<CommentSpan> spans) {
+  if (spans.isEmpty) return spans;
+  if (!spans.first.isMention) {
+    final first = spans.first;
+    if (first.isSticker) return spans;
+    final match = RegExp(r'^@([^\s：:]+)[\s：:]*').firstMatch(first.text);
+    if (match == null) return spans;
+    return [
+      CommentSpan.text(
+          '回复@${match.group(1)}：${first.text.substring(match.end)}'),
+      ...spans.skip(1),
+    ];
+  }
+  final tail = spans.skip(1).toList();
+  if (tail.isNotEmpty && !tail.first.isMention && !tail.first.isSticker) {
+    tail[0] =
+        CommentSpan.text(tail.first.text.replaceFirst(RegExp(r'^\s+'), ''));
+  }
+  return [
+    const CommentSpan.text('回复'),
+    spans.first,
+    const CommentSpan.text('：'),
+    ...tail,
+  ];
+}
+
 /// 二级评论（回复）：头像 + 昵称 + 内容 + 点赞/回复/删除操作，长按可复制或删除。
 class _CommentReplyTile extends StatefulWidget {
   const _CommentReplyTile({
@@ -6264,7 +6280,7 @@ class _CommentReplyTile extends StatefulWidget {
   final CommunityComment reply;
 
   /// 回复该二级评论（预填 @昵称 前缀）。
-  final void Function(String userName)? onReply;
+  final void Function(String userName, int userId)? onReply;
 
   /// 删除成功后回调（供父级移除列表项并修正计数）。
   final VoidCallback? onDeleted;
@@ -6476,7 +6492,7 @@ class _CommentReplyTileState extends State<_CommentReplyTile> {
                     )
                   else
                     ContentSpans(
-                      spans: reply.spans,
+                      spans: replyDisplaySpans(reply.spans),
                       textStyle: TextStyle(
                           color: AppPalette.of(context).muted,
                           fontSize: 13.5,
@@ -6516,7 +6532,7 @@ class _CommentReplyTileState extends State<_CommentReplyTile> {
                       const SizedBox(width: 12),
                       InkWell(
                         borderRadius: BorderRadius.circular(6),
-                        onTap: () => widget.onReply?.call(name),
+                        onTap: () => widget.onReply?.call(name, reply.userId),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 4, vertical: 2),
