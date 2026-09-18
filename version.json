@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.5.7",
-    "build": 51,
-    "name": "Mfuns Flutter v1.5.7 仙后座",
-    "date": "2026-09-16",
-    "notes": "优化楼中楼回复展示与编辑布局\n移除文章、动态详情页重复的全局刷新按钮",
+    "version": "1.5.8",
+    "build": 52,
+    "name": "Mfuns Flutter v1.5.8 仙后座",
+    "date": "2026-09-18",
+    "notes": "新增\n- 支持查看和管理黑名单，可从用户主页和私信页面拉黑或解除拉黑\n- 用户主页支持系统分享\n- 私信消息支持长按复制\n修复\n- 修复楼中楼回复内容未完整保存的问题",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.7/mfuns-flutter-1.5.7.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.7/mfuns-flutter-windows-1.5.7.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.8/mfuns-flutter-1.5.8.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.8/mfuns-flutter-windows-1.5.8.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.7"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.8"
   },
   "history": [
+    {
+      "version": "1.5.7",
+      "build": 51,
+      "name": "Mfuns Flutter v1.5.7 仙后座",
+      "date": "2026-09-16",
+      "notes": "优化楼中楼回复展示与编辑布局\n移除文章、动态详情页重复的全局刷新按钮",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.7/mfuns-flutter-1.5.7.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.7/mfuns-flutter-windows-1.5.7.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.7"
+    },
     {
       "version": "1.5.6",
       "build": 50,
