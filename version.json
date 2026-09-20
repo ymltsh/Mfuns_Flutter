@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.5.10",
-    "build": 55,
-    "name": "Mfuns Flutter v1.5.10 仙后座",
-    "date": "2026-09-18",
-    "notes": "新增\n- 支持查看和管理黑名单，可从用户主页和私信页面拉黑或解除拉黑\n- 用户主页支持系统分享\n- 私信消息支持长按复制\n优化\n- 优化楼中楼回复展示与编辑布局\n- 移除文章、动态详情页重复的全局刷新按钮\n修复\n- 修复楼中楼回复内容未完整保存的问题",
+    "version": "1.6.0",
+    "build": 56,
+    "name": "Mfuns Flutter v1.6.0 天鹅座",
+    "date": "2026-09-20",
+    "notes": "新增\n- 搜索支持字段与排序筛选，并完善内容、用户结果分页\n- 标签页同时展示文章与视频，支持分栏加载更多\n- 播放器新增更多设置面板\n- 文章正文支持选择与复制\n- 支持黑名单管理、用户拉黑状态校验与个人主页分享\n- 私信会话支持删除，消息支持长按复制\n\n优化\n- 首页推荐与分类内容支持触底加载并自动去重\n- 优化楼中楼回复分页、内容合并与页面交互\n- 优化版本星座彩蛋背景与动画，1.6.x 启用天鹅座（CYG）\n\n修复\n- 修复快速切换搜索条件时旧请求覆盖新结果的问题\n- 修复标签、消息与推荐列表的重复项及分页边界问题",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.10/mfuns-flutter-1.5.10.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.10/mfuns-flutter-windows-1.5.10.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.0/mfuns-flutter-1.6.0.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.0/mfuns-flutter-windows-1.6.0.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.10"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.0"
   },
   "history": [
+    {
+      "version": "1.5.10",
+      "build": 55,
+      "name": "Mfuns Flutter v1.5.10 仙后座",
+      "date": "2026-09-18",
+      "notes": "新增\n- 支持查看和管理黑名单，可从用户主页和私信页面拉黑或解除拉黑\n- 用户主页支持系统分享\n- 私信消息支持长按复制\n优化\n- 优化楼中楼回复展示与编辑布局\n- 移除文章、动态详情页重复的全局刷新按钮\n修复\n- 修复楼中楼回复内容未完整保存的问题",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.10/mfuns-flutter-1.5.10.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.5.10/mfuns-flutter-windows-1.5.10.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.5.10"
+    },
     {
       "version": "1.5.9",
       "build": 54,
