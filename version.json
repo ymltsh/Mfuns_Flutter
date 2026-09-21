@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.6.1",
-    "build": 57,
-    "name": "Mfuns Flutter v1.6.1 天鹅座",
+    "version": "1.6.2",
+    "build": 58,
+    "name": "Mfuns Flutter v1.6.2 天鹅座",
     "date": "2026-09-21",
-    "notes": "新增\n- 视频播放器支持应用内小窗、Android 系统画中画与 DLNA 投屏\n- 文章正文支持长按后进入专用页面复制文本\n\n优化\n- 修复系统画中画返回首页问题，并优化小窗控制按钮自动隐藏\n- 播放设置支持横屏半屏面板及非全屏底部面板\n- 非全屏播放设置跟随系统深浅色主题",
+    "notes": "优化\n- 完善视频分P结束检测与自动连播，避免重复切换\n- DLNA 投屏控制面板调整为半屏高度，并阻止重复弹出\n- 投屏控件支持折叠为悬浮按钮，可拖动位置并快速重新打开控制面板",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.1/mfuns-flutter-1.6.1.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.1/mfuns-flutter-windows-1.6.1.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.2/mfuns-flutter-1.6.2.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.2/mfuns-flutter-windows-1.6.2.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.1"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.2"
   },
   "history": [
+    {
+      "version": "1.6.1",
+      "build": 57,
+      "name": "Mfuns Flutter v1.6.1 天鹅座",
+      "date": "2026-09-21",
+      "notes": "新增\n- 视频播放器支持应用内小窗、Android 系统画中画与 DLNA 投屏\n- 文章正文支持长按后进入专用页面复制文本\n\n优化\n- 修复系统画中画返回首页问题，并优化小窗控制按钮自动隐藏\n- 播放设置支持横屏半屏面板及非全屏底部面板\n- 非全屏播放设置跟随系统深浅色主题",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.1/mfuns-flutter-1.6.1.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.1/mfuns-flutter-windows-1.6.1.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.1"
+    },
     {
       "version": "1.6.0",
       "build": 56,
