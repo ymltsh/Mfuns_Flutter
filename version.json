@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.6.2",
-    "build": 58,
-    "name": "Mfuns Flutter v1.6.2 天鹅座",
+    "version": "1.6.3",
+    "build": 59,
+    "name": "Mfuns Flutter v1.6.3 天鹅座",
     "date": "2026-09-21",
-    "notes": "优化\n- 完善视频分P结束检测与自动连播，避免重复切换\n- DLNA 投屏控制面板调整为半屏高度，并阻止重复弹出\n- 投屏控件支持折叠为悬浮按钮，可拖动位置并快速重新打开控制面板",
+    "notes": "新增\n- 完善黑名单管理与用户主页分享\n- 增强文章、动态及评论互动体验\n\n优化\n- 优化视频播放、投屏控制和详情页交互\n- 优化首页、标签内容及投稿管理体验",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.2/mfuns-flutter-1.6.2.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.2/mfuns-flutter-windows-1.6.2.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.3/mfuns-flutter-1.6.3.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.3/mfuns-flutter-windows-1.6.3.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.2"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.3"
   },
   "history": [
+    {
+      "version": "1.6.2",
+      "build": 58,
+      "name": "Mfuns Flutter v1.6.2 天鹅座",
+      "date": "2026-09-21",
+      "notes": "优化\n- 完善视频分P结束检测与自动连播，避免重复切换\n- DLNA 投屏控制面板调整为半屏高度，并阻止重复弹出\n- 投屏控件支持折叠为悬浮按钮，可拖动位置并快速重新打开控制面板",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.2/mfuns-flutter-1.6.2.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.2/mfuns-flutter-windows-1.6.2.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.2"
+    },
     {
       "version": "1.6.1",
       "build": 57,
