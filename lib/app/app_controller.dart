@@ -12,19 +12,19 @@ import '../features/latest/latest_mfuns_repository.dart';
 
 class AppController extends ChangeNotifier {
   AppController({SessionStore? sessionStore})
-      : _api = MfunsApiClient(),
-        _sessionStore = sessionStore ?? SessionStore(),
-        _recommendations = const [],
-        _searchResults = const [],
-        _hotRankings = const [],
-        _categories = const [],
-        _categoryContents = const [],
-        _feeds = const [],
-        _followingFeeds = const [],
-        _latestItems = const [],
-        _history = const [],
-        _favoriteFolders = const [],
-        _favoriteItems = const [] {
+    : _api = MfunsApiClient(),
+      _sessionStore = sessionStore ?? SessionStore(),
+      _recommendations = const [],
+      _searchResults = const [],
+      _hotRankings = const [],
+      _categories = const [],
+      _categoryContents = const [],
+      _feeds = const [],
+      _followingFeeds = const [],
+      _latestItems = const [],
+      _history = const [],
+      _favoriteFolders = const [],
+      _favoriteItems = const [] {
     _auth = AuthRepository(_api);
     _home = HomeRepository(_api);
     _latest = LatestMfunsRepository();
@@ -111,14 +111,29 @@ class AppController extends ChangeNotifier {
   String? _historyError;
   String? _favoritesError;
   bool _isLoadingHome = false;
+  bool _isLoadingMoreHome = false;
   bool _isSearching = false;
   bool _isSearchingUser = false;
+  bool _isLoadingMoreSearch = false;
+  bool _isLoadingMoreSearchUsers = false;
+  bool _hasMoreSearchResults = false;
+  bool _hasMoreSearchUsers = false;
+  int _searchPage = 1;
+  int _searchUserPage = 1;
+  int _searchRequestId = 0;
+  int _searchUserRequestId = 0;
+  String _searchQuery = '';
+  String _searchUserQuery = '';
+  int _searchType = -1;
+  SearchField _searchField = SearchField.titleAndContent;
+  SearchSort _searchSort = SearchSort.relevance;
   bool _isLoggingIn = false;
   bool _isSendingLoginCode = false;
   bool _isRestoringSession = false;
   bool _isLoadingHotRankings = false;
   bool _isLoadingCategories = false;
   bool _isLoadingCategoryContents = false;
+  bool _isLoadingMoreCategoryContents = false;
   bool _isLoadingFeeds = false;
   bool _isLoadingMoreFeeds = false;
   bool _isLoadingFollowingFeeds = false;
@@ -191,14 +206,20 @@ class AppController extends ChangeNotifier {
   String? get historyError => _historyError;
   String? get favoritesError => _favoritesError;
   bool get isLoadingHome => _isLoadingHome;
+  bool get isLoadingMoreHome => _isLoadingMoreHome;
   bool get isSearching => _isSearching;
   bool get isSearchingUser => _isSearchingUser;
+  bool get isLoadingMoreSearch => _isLoadingMoreSearch;
+  bool get isLoadingMoreSearchUsers => _isLoadingMoreSearchUsers;
+  bool get hasMoreSearchResults => _hasMoreSearchResults;
+  bool get hasMoreSearchUsers => _hasMoreSearchUsers;
   bool get isLoggingIn => _isLoggingIn;
   bool get isSendingLoginCode => _isSendingLoginCode;
   bool get isRestoringSession => _isRestoringSession;
   bool get isLoadingHotRankings => _isLoadingHotRankings;
   bool get isLoadingCategories => _isLoadingCategories;
   bool get isLoadingCategoryContents => _isLoadingCategoryContents;
+  bool get isLoadingMoreCategoryContents => _isLoadingMoreCategoryContents;
   bool get isLoadingFeeds => _isLoadingFeeds;
   bool get isLoadingMoreFeeds => _isLoadingMoreFeeds;
   bool get isLoadingFollowingFeeds => _isLoadingFollowingFeeds;
@@ -303,9 +324,11 @@ class AppController extends ChangeNotifier {
       _accounts = const [];
       return;
     }
-    accounts = [...accounts]..sort((a, b) =>
-        (b.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-            .compareTo(a.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    accounts = [...accounts]
+      ..sort(
+        (a, b) => (b.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(a.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+      );
     _accounts = accounts;
     if (_session != null) return;
     // 从最近使用的账号开始逐个校验，跳过已失效的，保证启动即登录可用账号。
@@ -390,16 +413,21 @@ class AppController extends ChangeNotifier {
 
   /// 刷新首页推荐：新内容前置合并，返回本次新增条数（用于交界标记）。
   Future<int> refreshHome() async {
+    if (_isLoadingHome || _isLoadingMoreHome) return 0;
     _isLoadingHome = true;
     _homeError = null;
     notifyListeners();
     try {
       final fresh = await _home.getRecommendations();
-      final existingIds =
-          _recommendations.map((i) => '${i.type}:${i.id}').toSet();
+      final existingIds = _recommendations
+          .map((i) => '${i.type}:${i.id}')
+          .toSet();
       final added = fresh
-          .where((item) =>
-              item.id != 0 && !existingIds.contains('${item.type}:${item.id}'))
+          .where(
+            (item) =>
+                item.id != 0 &&
+                !existingIds.contains('${item.type}:${item.id}'),
+          )
           .length;
       _recommendations = mergeRecommendations(fresh, _recommendations);
       return added;
@@ -408,6 +436,24 @@ class AppController extends ChangeNotifier {
       return 0;
     } finally {
       _isLoadingHome = false;
+      notifyListeners();
+    }
+  }
+
+  /// 推荐接口没有稳定分页游标；触底后重新取一批并追加到末尾，避免
+  /// 用户正在阅读时列表跳回顶部。
+  Future<void> loadMoreHome() async {
+    if (_isLoadingHome || _isLoadingMoreHome) return;
+    _isLoadingMoreHome = true;
+    _homeError = null;
+    notifyListeners();
+    try {
+      final fresh = await _home.getRecommendations();
+      _recommendations = appendRecommendations(_recommendations, fresh);
+    } on MfunsApiException catch (error) {
+      _homeError = error.message;
+    } finally {
+      _isLoadingMoreHome = false;
       notifyListeners();
     }
   }
@@ -429,6 +475,23 @@ class AppController extends ChangeNotifier {
     }
     return merged.length > maxRecommendations
         ? merged.sublist(0, maxRecommendations)
+        : merged;
+  }
+
+  /// 将新一批内容追加到末尾并按资源类型与 ID 去重。
+  static List<ContentPreview> appendRecommendations(
+    List<ContentPreview> existing,
+    List<ContentPreview> fresh,
+  ) {
+    final seen = existing.map((item) => '${item.type}:${item.id}').toSet();
+    final merged = [
+      ...existing,
+      ...fresh.where(
+        (item) => item.id != 0 && seen.add('${item.type}:${item.id}'),
+      ),
+    ];
+    return merged.length > maxRecommendations
+        ? merged.sublist(merged.length - maxRecommendations)
         : merged;
   }
 
@@ -490,46 +553,168 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> search(String text, {int type = -1}) async {
+  Future<void> search(
+    String text, {
+    int type = -1,
+    SearchField field = SearchField.titleAndContent,
+    SearchSort sort = SearchSort.relevance,
+  }) async {
     final query = text.trim();
+    final requestId = ++_searchRequestId;
     if (query.isEmpty) {
       _searchResults = const [];
       _searchError = null;
+      _isSearching = false;
+      _isLoadingMoreSearch = false;
+      _hasMoreSearchResults = false;
+      _searchQuery = '';
       notifyListeners();
       return;
     }
+    _searchQuery = query;
+    _searchType = type;
+    _searchField = field;
+    _searchSort = sort;
+    _searchPage = 1;
+    _searchResults = const [];
     _isSearching = true;
+    _isLoadingMoreSearch = false;
+    _hasMoreSearchResults = false;
     _searchError = null;
     notifyListeners();
     try {
-      _searchResults = await _home.search(query, type: type);
+      final result = await _home.search(
+        query,
+        type: type,
+        field: field,
+        sort: sort,
+      );
+      if (requestId != _searchRequestId) return;
+      _searchResults = result.items;
+      _hasMoreSearchResults = result.hasMore;
     } on MfunsApiException catch (error) {
+      if (requestId != _searchRequestId) return;
       _searchError = error.message;
     } finally {
-      _isSearching = false;
-      notifyListeners();
+      if (requestId == _searchRequestId) {
+        _isSearching = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadMoreSearch() async {
+    if (_isSearching ||
+        _isLoadingMoreSearch ||
+        !_hasMoreSearchResults ||
+        _searchQuery.isEmpty) {
+      return;
+    }
+    final requestId = _searchRequestId;
+    final nextPage = _searchPage + 1;
+    _isLoadingMoreSearch = true;
+    _searchError = null;
+    notifyListeners();
+    try {
+      final result = await _home.search(
+        _searchQuery,
+        type: _searchType,
+        page: nextPage,
+        field: _searchField,
+        sort: _searchSort,
+      );
+      if (requestId != _searchRequestId) return;
+      final known = _searchResults
+          .map((item) => '${item.type}:${item.id}')
+          .toSet();
+      _searchResults = [
+        ..._searchResults,
+        ...result.items.where((item) => known.add('${item.type}:${item.id}')),
+      ];
+      _searchPage = nextPage;
+      _hasMoreSearchResults = result.hasMore;
+    } on MfunsApiException catch (error) {
+      if (requestId != _searchRequestId) return;
+      _searchError = error.message;
+    } finally {
+      if (requestId == _searchRequestId) {
+        _isLoadingMoreSearch = false;
+        notifyListeners();
+      }
     }
   }
 
   /// 搜索用户（搜索页「用户」标签）：状态存于 [searchUserResults]。
   Future<void> searchUser(String text) async {
     final query = text.trim();
+    final requestId = ++_searchUserRequestId;
     if (query.isEmpty) {
       _searchUserResults = const [];
       _searchUserError = null;
+      _isSearchingUser = false;
+      _isLoadingMoreSearchUsers = false;
+      _hasMoreSearchUsers = false;
+      _searchUserQuery = '';
       notifyListeners();
       return;
     }
+    _searchUserQuery = query;
+    _searchUserPage = 1;
+    _searchUserResults = const [];
     _isSearchingUser = true;
+    _isLoadingMoreSearchUsers = false;
+    _hasMoreSearchUsers = false;
     _searchUserError = null;
     notifyListeners();
     try {
-      _searchUserResults = await _home.searchUsers(query);
+      final result = await _home.searchUserPage(query);
+      if (requestId != _searchUserRequestId) return;
+      _searchUserResults = result.items;
+      _hasMoreSearchUsers = result.hasMore;
     } on MfunsApiException catch (error) {
+      if (requestId != _searchUserRequestId) return;
       _searchUserError = error.message;
     } finally {
-      _isSearchingUser = false;
-      notifyListeners();
+      if (requestId == _searchUserRequestId) {
+        _isSearchingUser = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadMoreSearchUsers() async {
+    if (_isSearchingUser ||
+        _isLoadingMoreSearchUsers ||
+        !_hasMoreSearchUsers ||
+        _searchUserQuery.isEmpty) {
+      return;
+    }
+    final requestId = _searchUserRequestId;
+    final nextPage = _searchUserPage + 1;
+    _isLoadingMoreSearchUsers = true;
+    _searchUserError = null;
+    notifyListeners();
+    try {
+      final result = await _home.searchUserPage(
+        _searchUserQuery,
+        page: nextPage,
+      );
+      if (requestId != _searchUserRequestId) return;
+      final known = _searchUserResults.map((user) => user.id).toSet();
+      _searchUserResults = [
+        ..._searchUserResults,
+        ...result.items.where((user) => known.add(user.id)),
+      ];
+      _searchUserPage = nextPage;
+      _hasMoreSearchUsers = result.hasMore;
+    } on MfunsApiException catch (error) {
+      if (requestId != _searchUserRequestId) return;
+      _searchUserError = error.message;
+    } finally {
+      if (requestId == _searchUserRequestId) {
+        _isLoadingMoreSearchUsers = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -565,6 +750,9 @@ class AppController extends ChangeNotifier {
   int? _categoryContentsFor;
 
   Future<void> loadCategoryContents(int categoryId) async {
+    if (_isLoadingMoreCategoryContents && _categoryContentsFor == categoryId) {
+      return;
+    }
     _isLoadingCategoryContents = true;
     _categoryContentsError = null;
     notifyListeners();
@@ -581,6 +769,28 @@ class AppController extends ChangeNotifier {
       _categoryContentsError = error.message;
     } finally {
       _isLoadingCategoryContents = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMoreCategoryContents(int categoryId) async {
+    if (_isLoadingCategoryContents ||
+        _isLoadingMoreCategoryContents ||
+        _categoryContentsFor != categoryId) {
+      return;
+    }
+    _isLoadingMoreCategoryContents = true;
+    _categoryContentsError = null;
+    notifyListeners();
+    try {
+      final fresh = await _home.getCategoryContents(categoryId);
+      if (_categoryContentsFor == categoryId) {
+        _categoryContents = appendRecommendations(_categoryContents, fresh);
+      }
+    } on MfunsApiException catch (error) {
+      _categoryContentsError = error.message;
+    } finally {
+      _isLoadingMoreCategoryContents = false;
       notifyListeners();
     }
   }
@@ -637,12 +847,14 @@ class AppController extends ChangeNotifier {
     _latestItemsError = null;
     notifyListeners();
     try {
-      final page =
-          await _latest.getLatest(before: _latestBefore, user: _latestUserId());
+      final page = await _latest.getLatest(
+        before: _latestBefore,
+        user: _latestUserId(),
+      );
       final ids = _latestItems.map((item) => item.stableId).toSet();
-      final additions = _filterLatestMarked(page.items)
-          .where((item) => !ids.contains(item.stableId))
-          .toList(growable: false);
+      final additions = _filterLatestMarked(
+        page.items,
+      ).where((item) => !ids.contains(item.stableId)).toList(growable: false);
       _latestItems = [..._latestItems, ...additions];
       _latestBefore = page.nextBefore;
       _hasMoreLatestItems = additions.isNotEmpty && page.nextBefore != null;
@@ -699,8 +911,10 @@ class AppController extends ChangeNotifier {
     );
     _latestMarkedIds.remove(item.stableId);
     UserPreferences.saveLatestMarkedIds(_latestMarkedIds);
-    final unmarked =
-        item.copyWith(markCount: result.markCount, markedByMe: false);
+    final unmarked = item.copyWith(
+      markCount: result.markCount,
+      markedByMe: false,
+    );
     final updated = <LatestMfunsItem>[];
     for (final existing in _latestItems) {
       updated.add(existing.stableId == item.stableId ? unmarked : existing);
@@ -734,8 +948,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _loadMoreTimeline({required bool following}) async {
-    final loadingMore =
-        following ? _isLoadingMoreFollowingFeeds : _isLoadingMoreFeeds;
+    final loadingMore = following
+        ? _isLoadingMoreFollowingFeeds
+        : _isLoadingMoreFeeds;
     final hasMore = following ? _hasMoreFollowingFeeds : _hasMoreFeeds;
     final items = following ? _followingFeeds : _feeds;
     if (loadingMore || !hasMore || items.isEmpty) return;
@@ -861,7 +1076,8 @@ class AppController extends ChangeNotifier {
       _history = [..._history, ...additions];
       _historyCursor = page.nextStartTime;
       _historyTotal = page.total ?? _historyTotal;
-      _hasMoreHistory = page.hasMore &&
+      _hasMoreHistory =
+          page.hasMore &&
           additions.isNotEmpty &&
           page.nextStartTime != requestedCursor;
     } on MfunsApiException {
@@ -913,8 +1129,10 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadFavoriteItems(int favoriteId,
-      {bool loadMore = false}) async {
+  Future<void> loadFavoriteItems(
+    int favoriteId, {
+    bool loadMore = false,
+  }) async {
     if (loadMore) {
       if (_isLoadingMoreFavorites || !_hasMoreFavoriteItems) return;
       _isLoadingMoreFavorites = true;
@@ -964,12 +1182,14 @@ class AppController extends ChangeNotifier {
 
   Future<String?> login(String account, String password) async {
     return _runLogin(
-        () => _auth.login(account: account.trim(), password: password));
+      () => _auth.login(account: account.trim(), password: password),
+    );
   }
 
   Future<String?> loginBySms(String phone, String code) async {
     return _runLogin(
-        () => _auth.loginBySms(phone: phone.trim(), code: code.trim()));
+      () => _auth.loginBySms(phone: phone.trim(), code: code.trim()),
+    );
   }
 
   Future<String?> _runLogin(Future<UserSession> Function() authenticate) async {
@@ -1073,9 +1293,11 @@ class AppController extends ChangeNotifier {
   /// 按最近使用顺序尝试恢复一个有效账号为当前会话（失败自动跳过），
   /// 返回成功登录的账号，全部失效时返回 null。
   Future<StoredAccount?> _activateBestAccount() async {
-    final ordered = [..._accounts]..sort((a, b) =>
-        (b.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
-            .compareTo(a.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0)));
+    final ordered = [..._accounts]
+      ..sort(
+        (a, b) => (b.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(a.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
+      );
     for (final account in ordered) {
       final restored = await _auth.restore(account.accessToken);
       if (restored == null) {
@@ -1159,8 +1381,19 @@ class AppController extends ChangeNotifier {
   Future<List<ContentPreview>> relatedContent(ContentPreview preview) =>
       _home.getRelated(preview);
 
-  Future<List<ContentPreview>> tagArticles(String tag) =>
-      _home.getTagArticles(tag);
+  Future<TagContentPage> tagContents(
+    String tag, {
+    int? articleLastId,
+    int? videoLastId,
+    bool loadArticles = true,
+    bool loadVideos = true,
+  }) => _home.getTagContents(
+    tag,
+    articleLastId: articleLastId,
+    videoLastId: videoLastId,
+    loadArticles: loadArticles,
+    loadVideos: loadVideos,
+  );
 
   Future<List<VideoQuality>> videoQualities(int videoId) =>
       _home.getVideoQualities(videoId);
@@ -1168,18 +1401,19 @@ class AppController extends ChangeNotifier {
   Future<List<CommunityComment>> comments(int areaId, {int page = 1}) =>
       _home.getComments(areaId, page: page);
 
+  Future<CommunityCommentPage> commentPage(int areaId, {int page = 1}) =>
+      _home.getCommentPage(areaId, page: page);
+
   Future<List<CommunityComment>> commentReplies(
     int commentId, {
     int page = 1,
-  }) =>
-      _home.getCommentReplies(commentId, page: page);
+  }) => _home.getCommentReplies(commentId, page: page);
 
   Future<void> createComment({
     required int areaId,
     required List<CommentSpan> spans,
     List<String> images = const [],
-  }) =>
-      _home.createComment(areaId: areaId, spans: spans, images: images);
+  }) => _home.createComment(areaId: areaId, spans: spans, images: images);
 
   Future<String> uploadImage(List<int> bytes, String filename) =>
       _home.uploadImage(bytes, filename);
@@ -1187,25 +1421,27 @@ class AppController extends ChangeNotifier {
   Future<void> createCommentReply({
     required int commentId,
     required List<CommentSpan> spans,
-  }) =>
-      _home.createCommentReply(commentId: commentId, spans: spans);
+  }) => _home.createCommentReply(commentId: commentId, spans: spans);
 
   Future<void> deleteComment(int commentId) => _home.deleteComment(commentId);
+
+  Future<void> pinComment(int commentId) => _home.pinComment(commentId);
 
   /// 投币（需登录）：type 0=文章、1=视频，成功返回服务端消息。
   Future<String> reward({
     required int resourceId,
     required int resourceType,
     int count = 1,
-  }) =>
-      _home.reward(
-          resourceId: resourceId, resourceType: resourceType, count: count);
+  }) => _home.reward(
+    resourceId: resourceId,
+    resourceType: resourceType,
+    count: count,
+  );
 
   Future<void> setCommentReaction({
     required int commentId,
     required bool like,
-  }) =>
-      _home.setCommentReaction(commentId: commentId, like: like);
+  }) => _home.setCommentReaction(commentId: commentId, like: like);
 
   Future<void> deleteFeed(int feedId) => _home.deleteFeed(feedId);
 
@@ -1213,8 +1449,7 @@ class AppController extends ChangeNotifier {
     required int userId,
     required String type,
     int lastId = -1,
-  }) =>
-      _home.getFollowList(userId: userId, type: type, lastId: lastId);
+  }) => _home.getFollowList(userId: userId, type: type, lastId: lastId);
 
   /// 搜索用户（@ 提及用）。
   Future<List<UserProfile>> searchUsers(String keyword) =>
@@ -1226,6 +1461,9 @@ class AppController extends ChangeNotifier {
   Future<List<MessageConversation>> messageConversations({int page = 1}) =>
       _home.getMessageConversations(page: page);
 
+  Future<void> removeMessageConversation(int userId) =>
+      _home.removeMessageConversation(userId);
+
   Future<MessageRecordsPage> messageRecord(int userId, {String? msgId}) =>
       _home.getMessageRecord(userId, msgId: msgId);
 
@@ -1233,8 +1471,19 @@ class AppController extends ChangeNotifier {
     required int toUid,
     required List<CommentSpan> spans,
     List<String> images = const [],
-  }) =>
-      _home.sendMessage(toUid: toUid, spans: spans, images: images);
+  }) => _home.sendMessage(toUid: toUid, spans: spans, images: images);
+
+  Future<List<UserProfile>> blacklist() => _home.getBlacklist();
+
+  Future<bool> isUserBlocked(int userId) => _home.isUserBlocked(userId);
+
+  Future<void> setBlocked({required int userId, required bool blocked}) async {
+    await _home.setBlocked(userId: userId, blocked: blocked);
+    final actual = await _home.isUserBlocked(userId);
+    if (actual != blocked) {
+      throw const MfunsApiException('黑名单状态校验失败，请刷新后重试');
+    }
+  }
 
   Future<NotifyCounts> notifyCounts() => _home.getNotifyCounts();
 
@@ -1260,23 +1509,27 @@ class AppController extends ChangeNotifier {
       final previous = _lastNotifyCounts;
       if (_backgroundNotifications && previous != null) {
         if (counts.message > previous.message) {
-          LocalMessageNotifier.instance
-              .showDm(counts.message - previous.message);
+          LocalMessageNotifier.instance.showDm(
+            counts.message - previous.message,
+          );
         }
         if (counts.like > previous.like) {
           LocalMessageNotifier.instance.showLikes(counts.like - previous.like);
         }
         if (counts.comment > previous.comment) {
-          LocalMessageNotifier.instance
-              .showComments(counts.comment - previous.comment);
+          LocalMessageNotifier.instance.showComments(
+            counts.comment - previous.comment,
+          );
         }
         if (counts.mention > previous.mention) {
-          LocalMessageNotifier.instance
-              .showMentions(counts.mention - previous.mention);
+          LocalMessageNotifier.instance.showMentions(
+            counts.mention - previous.mention,
+          );
         }
         if (counts.system > previous.system) {
-          LocalMessageNotifier.instance
-              .showSystem(counts.system - previous.system);
+          LocalMessageNotifier.instance.showSystem(
+            counts.system - previous.system,
+          );
         }
       }
       _lastNotifyCounts = counts;
@@ -1340,13 +1593,12 @@ class AppController extends ChangeNotifier {
     int page = 1,
     int size = 20,
     int? status,
-  }) =>
-      _home.getSubmissionsPage(
-        type: type,
-        page: page,
-        size: size,
-        status: status,
-      );
+  }) => _home.getSubmissionsPage(
+    type: type,
+    page: page,
+    size: size,
+    status: status,
+  );
 
   Future<int> submissionCount(int type) => _home.getSubmissionTotal(type);
 
@@ -1375,15 +1627,15 @@ class AppController extends ChangeNotifier {
     int copyright = 2,
     String cover = '',
     bool draft = false,
-  }) =>
-      _home.createArticleSubmission(
-          title: title,
-          content: content,
-          categoryId: categoryId,
-          tags: tags,
-          copyright: copyright,
-          cover: cover,
-          draft: draft);
+  }) => _home.createArticleSubmission(
+    title: title,
+    content: content,
+    categoryId: categoryId,
+    tags: tags,
+    copyright: copyright,
+    cover: cover,
+    draft: draft,
+  );
 
   Future<void> updateArticleSubmission({
     required int contributeId,
@@ -1394,16 +1646,16 @@ class AppController extends ChangeNotifier {
     int copyright = 2,
     String cover = '',
     bool draft = false,
-  }) =>
-      _home.updateArticleSubmission(
-          contributeId: contributeId,
-          title: title,
-          content: content,
-          categoryId: categoryId,
-          tags: tags,
-          copyright: copyright,
-          cover: cover,
-          draft: draft);
+  }) => _home.updateArticleSubmission(
+    contributeId: contributeId,
+    title: title,
+    content: content,
+    categoryId: categoryId,
+    tags: tags,
+    copyright: copyright,
+    cover: cover,
+    draft: draft,
+  );
 
   Future<void> updateVideoSubmission({
     required int contributeId,
@@ -1414,28 +1666,36 @@ class AppController extends ChangeNotifier {
     List<String> tags = const [],
     int copyright = 0,
     String cover = '',
-  }) =>
-      _home.updateVideoSubmission(
-          contributeId: contributeId,
-          title: title,
-          content: content,
-          categoryId: categoryId,
-          videos: videos,
-          tags: tags,
-          copyright: copyright,
-          cover: cover);
+  }) => _home.updateVideoSubmission(
+    contributeId: contributeId,
+    title: title,
+    content: content,
+    categoryId: categoryId,
+    videos: videos,
+    tags: tags,
+    copyright: copyright,
+    cover: cover,
+  );
 
   Future<void> deleteSubmission({
     required int type,
     required int contributeId,
-  }) =>
-      _home.deleteSubmission(type: type, contributeId: contributeId);
+  }) => _home.deleteSubmission(type: type, contributeId: contributeId);
+
+  Future<void> updateResourceVisibility({
+    required int resourceType,
+    required int resourceId,
+    required int visibility,
+  }) => _home.updateResourceVisibility(
+    resourceType: resourceType,
+    resourceId: resourceId,
+    visibility: visibility,
+  );
 
   Future<VideoUploadAuth> videoUploadAuth({
     required String fileName,
     required int fileSize,
-  }) =>
-      _home.getVideoUploadAuth(fileName: fileName, fileSize: fileSize);
+  }) => _home.getVideoUploadAuth(fileName: fileName, fileSize: fileSize);
 
   Future<int> completeVideoUpload(String videoId) =>
       _home.completeVideoUpload(videoId);
@@ -1448,33 +1708,31 @@ class AppController extends ChangeNotifier {
     List<String> tags = const [],
     int copyright = 0,
     String cover = '',
-  }) =>
-      _home.createVideoSubmission(
-          title: title,
-          content: content,
-          categoryId: categoryId,
-          videos: videos,
-          tags: tags,
-          copyright: copyright,
-          cover: cover);
+  }) => _home.createVideoSubmission(
+    title: title,
+    content: content,
+    categoryId: categoryId,
+    videos: videos,
+    tags: tags,
+    copyright: copyright,
+    cover: cover,
+  );
 
   Future<void> createFeed({
     required String content,
     List<String> images = const [],
     List<String> tags = const [],
-  }) =>
-      _home.createFeed(content: content, images: images, tags: tags);
+  }) => _home.createFeed(content: content, images: images, tags: tags);
 
   Future<void> forwardFeed({
     required String content,
     required int resourceId,
     required int resourceType,
-  }) =>
-      _home.forwardFeed(
-        content: content,
-        resourceId: resourceId,
-        resourceType: resourceType,
-      );
+  }) => _home.forwardFeed(
+    content: content,
+    resourceId: resourceId,
+    resourceType: resourceType,
+  );
 
   Future<void> updateUserName(String name) => _home.updateUserName(name);
 
@@ -1523,51 +1781,51 @@ class AppController extends ChangeNotifier {
   Future<List<TimelineFeed>> userFeeds({
     required int userId,
     int startId = -1,
-  }) =>
-      _home.getFeeds(startId: startId, following: false, userId: userId);
+  }) => _home.getFeeds(startId: startId, following: false, userId: userId);
 
   Future<List<ContentPreview>> userArticles({
     required int userId,
     int cursor = 0,
-  }) =>
-      _home.getUserArticles(userId: userId, cursor: cursor);
+  }) => _home.getUserArticles(userId: userId, cursor: cursor);
 
   Future<List<ContentPreview>> userVideos({
     required int userId,
     int cursor = 0,
-  }) =>
-      _home.getUserVideos(userId: userId, cursor: cursor);
+  }) => _home.getUserVideos(userId: userId, cursor: cursor);
 
   Future<ResourceReactionStatus> reactionStatus({
     required int resourceId,
     required int resourceType,
-  }) =>
-      _home.getReactionStatus(
-        resourceId: resourceId,
-        resourceType: resourceType,
-      );
+  }) => _home.getReactionStatus(
+    resourceId: resourceId,
+    resourceType: resourceType,
+  );
 
   Future<void> setReaction({
     required int resourceId,
     required int resourceType,
     required String action,
-  }) =>
-      _home.setReaction(
-        resourceId: resourceId,
-        resourceType: resourceType,
-        action: action,
-      );
+  }) => _home.setReaction(
+    resourceId: resourceId,
+    resourceType: resourceType,
+    action: action,
+  );
 
   Future<bool> isFavorite({
     required int resourceId,
     required int resourceType,
-  }) =>
-      _home.isFavorite(
-        resourceId: resourceId,
-        resourceType: resourceType,
-      );
+  }) => _home.isFavorite(resourceId: resourceId, resourceType: resourceType);
 
   Future<bool> followStatus(int userId) => _home.followStatus(userId);
+
+  Future<FollowRelation> followRelation(int userId) {
+    final currentUserId = _session?.userId;
+    if (currentUserId == null) return Future.value(FollowRelation.none);
+    return _home.getFollowRelation(
+      userId: userId,
+      currentUserId: currentUserId,
+    );
+  }
 
   Future<void> setFollow({required int userId, required bool follow}) =>
       _home.setFollow(userId: userId, follow: follow);
@@ -1576,23 +1834,21 @@ class AppController extends ChangeNotifier {
     required int listId,
     required int resourceId,
     required int resourceType,
-  }) =>
-      _home.addFavorite(
-        listId: listId,
-        resourceId: resourceId,
-        resourceType: resourceType,
-      );
+  }) => _home.addFavorite(
+    listId: listId,
+    resourceId: resourceId,
+    resourceType: resourceType,
+  );
 
   Future<void> removeFavorite({
     required int listId,
     required int resourceId,
     required int resourceType,
-  }) =>
-      _home.removeFavorite(
-        listId: listId,
-        resourceId: resourceId,
-        resourceType: resourceType,
-      );
+  }) => _home.removeFavorite(
+    listId: listId,
+    resourceId: resourceId,
+    resourceType: resourceType,
+  );
 
   Future<void> sendDanmaku({
     required int videoId,
@@ -1600,12 +1856,11 @@ class AppController extends ChangeNotifier {
     required double seconds,
     required String content,
     int type = 1,
-  }) =>
-      _home.sendDanmaku(
-        videoId: videoId,
-        part: part,
-        seconds: seconds,
-        content: content,
-        type: type,
-      );
+  }) => _home.sendDanmaku(
+    videoId: videoId,
+    part: part,
+    seconds: seconds,
+    content: content,
+    type: type,
+  );
 }

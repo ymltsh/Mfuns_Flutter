@@ -43,6 +43,7 @@ class InlineEmojiInput extends StatefulWidget {
 
 class InlineEmojiInputState extends State<InlineEmojiInput> {
   late final TextEditingController _input;
+  final FocusNode _focusNode = FocusNode();
   final List<String> _images = [];
   var _isUploading = false;
 
@@ -112,6 +113,8 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
 
   bool get isUploading => _isUploading;
 
+  void requestFocus() => _focusNode.requestFocus();
+
   void clear() {
     _images.clear();
     _input.clear();
@@ -175,6 +178,7 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
   @override
   void dispose() {
     _mentionDebounce?.cancel();
+    _focusNode.dispose();
     _input.dispose();
     super.dispose();
   }
@@ -225,6 +229,7 @@ class InlineEmojiInputState extends State<InlineEmojiInput> {
               ),
             TextField(
               controller: _input,
+              focusNode: _focusNode,
               minLines: 1,
               maxLines: 4,
               style: TextStyle(

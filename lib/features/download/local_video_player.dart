@@ -8,6 +8,8 @@ import 'package:screen_brightness/screen_brightness.dart';
 import 'package:video_player/video_player.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../core/widgets/player_more_overlay.dart';
+
 /// 本地视频播放器：直接复用线上播放器全屏控件（[VideoDetailPage] 横屏层）
 /// 的 UI / 交互骨架，裁剪掉弹幕、清晰度切换、后台播放交接、媒体通知等
 /// 网络播放专属能力，只服务已下载完成的本地文件；多分P任务可在播放器内
@@ -15,11 +17,11 @@ import 'package:window_manager/window_manager.dart';
 ///
 /// 复用的交互骨架：
 /// - 单击显隐控制层，4 秒无操作自动隐藏（播放中）
-/// - 双击左右半屏 ±10 秒、长按 2× 倍速
+/// - 双击切换播放/暂停、长按 2× 倍速
 /// - 左右拖动比例式跳转进度
 /// - 左半屏上下滑动调亮度、右半屏调音量（带 HUD 反馈）
 /// - 顶部返回 + 标题 + 分P菜单，底部时间 + 进度滑杆 + 全屏退出
-/// - 设置面板：音量滑杆 + 倍速选择
+/// - 右侧更多遮罩：音量/静音合并控制 + 倍速选择
 /// - 移动端进入横屏沉浸式（immersiveSticky），桌面端窗口级全屏
 class LocalVideoPlayer extends StatefulWidget {
   const LocalVideoPlayer({
@@ -57,24 +59,22 @@ class _LocalVideoPlayerState extends State<LocalVideoPlayer> {
   _SlideFeedback? _slideFeedback;
   Timer? _hideTimer;
   Timer? _ticker;
-  double _doubleTapX = 0;
   double _dragSeekStartDx = 0;
   Duration _dragSeekBase = Duration.zero;
   double _volume = .7;
+  double _playbackSpeed = 1;
   var _brightness = .5;
   var _brightnessAvailable = true;
   String? _error;
   var _initialized = false;
 
   /// 分P序号（升序）。
-  List<int> get _partOrder =>
-      (widget.parts.keys.toList()..sort());
+  List<int> get _partOrder => (widget.parts.keys.toList()..sort());
 
   @override
   void initState() {
     super.initState();
-    _currentPart =
-        widget.initialPart ?? _partOrder.firstOrNull ?? 1;
+    _currentPart = widget.initialPart ?? _partOrder.firstOrNull ?? 1;
     _init();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     SystemChrome.setPreferredOrientations(const [
@@ -208,21 +208,32 @@ class _LocalVideoPlayerState extends State<LocalVideoPlayer> {
   Future<void> _setLongPressSpeed(bool active) async {
     if (_isLongPressSpeed == active) return;
     setState(() => _isLongPressSpeed = active);
-    await _player?.setPlaybackSpeed(active ? 2 : 1);
+    await _player?.setPlaybackSpeed(active ? 2 : _playbackSpeed);
   }
 
-  Future<void> _seekBy(int seconds) async {
+  Future<void> _togglePlayback() async {
     final player = _player;
     if (player == null) return;
-    var target = player.value.position + Duration(seconds: seconds);
-    if (target < Duration.zero) target = Duration.zero;
-    if (target > player.value.duration) target = player.value.duration;
-    await player.seekTo(target);
+    if (player.value.isPlaying) {
+      await player.pause();
+    } else {
+      await player.play();
+    }
     if (mounted) {
-      setState(() {
-        _controlsVisible = true;
-        _seekNotice = '${seconds > 0 ? '+' : ''}$seconds 秒';
-      });
+      setState(() => _controlsVisible = true);
+      _scheduleHide();
+    }
+  }
+
+  void _toggleOptions() {
+    final opening = !_showOptions;
+    setState(() {
+      _showOptions = opening;
+      _controlsVisible = true;
+    });
+    if (opening) {
+      _hideTimer?.cancel();
+    } else {
       _scheduleHide();
     }
   }
@@ -247,8 +258,7 @@ class _LocalVideoPlayerState extends State<LocalVideoPlayer> {
     final deltaDx = details.globalPosition.dx - _dragSeekStartDx;
     final target = _dragSeekBase +
         Duration(
-            milliseconds:
-                (deltaDx / width * duration.inMilliseconds).round());
+            milliseconds: (deltaDx / width * duration.inMilliseconds).round());
     var clamped = target;
     if (clamped < Duration.zero) clamped = Duration.zero;
     if (clamped > duration) clamped = duration;
@@ -272,8 +282,8 @@ class _LocalVideoPlayerState extends State<LocalVideoPlayer> {
         appBar: AppBar(
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
-          title: Text(widget.title,
-              maxLines: 1, overflow: TextOverflow.ellipsis),
+          title:
+              Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis),
           centerTitle: true,
         ),
         body: Center(
@@ -317,11 +327,7 @@ class _LocalVideoPlayerState extends State<LocalVideoPlayer> {
           setState(() => _controlsVisible = !_controlsVisible);
           if (_controlsVisible) _scheduleHide();
         },
-        onDoubleTapDown: (details) => _doubleTapX = details.localPosition.dx,
-        onDoubleTap: () {
-          final width = MediaQuery.sizeOf(context).width;
-          _seekBy(_doubleTapX < width / 2 ? -10 : 10);
-        },
+        onDoubleTap: _togglePlayback,
         onLongPressStart: (_) => _setLongPressSpeed(true),
         onLongPressEnd: (_) => _setLongPressSpeed(false),
         onLongPressCancel: () => _setLongPressSpeed(false),
@@ -340,231 +346,231 @@ class _LocalVideoPlayerState extends State<LocalVideoPlayer> {
                 child: CircularProgressIndicator(color: Colors.white),
               )
             : ValueListenableBuilder<VideoPlayerValue>(
-          valueListenable: player,
-          builder: (context, value, _) {
-            final duration = value.duration;
-            final position = value.position;
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                Center(
-                  child: AspectRatio(
-                    aspectRatio:
-                        value.aspectRatio == 0 ? 16 / 9 : value.aspectRatio,
-                    child: VideoPlayer(player),
-                  ),
-                ),
-                if (_controlsVisible)
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Color(0x99000000),
-                            Colors.transparent,
-                            Color(0xaa000000)
-                          ],
+                valueListenable: player,
+                builder: (context, value, _) {
+                  final duration = value.duration;
+                  final position = value.position;
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Center(
+                        child: AspectRatio(
+                          aspectRatio: value.aspectRatio == 0
+                              ? 16 / 9
+                              : value.aspectRatio,
+                          child: VideoPlayer(player),
                         ),
                       ),
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            top: 8,
-                            left: 8,
-                            right: 8,
-                            child: SafeArea(
-                              bottom: false,
-                              child: Row(
-                                children: [
-                                  IconButton(
-                                    color: Colors.white,
-                                    tooltip: '退出',
-                                    icon: const Icon(Icons.arrow_back_rounded),
-                                    onPressed: _close,
-                                  ),
-                                  Expanded(
-                                    child: Text(widget.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w600)),
-                                  ),
-                                  if (widget.parts.length > 1)
-                                    PopupMenuButton<int>(
-                                      tooltip: '分 P',
-                                      initialValue: _currentPart,
-                                      onSelected: (part) {
-                                        if (part == _currentPart) return;
-                                        _openPart(part, autoplay: true);
-                                      },
-                                      itemBuilder: (context) => _partOrder
-                                          .map((part) => PopupMenuItem(
-                                                value: part,
-                                                child: Text('P$part'),
-                                              ))
-                                          .toList(),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 9, vertical: 8),
-                                        child: Text(
-                                          'P$_currentPart',
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w800),
+                      if (_controlsVisible)
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Color(0x99000000),
+                                  Colors.transparent,
+                                  Color(0xaa000000)
+                                ],
+                              ),
+                            ),
+                            child: Stack(
+                              children: [
+                                Positioned(
+                                  top: 8,
+                                  left: 8,
+                                  right: 8,
+                                  child: SafeArea(
+                                    bottom: false,
+                                    child: Row(
+                                      children: [
+                                        IconButton(
+                                          color: Colors.white,
+                                          tooltip: '退出',
+                                          icon: const Icon(
+                                              Icons.arrow_back_rounded),
+                                          onPressed: _close,
                                         ),
-                                      ),
-                                    ),
-                                  IconButton(
-                                    color: Colors.white,
-                                    tooltip: '播放器设置',
-                                    onPressed: () => setState(
-                                        () => _showOptions = !_showOptions),
-                                    icon: const Icon(
-                                        Icons.settings_rounded),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          if (_showOptions)
-                            Positioned(
-                              top: 58,
-                              right: 16,
-                              child: _LocalPlayerOptionsPanel(
-                                volume: _volume,
-                                onVolumeChanged: (next) async {
-                                  setState(() => _volume = next);
-                                  await player.setVolume(next);
-                                },
-                                onSpeedChanged: (next) async {
-                                  await player.setPlaybackSpeed(next);
-                                },
-                              ),
-                            ),
-                          Center(
-                            child: _isSeeking || value.isBuffering
-                                ? const CircularProgressIndicator(
-                                    color: Colors.white)
-                                : IconButton.filledTonal(
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: Colors.black54,
-                                      foregroundColor: Colors.white,
-                                    ),
-                                    iconSize: 54,
-                                    onPressed: () async {
-                                      if (value.isPlaying) {
-                                        await player.pause();
-                                      } else {
-                                        await player.play();
-                                      }
-                                      _scheduleHide();
-                                    },
-                                    icon: Icon(value.isPlaying
-                                        ? Icons.pause_rounded
-                                        : Icons.play_arrow_rounded),
-                                  ),
-                          ),
-                          Positioned(
-                            left: 12,
-                            right: 12,
-                            bottom: 4,
-                            child: SafeArea(
-                              top: false,
-                              child: Row(
-                                children: [
-                                  Text(_formatDuration(position),
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 11)),
-                                  Expanded(
-                                    child: Slider(
-                                      activeColor: Theme.of(context)
-                                          .colorScheme
-                                          .primary,
-                                      inactiveColor: Colors.white38,
-                                      value: duration.inMilliseconds == 0
-                                          ? 0
-                                          : position.inMilliseconds
-                                              .clamp(0,
-                                                  duration.inMilliseconds)
-                                              .toDouble(),
-                                      max: duration.inMilliseconds == 0
-                                          ? 1
-                                          : duration.inMilliseconds.toDouble(),
-                                      onChanged: (milliseconds) {
-                                        player.seekTo(Duration(
-                                            milliseconds:
-                                                milliseconds.round()));
-                                        _scheduleHide();
-                                      },
-                                      onChangeStart: (_) => setState(
-                                          () => _isSeeking = true),
-                                      onChangeEnd: (_) => setState(
-                                          () => _isSeeking = false),
+                                        Expanded(
+                                          child: Text(widget.title,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w600)),
+                                        ),
+                                        if (widget.parts.length > 1)
+                                          PopupMenuButton<int>(
+                                            tooltip: '分 P',
+                                            initialValue: _currentPart,
+                                            onSelected: (part) {
+                                              if (part == _currentPart) return;
+                                              _openPart(part, autoplay: true);
+                                            },
+                                            itemBuilder: (context) => _partOrder
+                                                .map((part) => PopupMenuItem(
+                                                      value: part,
+                                                      child: Text('P$part'),
+                                                    ))
+                                                .toList(),
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 9,
+                                                      vertical: 8),
+                                              child: Text(
+                                                'P$_currentPart',
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight:
+                                                        FontWeight.w800),
+                                              ),
+                                            ),
+                                          ),
+                                        IconButton(
+                                          color: Colors.white,
+                                          tooltip: '播放器设置',
+                                          onPressed: _toggleOptions,
+                                          icon: const Icon(
+                                              Icons.settings_rounded),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  Text(_formatDuration(duration),
-                                      style: const TextStyle(
-                                          color: Colors.white, fontSize: 11)),
-                                  IconButton(
-                                    color: Colors.white,
-                                    icon: const Icon(
-                                        Icons.fullscreen_exit_rounded),
-                                    onPressed: _close,
+                                ),
+                                if (_isSeeking || value.isBuffering)
+                                  const Center(
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white),
                                   ),
-                                ],
-                              ),
+                                Positioned(
+                                  left: 12,
+                                  right: 12,
+                                  bottom: 4,
+                                  child: SafeArea(
+                                    top: false,
+                                    child: Row(
+                                      children: [
+                                        IconButton(
+                                          color: Colors.white,
+                                          tooltip:
+                                              value.isPlaying ? '暂停' : '播放',
+                                          onPressed: _togglePlayback,
+                                          icon: Icon(value.isPlaying
+                                              ? Icons.pause_rounded
+                                              : Icons.play_arrow_rounded),
+                                        ),
+                                        Text(_formatDuration(position),
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11)),
+                                        Expanded(
+                                          child: Slider(
+                                            activeColor: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                            inactiveColor: Colors.white38,
+                                            value: duration.inMilliseconds == 0
+                                                ? 0
+                                                : position.inMilliseconds
+                                                    .clamp(0,
+                                                        duration.inMilliseconds)
+                                                    .toDouble(),
+                                            max: duration.inMilliseconds == 0
+                                                ? 1
+                                                : duration.inMilliseconds
+                                                    .toDouble(),
+                                            onChanged: (milliseconds) {
+                                              player.seekTo(Duration(
+                                                  milliseconds:
+                                                      milliseconds.round()));
+                                              _scheduleHide();
+                                            },
+                                            onChangeStart: (_) => setState(
+                                                () => _isSeeking = true),
+                                            onChangeEnd: (_) => setState(
+                                                () => _isSeeking = false),
+                                          ),
+                                        ),
+                                        Text(_formatDuration(duration),
+                                            style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11)),
+                                        IconButton(
+                                          color: Colors.white,
+                                          icon: const Icon(
+                                              Icons.fullscreen_exit_rounded),
+                                          onPressed: _close,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (_slideFeedback != null)
-                  IgnorePointer(
-                    child:
-                        _VerticalSlideFeedback(feedback: _slideFeedback!),
-                  ),
-                if (_seekNotice != null && _controlsVisible)
-                  // 位于中央播放/暂停按钮下方，避免重叠。
-                  Align(
-                    alignment: const Alignment(0, 0.38),
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(18),
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          child: Text(_seekNotice!,
-                              style: const TextStyle(color: Colors.white)),
+                      if (_slideFeedback != null)
+                        IgnorePointer(
+                          child:
+                              _VerticalSlideFeedback(feedback: _slideFeedback!),
                         ),
-                      ),
-                    ),
-                  ),
-                if (_isLongPressSpeed)
-                  IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        child: Text('2.0× 倍速播放',
-                            style: TextStyle(color: Colors.white)),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
+                      if (_seekNotice != null && _controlsVisible)
+                        // 位于画面偏下方，避免遮挡主要内容。
+                        Align(
+                          alignment: const Alignment(0, 0.38),
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                                child: Text(_seekNotice!,
+                                    style:
+                                        const TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_isLongPressSpeed)
+                        IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 8),
+                              child: Text('2.0× 倍速播放',
+                                  style: TextStyle(color: Colors.white)),
+                            ),
+                          ),
+                        ),
+                      if (_showOptions)
+                        Positioned.fill(
+                          child: PlayerMoreOverlay(
+                            volume: _volume,
+                            speed: _playbackSpeed,
+                            onDismiss: _toggleOptions,
+                            onVolumeChanged: (next) async {
+                              setState(() => _volume = next);
+                              await player.setVolume(next);
+                            },
+                            onSpeedChanged: (next) async {
+                              setState(() => _playbackSpeed = next);
+                              await player.setPlaybackSpeed(next);
+                            },
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
       ),
     );
   }
@@ -613,63 +619,6 @@ class _VerticalSlideFeedback extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      );
-}
-
-/// 设置面板（裁剪自全屏设置面板）：音量滑杆 + 倍速选择。
-class _LocalPlayerOptionsPanel extends StatelessWidget {
-  const _LocalPlayerOptionsPanel({
-    required this.volume,
-    required this.onVolumeChanged,
-    required this.onSpeedChanged,
-  });
-
-  final double volume;
-  final ValueChanged<double> onVolumeChanged;
-  final ValueChanged<double> onSpeedChanged;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 248,
-        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
-        decoration: BoxDecoration(
-          color: const Color(0xee1d1d23),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.volume_up_rounded,
-                    color: Colors.white, size: 19),
-                Expanded(
-                  child: Slider(
-                    activeColor: Theme.of(context).colorScheme.primary,
-                    inactiveColor: Colors.white38,
-                    value: volume,
-                    onChanged: onVolumeChanged,
-                  ),
-                ),
-                PopupMenuButton<double>(
-                  initialValue: 1.0,
-                  onSelected: onSpeedChanged,
-                  itemBuilder: (context) => [
-                    for (final option in [.5, .75, 1.0, 1.25, 1.5, 2.0])
-                      PopupMenuItem(value: option, child: Text('${option}x')),
-                  ],
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Text('1.0x',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
       );
 }

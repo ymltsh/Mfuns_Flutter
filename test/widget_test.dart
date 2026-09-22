@@ -22,6 +22,37 @@ void main() {
     expect(find.text('推荐'), findsOneWidget);
   });
 
+  testWidgets('搜索筛选默认折叠，可从标签行右侧展开', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MfunsApp(controller: AppController()));
+
+    await tester.tap(find.byTooltip('搜索').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('搜索字段'), findsNothing);
+    expect(find.text('排序方式'), findsNothing);
+    expect(find.byTooltip('展开筛选'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('展开筛选'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('收起筛选'), findsOneWidget);
+    expect(find.text('搜索字段'), findsOneWidget);
+    expect(find.text('标题和内容'), findsOneWidget);
+    expect(find.text('仅标题'), findsOneWidget);
+    expect(find.text('仅内容'), findsOneWidget);
+    expect(find.text('排序方式'), findsOneWidget);
+    expect(find.text('最多打赏'), findsOneWidget);
+
+    await tester.tap(find.text('用户'));
+    await tester.pump();
+    expect(find.text('搜索字段'), findsNothing);
+    expect(find.text('排序方式'), findsNothing);
+    expect(find.byTooltip('展开筛选'), findsNothing);
+    expect(find.byTooltip('收起筛选'), findsNothing);
+  });
+
   testWidgets('我的页面按场景整理访客入口', (tester) async {
     final controller = AppController();
     await tester.pumpWidget(MfunsApp(controller: controller));
@@ -122,12 +153,14 @@ void main() {
       await tester.tap(logo);
       await tester.pump(const Duration(milliseconds: 50));
     }
-    await tester.pumpAndSettle();
+    // The starfield keeps animating, so advance past the one-shot reveal
+    // instead of waiting for every animation to settle.
+    await tester.pump(const Duration(seconds: 7));
 
     expect(
         find.byKey(const ValueKey('constellation-codename')), findsOneWidget);
-    expect(find.text('仙后座'), findsOneWidget);
-    expect(find.text('CAS'), findsOneWidget);
+    expect(find.text('天鹅座'), findsOneWidget);
+    expect(find.text('CYG'), findsOneWidget);
     expect(
       find.textContaining('v${AppConfig.appVersion} (${AppConfig.appBuild})'),
       findsOneWidget,

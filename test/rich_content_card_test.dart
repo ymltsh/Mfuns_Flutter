@@ -3,6 +3,18 @@ import 'package:mfuns_flutter/features/content/rich_content_card.dart';
 import 'package:mfuns_flutter/features/home/home_repository.dart';
 
 void main() {
+  test('keeps relative Mfuns images when normalizing quill content', () {
+    final markdown = normalizeRichContent(
+      '{"ops":[{"insert":{"image":"/static/article-image.jpg"}},'
+      '{"insert":"\\n"}]}',
+    );
+
+    expect(
+      markdown,
+      contains('![图片](https://cdn2.mfuns.net/static/article-image.jpg)'),
+    );
+  });
+
   test('normalizes the article HTML returned by the mobile page', () {
     final markdown = normalizeRichContent('''
       <h2>亮点</h2><p><strong>批量投稿</strong>，一条命令完成。</p>
@@ -25,31 +37,36 @@ void main() {
   });
 
   test('renders private-pack stickers inline instead of full-width images', () {
-    final markdown =
-        normalizeRichContent('<p>太棒了<img class="sticker" width="50px" '
-            'src="https://resource.mfuns.net/image/sticker/s/1.png" '
-            "alt='[s-1]'/></p>");
+    final markdown = normalizeRichContent(
+      '<p>太棒了<img class="sticker" width="50px" '
+      'src="https://resource.mfuns.net/image/sticker/s/1.png" '
+      "alt='[s-1]'/></p>",
+    );
     expect(markdown, contains('![sticker:s-1]('));
     expect(markdown, isNot(contains('![图片](')));
     expect(markdown.trim().contains('\n\n'), isFalse);
   });
 
   test('derives sticker key from src when alt is missing', () {
-    final markdown = normalizeRichContent('<p>冲鸭<img class=\'sticker\' '
-        'src="https://resource.mfuns.net/image/sticker/family/3.gif"/></p>');
+    final markdown = normalizeRichContent(
+      '<p>冲鸭<img class=\'sticker\' '
+      'src="https://resource.mfuns.net/image/sticker/family/3.gif"/></p>',
+    );
     expect(markdown, contains('![sticker:family-3]('));
   });
 
   test('keeps regular images as block images', () {
     final markdown = normalizeRichContent(
-        '<p><img src="https://example.test/photo.jpg" alt="照片"/></p>');
+      '<p><img src="https://example.test/photo.jpg" alt="照片"/></p>',
+    );
     expect(markdown, contains('![照片](https://example.test/photo.jpg)'));
     expect(markdown, isNot(contains('sticker:')));
   });
 
   test('converts quill json content with stickers to markdown', () {
     final markdown = normalizeRichContent(
-        '{"ops":[{"insert":{"sticker":"simple-5"}},{"insert":"赞\\n"}]}');
+      '{"ops":[{"insert":{"sticker":"simple-5"}},{"insert":"赞\\n"}]}',
+    );
     expect(markdown, contains('![sticker:simple-5]('));
     expect(markdown, contains('赞'));
   });

@@ -15,7 +15,8 @@ class UserPreferences {
   static const _keyBackgroundNotifications = 'pref.background_notifications';
   static const _keyAcceleratorBase = 'pref.accelerator_base';
   static const _keyBackgroundPlay = 'pref.background_play';
-  static const _keyArticleScrollbar = 'pref.article_scrollbar';
+  static const _keyArticleToolsFab = 'pref.article_tools_fab';
+  static const _keyFullCommentInput = 'pref.article_full_comment_input';
   static const _keyShowDislike = 'pref.player_show_dislike';
   static const _keyLandscapeSideRatio = 'pref.landscape_side_ratio';
   static const _keyLatestMarkedIds = 'pref.latest_marked_ids';
@@ -198,25 +199,42 @@ class UserPreferences {
     } catch (_) {}
   }
 
-  /// 文章阅读进度滑块开关：长文章右侧显示可拖拽的阅读进度条，
-  /// 默认关闭。
-  static Future<bool> loadArticleScrollbar() async {
+  /// 文章详情页是否显示可拖动的文章工具按钮，默认关闭。
+  static Future<bool> loadArticleToolsFab() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getBool(_keyArticleScrollbar) ?? false;
+      return prefs.getBool(_keyArticleToolsFab) ?? false;
     } catch (_) {
       return false;
     }
   }
 
-  static Future<void> saveArticleScrollbar(bool enabled) async {
+  static Future<void> saveArticleToolsFab(bool enabled) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_keyArticleScrollbar, enabled);
+      await prefs.setBool(_keyArticleToolsFab, enabled);
     } catch (_) {}
   }
 
-  /// 竖屏播放页是否显示点踩按钮，默认关闭。
+  /// 内容详情页是否默认显示完整评论输入栏；关闭时收纳为右下角 FAB。
+  /// 默认关闭，减少输入栏对阅读区域的遮挡。
+  static Future<bool> loadFullCommentInput() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyFullCommentInput) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> saveFullCommentInput(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyFullCommentInput, enabled);
+    } catch (_) {}
+  }
+
+  /// 内容详情页互动栏是否显示点踩按钮，默认关闭。
   static Future<bool> loadShowDislike() async {
     try {
       final prefs = await SharedPreferences.getInstance();

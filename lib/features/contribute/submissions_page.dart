@@ -91,9 +91,9 @@ class _SubmissionsPageState extends State<SubmissionsPage> {
         _isLoading = false;
       });
       if (_items.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('刷新失败：$error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('刷新失败：$error')));
       }
     }
   }
@@ -116,9 +116,7 @@ class _SubmissionsPageState extends State<SubmissionsPage> {
       if (!mounted || generation != _generation || type != _tab) return;
       final knownIds = _items.map((item) => item.id).toSet();
       setState(() {
-        _items.addAll(
-          result.items.where((item) => knownIds.add(item.id)),
-        );
+        _items.addAll(result.items.where((item) => knownIds.add(item.id)));
         _nextPage = page + 1;
         _hasMore = result.hasMore;
         _isLoadingMore = false;
@@ -154,16 +152,14 @@ class _SubmissionsPageState extends State<SubmissionsPage> {
   void _openEditor() {
     Navigator.of(context)
         .push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => SubmissionEditorPage(
-          controller: widget.controller,
-          type: _tab,
-        ),
-      ),
-    )
+          MaterialPageRoute<bool>(
+            builder: (_) =>
+                SubmissionEditorPage(controller: widget.controller, type: _tab),
+          ),
+        )
         .then((changed) {
-      if (changed == true) _reload();
-    });
+          if (changed == true) _reload();
+        });
   }
 
   Widget _buildBody(AppPalette palette) {
@@ -275,9 +271,7 @@ class _SubmissionsPageState extends State<SubmissionsPage> {
               ],
               onTap: _selectTab,
             ),
-            Expanded(
-              child: _buildBody(palette),
-            ),
+            Expanded(child: _buildBody(palette)),
           ],
         ),
       ),
@@ -323,10 +317,7 @@ class _SubmissionListFooter extends StatelessWidget {
     }
     if (hasMore) {
       return Center(
-        child: TextButton(
-          onPressed: onRetry,
-          child: const Text('加载更多'),
-        ),
+        child: TextButton(onPressed: onRetry, child: const Text('加载更多')),
       );
     }
     return Padding(
@@ -378,15 +369,66 @@ class _SubmissionCard extends StatelessWidget {
     try {
       await controller.deleteSubmission(type: type, contributeId: item.id);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('投稿已删除')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('投稿已删除')));
       await onChanged();
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('删除失败：$error')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('删除失败：$error')));
       }
     }
+  }
+
+  Future<void> _changeVisibility(BuildContext context, int visibility) async {
+    final resourceId = item.resourceId;
+    if (resourceId == null || resourceId <= 0) return;
+    try {
+      await controller.updateResourceVisibility(
+        resourceType: type,
+        resourceId: resourceId,
+        visibility: visibility,
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已设为${_visibilityLabel(visibility)}')),
+      );
+      await onChanged();
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('修改可见性失败：$error')));
+      }
+    }
+  }
+
+  Future<void> _openEditor(BuildContext context) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => SubmissionEditorPage(
+          controller: controller,
+          type: type,
+          contributeId: item.id,
+        ),
+      ),
+    );
+    if (changed == true) await onChanged();
+  }
+
+  Future<void> _openDetail(BuildContext context) async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => SubmissionDetailPage(
+          controller: controller,
+          contributeId: item.id,
+          type: type,
+        ),
+      ),
+    );
+    if (changed == true) await onChanged();
   }
 
   @override
@@ -394,88 +436,175 @@ class _SubmissionCard extends StatelessWidget {
     final palette = AppPalette.of(context);
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () async {
-          final changed = await Navigator.of(context).push<bool>(
-            MaterialPageRoute<bool>(
-              builder: (_) => SubmissionDetailPage(
-                controller: controller,
-                contributeId: item.id,
-                type: type,
-              ),
-            ),
-          );
-          if (changed == true) await onChanged();
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              _SubmissionCover(url: item.cover),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.title.isEmpty ? '未命名投稿' : item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: AppPalette.of(context).muted,
-                            fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 6),
-                    Row(
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => _openDetail(context),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  _SubmissionCover(url: item.cover),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: palette.primary.withOpacity(.1),
-                            borderRadius: BorderRadius.circular(5),
+                        Text(
+                          item.title.isEmpty ? '未命名投稿' : item.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontWeight: FontWeight.w700,
                           ),
-                          child: Text(item.statusLabel,
-                              style: TextStyle(
-                                  color: palette.primary, fontSize: 11)),
                         ),
-                        const SizedBox(width: 8),
-                        if (item.createdAt != null)
-                          Text(_submissionTime(item.createdAt!),
-                              style: TextStyle(
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: palette.primary.withOpacity(.1),
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              child: Text(
+                                item.statusLabel,
+                                style: TextStyle(
+                                  color: palette.primary,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                            if (item.createdAt != null)
+                              Text(
+                                _submissionTime(item.createdAt!),
+                                style: TextStyle(
                                   color: AppPalette.of(context).muted,
-                                  fontSize: 11.5)),
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (item.resourceId != null &&
+                            item.resourceId! > 0) ...[
+                          const SizedBox(height: 9),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 5,
+                            children: [
+                              _Interaction(
+                                icon: Icons.visibility_outlined,
+                                value: item.views,
+                              ),
+                              _Interaction(
+                                icon: Icons.thumb_up_alt_outlined,
+                                value: item.likes,
+                              ),
+                              _Interaction(
+                                icon: Icons.chat_bubble_outline_rounded,
+                                value: item.comments,
+                              ),
+                              _Interaction(
+                                icon: Icons.star_border_rounded,
+                                value: item.favorites,
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded),
+                ],
               ),
-              IconButton(
-                tooltip: '编辑',
-                onPressed: () async {
-                  final changed = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute<bool>(
-                      builder: (_) => SubmissionEditorPage(
-                        controller: controller,
-                        type: type,
-                        contributeId: item.id,
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  onPressed: () => _openEditor(context),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('编辑'),
+                ),
+                if (item.resourceId != null && item.resourceId! > 0)
+                  PopupMenuButton<int>(
+                    tooltip: '修改可见性',
+                    initialValue: item.visibility,
+                    onSelected: (value) => _changeVisibility(context, value),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 0, child: Text('所有人可见')),
+                      PopupMenuItem(value: 1, child: Text('仅关注可见')),
+                      PopupMenuItem(value: 2, child: Text('仅自己可见')),
+                    ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.visibility_outlined, size: 18),
+                          const SizedBox(width: 7),
+                          Text(
+                            item.visibility == null
+                                ? '可见性'
+                                : _visibilityLabel(item.visibility!),
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                  if (changed == true) await onChanged();
-                },
-                icon: const Icon(Icons.edit_outlined, size: 20),
-              ),
-              IconButton(
-                tooltip: '删除',
-                onPressed: () => _confirmDelete(context),
-                icon: const Icon(Icons.delete_outline_rounded, size: 20),
-              ),
-            ],
+                  ),
+                TextButton.icon(
+                  onPressed: () => _confirmDelete(context),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  label: const Text('删除'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
+
+class _Interaction extends StatelessWidget {
+  const _Interaction({required this.icon, required this.value});
+
+  final IconData icon;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 15, color: AppPalette.of(context).muted),
+      const SizedBox(width: 3),
+      Text(
+        '$value',
+        style: TextStyle(color: AppPalette.of(context).muted, fontSize: 12),
+      ),
+    ],
+  );
+}
+
+String _visibilityLabel(int value) => switch (value) {
+  0 => '所有人可见',
+  1 => '仅关注可见',
+  2 => '仅自己可见',
+  _ => '可见性',
+};
 
 class _SubmissionCover extends StatelessWidget {
   const _SubmissionCover({required this.url});
@@ -485,13 +614,10 @@ class _SubmissionCover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget placeholder() => Container(
-          color: AppPalette.of(context).placeholder,
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.image_outlined,
-            color: AppPalette.of(context).muted,
-          ),
-        );
+      color: AppPalette.of(context).placeholder,
+      alignment: Alignment.center,
+      child: Icon(Icons.image_outlined, color: AppPalette.of(context).muted),
+    );
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),

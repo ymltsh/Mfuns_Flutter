@@ -12,20 +12,14 @@ import '../../core/emoji/emoji_pack_store.dart';
 import '../../core/network/update_checker.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/content_link_handler.dart';
+import '../user/blacklist_page.dart';
 import 'download_settings_page.dart';
 import 'network_diagnostics_page.dart';
 import 'widgets/version_constellation_dialog.dart';
 
 const _genderOptions = <int, String>{0: '保密', 1: '男', 2: '女', 3: '其他'};
 
-const _qualityOptions = <String>[
-  '',
-  '360p',
-  '480p',
-  '540p',
-  '720p',
-  '1080p',
-];
+const _qualityOptions = <String>['', '360p', '480p', '540p', '720p', '1080p'];
 
 String _qualityLabel(String value) => value.isEmpty ? '自动' : value;
 
@@ -70,28 +64,28 @@ class _AboutLogoEasterEggState extends State<_AboutLogoEasterEgg> {
 
   @override
   Widget build(BuildContext context) => Semantics(
-        label: 'Mfuns Flutter Logo',
-        button: true,
-        child: GestureDetector(
-          key: const ValueKey('about-logo-easter-egg'),
-          behavior: HitTestBehavior.opaque,
-          onTap: _handleTap,
-          child: TweenAnimationBuilder<double>(
-            key: ValueKey(_tapCount),
-            duration: const Duration(milliseconds: 150),
-            tween: Tween(begin: 0.9, end: 1),
-            curve: Curves.easeOutBack,
-            builder: (context, scale, child) =>
-                Transform.scale(scale: scale, child: child),
-            child: Image.asset(
-              'assets/logo.png',
-              width: 42,
-              height: 42,
-              fit: BoxFit.contain,
-            ),
-          ),
+    label: 'Mfuns Flutter Logo',
+    button: true,
+    child: GestureDetector(
+      key: const ValueKey('about-logo-easter-egg'),
+      behavior: HitTestBehavior.opaque,
+      onTap: _handleTap,
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey(_tapCount),
+        duration: const Duration(milliseconds: 150),
+        tween: Tween(begin: 0.9, end: 1),
+        curve: Curves.easeOutBack,
+        builder: (context, scale, child) =>
+            Transform.scale(scale: scale, child: child),
+        child: Image.asset(
+          'assets/logo.png',
+          width: 42,
+          height: 42,
+          fit: BoxFit.contain,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 /// 设置页：按账号、内容体验、网络和应用支持分组展示。
@@ -179,8 +173,9 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _acceleratorBase = normalized);
     await UserPreferences.saveAcceleratorBase(normalized);
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('加速地址已更新，检查更新将使用新的地址')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('加速地址已更新，检查更新将使用新的地址')));
     }
     controller.dispose();
   }
@@ -189,8 +184,9 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_checkingUpdate) return;
     setState(() => _checkingUpdate = true);
     try {
-      final manifest =
-          await UpdateChecker.fetch(acceleratorBase: _acceleratorBase);
+      final manifest = await UpdateChecker.fetch(
+        acceleratorBase: _acceleratorBase,
+      );
       if (!mounted) return;
       final latest = manifest.latest;
       if (latest == null || latest.version.isEmpty) {
@@ -221,9 +217,11 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('已是最新版本'),
-        content: Text('当前已是最新版本 v${AppConfig.appVersion}。\n'
-            '最新发布：${latest.name}'
-            '${latest.date.isEmpty ? '' : '（${latest.date}）'}'),
+        content: Text(
+          '当前已是最新版本 v${AppConfig.appVersion}。\n'
+          '最新发布：${latest.name}'
+          '${latest.date.isEmpty ? '' : '（${latest.date}）'}',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -246,12 +244,18 @@ class _SettingsPageState extends State<SettingsPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (latest.date.isNotEmpty)
-                Text(latest.date,
-                    style: TextStyle(
-                        color: AppPalette.of(context).muted, fontSize: 12)),
+                Text(
+                  latest.date,
+                  style: TextStyle(
+                    color: AppPalette.of(context).muted,
+                    fontSize: 12,
+                  ),
+                ),
               const SizedBox(height: 8),
-              Text(latest.notes.isEmpty ? '暂无更新说明' : latest.notes,
-                  style: const TextStyle(height: 1.45, fontSize: 13)),
+              Text(
+                latest.notes.isEmpty ? '暂无更新说明' : latest.notes,
+                style: const TextStyle(height: 1.45, fontSize: 13),
+              ),
             ],
           ),
         ),
@@ -263,7 +267,8 @@ class _SettingsPageState extends State<SettingsPage> {
           TextButton(
             onPressed: () => launchUrl(
               Uri.parse(
-                  latest.page.isEmpty ? AppConfig.releasePageUrl : latest.page),
+                latest.page.isEmpty ? AppConfig.releasePageUrl : latest.page,
+              ),
               mode: LaunchMode.externalApplication,
             ),
             child: const Text('查看发布页'),
@@ -272,7 +277,8 @@ class _SettingsPageState extends State<SettingsPage> {
             FilledButton(
               onPressed: () => launchUrl(
                 Uri.parse(
-                    UpdateChecker.accelerate(_acceleratorBase, downloadUrl)),
+                  UpdateChecker.accelerate(_acceleratorBase, downloadUrl),
+                ),
                 mode: LaunchMode.externalApplication,
               ),
               child: const Text('下载更新'),
@@ -337,14 +343,18 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     if (confirmed != true || !context.mounted) return;
     EmojiPackStore.instance.clear();
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('缓存已清除')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('缓存已清除')));
   }
 
   /// 打开反馈帖（站内文章），提示用户在评论区留言。
   void _openFeedback() {
-    pushMfunsTarget(context, widget.controller,
-        const MfunsLinkTarget(type: 'article', id: 122326));
+    pushMfunsTarget(
+      context,
+      widget.controller,
+      const MfunsLinkTarget(type: 'article', id: 122326),
+    );
   }
 
   void _showAbout(BuildContext context) {
@@ -382,7 +392,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      color: Colors.blue, decoration: TextDecoration.underline),
+                    color: Colors.blue,
+                    decoration: TextDecoration.underline,
+                  ),
                 ),
               ),
             ),
@@ -394,9 +406,7 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             Icon(Icons.star_rounded, size: 16, color: Color(0xFFE6A23C)),
             SizedBox(width: 6),
-            Flexible(
-              child: Text('如果喜欢这个项目，欢迎在 GitHub 点个 Star 支持我们！'),
-            ),
+            Flexible(child: Text('如果喜欢这个项目，欢迎在 GitHub 点个 Star 支持我们！')),
           ],
         ),
       ],
@@ -405,211 +415,235 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('设置'), centerTitle: true),
-        // 监听 controller：自动签到等开关变化后立即反映到界面。
-        body: ListenableBuilder(
-          listenable: widget.controller,
-          builder: (context, _) => ListView(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
-            children: [
-              Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: Column(
+    appBar: AppBar(title: const Text('设置'), centerTitle: true),
+    // 监听 controller：自动签到等开关变化后立即反映到界面。
+    body: ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) => ListView(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+        children: [
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: Column(
+                children: [
+                  _SettingsSection(
+                    title: '账号与界面',
                     children: [
-                      _SettingsSection(
-                        title: '账号与界面',
-                        children: [
-                          _SettingsTile(
-                            icon: Icons.badge_outlined,
-                            title: '编辑资料',
-                            subtitle: '单独修改昵称、性别或个人简介',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => ProfileEditPage(
-                                    controller: widget.controller),
-                              ),
-                            ),
+                      _SettingsTile(
+                        icon: Icons.badge_outlined,
+                        title: '编辑资料',
+                        subtitle: '单独修改昵称、性别或个人简介',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                ProfileEditPage(controller: widget.controller),
                           ),
-                          _ProfileEntryLayoutTile(
-                              controller: widget.controller),
-                          SwitchListTile(
-                            value: widget.controller.autoSignIn,
-                            title: Text('自动签到',
-                                style: TextStyle(
-                                    color: AppPalette.of(context).muted,
-                                    fontWeight: FontWeight.w700)),
-                            subtitle: Text('打开应用和每日零点自动检查签到',
-                                style: TextStyle(
-                                    color: AppPalette.of(context).muted,
-                                    fontSize: 12)),
-                            secondary: CircleAvatar(
-                              backgroundColor: AppPalette.of(context)
-                                  .primary
-                                  .withOpacity(.11),
-                              foregroundColor: AppPalette.of(context).primary,
-                              child: const Icon(Icons.event_repeat_rounded,
-                                  size: 20),
-                            ),
-                            onChanged: widget.controller.setAutoSignIn,
-                          ),
-                          const Divider(height: 1, indent: 56),
-                          SwitchListTile(
-                            value: widget.controller.backgroundNotifications,
-                            title: Text('后台通知服务',
-                                style: TextStyle(
-                                    color: AppPalette.of(context).muted,
-                                    fontWeight: FontWeight.w700)),
-                            subtitle: Text('定时检查新私信与互动，并发送系统通知',
-                                style: TextStyle(
-                                    color: AppPalette.of(context).muted,
-                                    fontSize: 12)),
-                            secondary: CircleAvatar(
-                              backgroundColor: AppPalette.of(context)
-                                  .primary
-                                  .withOpacity(.11),
-                              foregroundColor: AppPalette.of(context).primary,
-                              child: const Icon(
-                                  Icons.notifications_active_outlined,
-                                  size: 20),
-                            ),
-                            onChanged:
-                                widget.controller.setBackgroundNotifications,
-                          ),
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 20),
-                      _SettingsSection(
-                        title: '播放与阅读',
-                        children: [
-                          _SettingsTile(
-                            icon: Icons.play_circle_outline_rounded,
-                            title: '播放器配置',
-                            subtitle: '默认清晰度与自动播放',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const PlayerSettingsPage(),
-                              ),
-                            ),
+                      _SettingsTile(
+                        icon: Icons.person_off_outlined,
+                        title: '黑名单',
+                        subtitle: '查看和管理已拉黑的用户',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                BlacklistPage(controller: widget.controller),
                           ),
-                          _SettingsTile(
-                            icon: Icons.subtitles_outlined,
-                            title: '弹幕设置',
-                            subtitle:
-                                '${_danmakuOn ? '开启' : '关闭'} · 透明度 ${(_danmakuOpacity * 100).round()}% · 字号 ${_danmakuSize.round()}',
-                            onTap: _loaded
-                                ? () => Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => DanmakuSettingsPage(
-                                          enabled: _danmakuOn,
-                                          opacity: _danmakuOpacity,
-                                          size: _danmakuSize,
-                                          onChanged: (enabled, opacity, size) {
-                                            setState(() {
-                                              _danmakuOn = enabled;
-                                              _danmakuOpacity = opacity;
-                                              _danmakuSize = size;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                    )
-                                : null,
-                          ),
-                          _SettingsTile(
-                            icon: Icons.menu_book_outlined,
-                            title: '文章阅读设置',
-                            subtitle: '阅读进度滑块等长文章阅读选项',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    const ArticleReaderSettingsPage(),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 20),
-                      _SettingsSection(
-                        title: '下载与网络',
-                        children: [
-                          _SettingsTile(
-                            icon: Icons.download_rounded,
-                            title: '下载设置',
-                            subtitle: '仅 Wi-Fi 下载、并发数与存储空间',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const DownloadSettingsPage(),
-                              ),
-                            ),
+                      _ProfileEntryLayoutTile(controller: widget.controller),
+                      SwitchListTile(
+                        value: widget.controller.autoSignIn,
+                        title: Text(
+                          '自动签到',
+                          style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontWeight: FontWeight.w700,
                           ),
-                          _SettingsTile(
-                            icon: Icons.network_check_rounded,
-                            title: '网络诊断',
-                            subtitle: '检测 DNS、延迟与业务接口连通性',
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const NetworkDiagnosticsPage(),
-                              ),
-                            ),
+                        ),
+                        subtitle: Text(
+                          '打开应用和每日零点自动检查签到',
+                          style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontSize: 12,
                           ),
-                          _SettingsTile(
-                            icon: Icons.bolt_rounded,
-                            title: '下载加速配置',
-                            subtitle: '自定义 GitHub 更新与下载加速地址',
-                            onTap: _configureAccelerator,
+                        ),
+                        secondary: CircleAvatar(
+                          backgroundColor: AppPalette.of(
+                            context,
+                          ).primary.withOpacity(.11),
+                          foregroundColor: AppPalette.of(context).primary,
+                          child: const Icon(
+                            Icons.event_repeat_rounded,
+                            size: 20,
                           ),
-                        ],
+                        ),
+                        onChanged: widget.controller.setAutoSignIn,
                       ),
-                      const SizedBox(height: 20),
-                      _SettingsSection(
-                        title: '应用与支持',
-                        children: [
-                          _SettingsTile(
-                            icon: Icons.system_update_alt_rounded,
-                            title: '检查更新',
-                            subtitle: _checkingUpdate
-                                ? '正在检查…'
-                                : '当前 v${AppConfig.appVersion}，检查新版本',
-                            onTap: _checkingUpdate ? null : _checkUpdate,
+                      const Divider(height: 1, indent: 56),
+                      SwitchListTile(
+                        value: widget.controller.backgroundNotifications,
+                        title: Text(
+                          '后台通知服务',
+                          style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontWeight: FontWeight.w700,
                           ),
-                          _SettingsTile(
-                            icon: Icons.cleaning_services_outlined,
-                            title: '清除缓存',
-                            subtitle: '清理表情包等本地缓存数据',
-                            onTap: () => _confirmClearCache(context),
+                        ),
+                        subtitle: Text(
+                          '定时检查新私信与互动，并发送系统通知',
+                          style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontSize: 12,
                           ),
-                          _SettingsTile(
-                            icon: Icons.feedback_outlined,
-                            title: '意见反馈',
-                            subtitle: '前往反馈帖留言',
-                            onTap: _openFeedback,
+                        ),
+                        secondary: CircleAvatar(
+                          backgroundColor: AppPalette.of(
+                            context,
+                          ).primary.withOpacity(.11),
+                          foregroundColor: AppPalette.of(context).primary,
+                          child: const Icon(
+                            Icons.notifications_active_outlined,
+                            size: 20,
                           ),
-                          _SettingsTile(
-                            icon: Icons.info_outline_rounded,
-                            title: '关于',
-                            subtitle:
-                                'Mfuns Flutter · v${AppConfig.appVersion}',
-                            onTap: () => _showAbout(context),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      Text(
-                        '登录状态：${widget.controller.session?.displayName ?? '未登录'}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: AppPalette.of(context).muted, fontSize: 12),
+                        ),
+                        onChanged: widget.controller.setBackgroundNotifications,
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 20),
+                  _SettingsSection(
+                    title: '播放与阅读',
+                    children: [
+                      _SettingsTile(
+                        icon: Icons.play_circle_outline_rounded,
+                        title: '播放器配置',
+                        subtitle: '默认清晰度与自动播放',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const PlayerSettingsPage(),
+                          ),
+                        ),
+                      ),
+                      _SettingsTile(
+                        icon: Icons.subtitles_outlined,
+                        title: '弹幕设置',
+                        subtitle:
+                            '${_danmakuOn ? '开启' : '关闭'} · 透明度 ${(_danmakuOpacity * 100).round()}% · 字号 ${_danmakuSize.round()}',
+                        onTap: _loaded
+                            ? () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => DanmakuSettingsPage(
+                                    enabled: _danmakuOn,
+                                    opacity: _danmakuOpacity,
+                                    size: _danmakuSize,
+                                    onChanged: (enabled, opacity, size) {
+                                      setState(() {
+                                        _danmakuOn = enabled;
+                                        _danmakuOpacity = opacity;
+                                        _danmakuSize = size;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
+                      _SettingsTile(
+                        icon: Icons.menu_book_outlined,
+                        title: '文章阅读设置',
+                        subtitle: '文章工具、评论输入框与互动按钮设置',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const ArticleReaderSettingsPage(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _SettingsSection(
+                    title: '下载与网络',
+                    children: [
+                      _SettingsTile(
+                        icon: Icons.download_rounded,
+                        title: '下载设置',
+                        subtitle: '仅 Wi-Fi 下载、并发数与存储空间',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const DownloadSettingsPage(),
+                          ),
+                        ),
+                      ),
+                      _SettingsTile(
+                        icon: Icons.network_check_rounded,
+                        title: '网络诊断',
+                        subtitle: '检测 DNS、延迟与业务接口连通性',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const NetworkDiagnosticsPage(),
+                          ),
+                        ),
+                      ),
+                      _SettingsTile(
+                        icon: Icons.bolt_rounded,
+                        title: '下载加速配置',
+                        subtitle: '自定义 GitHub 更新与下载加速地址',
+                        onTap: _configureAccelerator,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _SettingsSection(
+                    title: '应用与支持',
+                    children: [
+                      _SettingsTile(
+                        icon: Icons.system_update_alt_rounded,
+                        title: '检查更新',
+                        subtitle: _checkingUpdate
+                            ? '正在检查…'
+                            : '当前 v${AppConfig.appVersion}，检查新版本',
+                        onTap: _checkingUpdate ? null : _checkUpdate,
+                      ),
+                      _SettingsTile(
+                        icon: Icons.cleaning_services_outlined,
+                        title: '清除缓存',
+                        subtitle: '清理表情包等本地缓存数据',
+                        onTap: () => _confirmClearCache(context),
+                      ),
+                      _SettingsTile(
+                        icon: Icons.feedback_outlined,
+                        title: '意见反馈',
+                        subtitle: '前往反馈帖留言',
+                        onTap: _openFeedback,
+                      ),
+                      _SettingsTile(
+                        icon: Icons.info_outline_rounded,
+                        title: '关于',
+                        subtitle: 'Mfuns Flutter · v${AppConfig.appVersion}',
+                        onTap: () => _showAbout(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                  Text(
+                    '登录状态：${widget.controller.session?.displayName ?? '未登录'}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppPalette.of(context).muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 /// 播放器配置子页面：默认清晰度与自动播放。
@@ -624,13 +658,16 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
   var _quality = '';
   var _autoPlay = true;
   var _backgroundPlay = false;
-  var _showDislike = false;
   var _sideRatioIndex = 2;
   var _loaded = false;
 
   /// 滑块位置 0..3（左窄右宽）映射到可选的栏宽比例。
-  double get _sideRatio => UserPreferences.landscapeSideRatios[
-      UserPreferences.landscapeSideRatios.length - 1 - _sideRatioIndex];
+  double get _sideRatio =>
+      UserPreferences.landscapeSideRatios[UserPreferences
+              .landscapeSideRatios
+              .length -
+          1 -
+          _sideRatioIndex];
 
   @override
   void initState() {
@@ -643,7 +680,6 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
       UserPreferences.loadDefaultQuality(),
       UserPreferences.loadAutoPlay(),
       UserPreferences.loadBackgroundPlay(),
-      UserPreferences.loadShowDislike(),
       UserPreferences.loadLandscapeSideRatio(),
     ]);
     if (!mounted) return;
@@ -651,10 +687,10 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
       _quality = results[0] as String;
       _autoPlay = results[1] as bool;
       _backgroundPlay = results[2] as bool;
-      _showDislike = results[3] as bool;
-      final storedRatio = results[4] as double;
-      final storedIndex = UserPreferences.landscapeSideRatios
-          .indexWhere((ratio) => (ratio - storedRatio).abs() < .01);
+      final storedRatio = results[3] as double;
+      final storedIndex = UserPreferences.landscapeSideRatios.indexWhere(
+        (ratio) => (ratio - storedRatio).abs() < .01,
+      );
       _sideRatioIndex = storedIndex >= 0
           ? UserPreferences.landscapeSideRatios.length - 1 - storedIndex
           : 2;
@@ -681,19 +717,24 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('默认清晰度',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800)),
+                  child: Text(
+                    '默认清晰度',
+                    style: TextStyle(
+                      color: AppPalette.of(context).muted,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
               for (final option in _qualityOptions)
                 ListTile(
                   title: Text(_qualityLabel(option)),
                   trailing: option == _quality
-                      ? Icon(Icons.check_rounded,
-                          color: AppPalette.of(context).primary)
+                      ? Icon(
+                          Icons.check_rounded,
+                          color: AppPalette.of(context).primary,
+                        )
                       : null,
                   onTap: () => Navigator.of(sheetContext).pop(option),
                 ),
@@ -709,118 +750,125 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('播放器配置'), centerTitle: true),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+    appBar: AppBar(title: const Text('播放器配置'), centerTitle: true),
+    body: ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+      children: [
+        _SettingsCard(
           children: [
-            _SettingsCard(
-              children: [
-                _SettingsTile(
-                  icon: Icons.high_quality_outlined,
-                  title: '默认清晰度',
-                  subtitle: '播放视频时优先使用：${_qualityLabel(_quality)}',
-                  onTap: _loaded ? () => _selectQuality() : null,
-                ),
-                const Divider(height: 1, indent: 56),
-                SwitchListTile(
-                  value: _autoPlay,
-                  title: Text('打开视频自动播放',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted,
-                          fontWeight: FontWeight.w700)),
-                  subtitle: Text('进入播放页后自动开始播放',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted, fontSize: 12)),
-                  onChanged: _loaded
-                      ? (value) {
-                          setState(() => _autoPlay = value);
-                          UserPreferences.saveAutoPlay(value);
-                        }
-                      : null,
-                ),
-                const Divider(height: 1, indent: 56),
-                SwitchListTile(
-                  value: _backgroundPlay,
-                  title: Text('后台播放（Beta）',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted,
-                          fontWeight: FontWeight.w700)),
-                  subtitle: Text('退到后台时视频继续播放声音（Android）',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted, fontSize: 12)),
-                  onChanged: _loaded
-                      ? (value) {
-                          setState(() => _backgroundPlay = value);
-                          UserPreferences.saveBackgroundPlay(value);
-                        }
-                      : null,
-                ),
-                const Divider(height: 1, indent: 56),
-                SwitchListTile(
-                  value: _showDislike,
-                  title: Text('显示点踩按钮',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted,
-                          fontWeight: FontWeight.w700)),
-                  subtitle: Text('在竖屏播放页显示点踩按钮',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted, fontSize: 12)),
-                  onChanged: _loaded
-                      ? (value) {
-                          setState(() => _showDislike = value);
-                          UserPreferences.saveShowDislike(value);
-                        }
-                      : null,
-                ),
-              ],
+            _SettingsTile(
+              icon: Icons.high_quality_outlined,
+              title: '默认清晰度',
+              subtitle: '播放视频时优先使用：${_qualityLabel(_quality)}',
+              onTap: _loaded ? () => _selectQuality() : null,
             ),
-            const SizedBox(height: 14),
-            _SettingsCard(
-              children: [
-                ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        AppPalette.of(context).primary.withOpacity(.11),
-                    foregroundColor: AppPalette.of(context).primary,
-                    child: const Icon(Icons.vertical_split_rounded, size: 20),
-                  ),
-                  title: Text('横屏简介/评论栏宽度',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted,
-                          fontWeight: FontWeight.w700)),
-                  subtitle: Text(
-                      '横屏分栏时简介/评论栏占整屏宽度 ${_sideRatioLabel(_sideRatio)}，播放器自动占剩余宽度',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted, fontSize: 12)),
-                  trailing: Text(_sideRatioLabel(_sideRatio),
-                      style: TextStyle(
-                          color: AppPalette.of(context).primary,
-                          fontWeight: FontWeight.w800)),
+            const Divider(height: 1, indent: 56),
+            SwitchListTile(
+              value: _autoPlay,
+              title: Text(
+                '打开视频自动播放',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontWeight: FontWeight.w700,
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
-                  child: Slider(
-                    value: _sideRatioIndex.toDouble(),
-                    min: 0,
-                    max: (UserPreferences.landscapeSideRatios.length - 1)
-                        .toDouble(),
-                    divisions: UserPreferences.landscapeSideRatios.length - 1,
-                    label: _sideRatioLabel(_sideRatio),
-                    onChanged: _loaded
-                        ? (value) {
-                            setState(() => _sideRatioIndex = value.round());
-                            UserPreferences.saveLandscapeSideRatio(_sideRatio);
-                          }
-                        : null,
-                  ),
+              ),
+              subtitle: Text(
+                '进入播放页后自动开始播放',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontSize: 12,
                 ),
-              ],
+              ),
+              onChanged: _loaded
+                  ? (value) {
+                      setState(() => _autoPlay = value);
+                      UserPreferences.saveAutoPlay(value);
+                    }
+                  : null,
             ),
-            const SizedBox(height: 10),
-            const Text(': )'),
+            const Divider(height: 1, indent: 56),
+            SwitchListTile(
+              value: _backgroundPlay,
+              title: Text(
+                '后台播放（Beta）',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                '退到后台时视频继续播放声音（Android）',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontSize: 12,
+                ),
+              ),
+              onChanged: _loaded
+                  ? (value) {
+                      setState(() => _backgroundPlay = value);
+                      UserPreferences.saveBackgroundPlay(value);
+                    }
+                  : null,
+            ),
           ],
         ),
-      );
+        const SizedBox(height: 14),
+        _SettingsCard(
+          children: [
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: AppPalette.of(
+                  context,
+                ).primary.withOpacity(.11),
+                foregroundColor: AppPalette.of(context).primary,
+                child: const Icon(Icons.vertical_split_rounded, size: 20),
+              ),
+              title: Text(
+                '横屏简介/评论栏宽度',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                '横屏分栏时简介/评论栏占整屏宽度 ${_sideRatioLabel(_sideRatio)}，播放器自动占剩余宽度',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontSize: 12,
+                ),
+              ),
+              trailing: Text(
+                _sideRatioLabel(_sideRatio),
+                style: TextStyle(
+                  color: AppPalette.of(context).primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+              child: Slider(
+                value: _sideRatioIndex.toDouble(),
+                min: 0,
+                max: (UserPreferences.landscapeSideRatios.length - 1)
+                    .toDouble(),
+                divisions: UserPreferences.landscapeSideRatios.length - 1,
+                label: _sideRatioLabel(_sideRatio),
+                onChanged: _loaded
+                    ? (value) {
+                        setState(() => _sideRatioIndex = value.round());
+                        UserPreferences.saveLandscapeSideRatio(_sideRatio);
+                      }
+                    : null,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        const Text(': )'),
+      ],
+    ),
+  );
 }
 
 /// 弹幕设置子页面：默认开关、透明度与字号。
@@ -861,81 +909,95 @@ class _DanmakuSettingsPageState extends State<DanmakuSettingsPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('弹幕设置'), centerTitle: true),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
-          children: [
-            Card(
-              clipBehavior: Clip.antiAlias,
-              child: SwitchListTile(
-                value: _enabled,
-                title: Text('默认显示弹幕',
-                    style: TextStyle(
-                        color: AppPalette.of(context).muted,
-                        fontWeight: FontWeight.w700)),
-                subtitle: Text('播放视频时是否默认开启弹幕',
-                    style: TextStyle(
-                        color: AppPalette.of(context).muted, fontSize: 12)),
-                onChanged: (value) {
-                  setState(() => _enabled = value);
-                  UserPreferences.saveDanmakuOn(value);
-                  _update();
-                },
+    appBar: AppBar(title: const Text('弹幕设置'), centerTitle: true),
+    body: ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+      children: [
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: SwitchListTile(
+            value: _enabled,
+            title: Text(
+              '默认显示弹幕',
+              style: TextStyle(
+                color: AppPalette.of(context).muted,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 14),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('弹幕透明度 ${(_opacity * 100).round()}%',
-                        style: TextStyle(
-                            color: AppPalette.of(context).muted,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700)),
-                    Slider(
-                      value: _opacity,
-                      min: .2,
-                      max: 1,
-                      onChanged: (value) {
-                        setState(() => _opacity = value);
-                        UserPreferences.saveDanmakuOpacity(value);
-                        _update();
-                      },
-                    ),
-                    const Divider(height: 12),
-                    Text('弹幕字号 ${_size.round()}',
-                        style: TextStyle(
-                            color: AppPalette.of(context).muted,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700)),
-                    Slider(
-                      value: _size,
-                      min: 14,
-                      max: 28,
-                      divisions: 14,
-                      onChanged: (value) {
-                        setState(() => _size = value);
-                        UserPreferences.saveDanmakuSize(value);
-                        _update();
-                      },
-                    ),
-                  ],
-                ),
+            subtitle: Text(
+              '播放视频时是否默认开启弹幕',
+              style: TextStyle(
+                color: AppPalette.of(context).muted,
+                fontSize: 12,
               ),
             ),
-            const SizedBox(height: 10),
-            Text('保持即生效',
-                style: TextStyle(
-                    color: AppPalette.of(context).muted, fontSize: 12)),
-          ],
+            onChanged: (value) {
+              setState(() => _enabled = value);
+              UserPreferences.saveDanmakuOn(value);
+              _update();
+            },
+          ),
         ),
-      );
+        const SizedBox(height: 14),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '弹幕透明度 ${(_opacity * 100).round()}%',
+                  style: TextStyle(
+                    color: AppPalette.of(context).muted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Slider(
+                  value: _opacity,
+                  min: .2,
+                  max: 1,
+                  onChanged: (value) {
+                    setState(() => _opacity = value);
+                    UserPreferences.saveDanmakuOpacity(value);
+                    _update();
+                  },
+                ),
+                const Divider(height: 12),
+                Text(
+                  '弹幕字号 ${_size.round()}',
+                  style: TextStyle(
+                    color: AppPalette.of(context).muted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Slider(
+                  value: _size,
+                  min: 14,
+                  max: 28,
+                  divisions: 14,
+                  onChanged: (value) {
+                    setState(() => _size = value);
+                    UserPreferences.saveDanmakuSize(value);
+                    _update();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '保持即生效',
+          style: TextStyle(color: AppPalette.of(context).muted, fontSize: 12),
+        ),
+      ],
+    ),
+  );
 }
 
-/// 文章阅读设置子页面：阅读进度滑块开关。
+/// 文章阅读设置子页面：文章工具、评论输入栏与详情页互动选项。
 class ArticleReaderSettingsPage extends StatefulWidget {
   const ArticleReaderSettingsPage({super.key});
 
@@ -945,7 +1007,9 @@ class ArticleReaderSettingsPage extends StatefulWidget {
 }
 
 class _ArticleReaderSettingsPageState extends State<ArticleReaderSettingsPage> {
-  var _scrollbarEnabled = false;
+  var _articleToolsEnabled = false;
+  var _fullCommentInput = false;
+  var _showDislike = false;
   var _loaded = false;
 
   @override
@@ -955,57 +1019,134 @@ class _ArticleReaderSettingsPageState extends State<ArticleReaderSettingsPage> {
   }
 
   Future<void> _load() async {
-    final enabled = await UserPreferences.loadArticleScrollbar();
+    final values = await Future.wait<bool>([
+      UserPreferences.loadArticleToolsFab(),
+      UserPreferences.loadFullCommentInput(),
+      UserPreferences.loadShowDislike(),
+    ]);
     if (!mounted) return;
     setState(() {
-      _scrollbarEnabled = enabled;
+      _articleToolsEnabled = values[0];
+      _fullCommentInput = values[1];
+      _showDislike = values[2];
       _loaded = true;
     });
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('文章阅读设置'), centerTitle: true),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+    appBar: AppBar(title: const Text('文章阅读设置'), centerTitle: true),
+    body: ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+      children: [
+        _SettingsCard(
           children: [
-            _SettingsCard(
-              children: [
-                SwitchListTile(
-                  value: _scrollbarEnabled,
-                  title: Text('阅读进度滑块(Beta)',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted,
-                          fontWeight: FontWeight.w700)),
-                  subtitle: Text('长文章右侧显示可拖拽的阅读进度条，滚动时自动出现，无操作自动隐藏',
-                      style: TextStyle(
-                          color: AppPalette.of(context).muted, fontSize: 12)),
-                  secondary: CircleAvatar(
-                    backgroundColor:
-                        AppPalette.of(context).primary.withOpacity(.11),
-                    foregroundColor: AppPalette.of(context).primary,
-                    child: const Icon(Icons.drag_indicator_rounded, size: 20),
-                  ),
-                  onChanged: _loaded
-                      ? (value) {
-                          setState(() => _scrollbarEnabled = value);
-                          UserPreferences.saveArticleScrollbar(value);
-                        }
-                      : null,
+            SwitchListTile(
+              value: _articleToolsEnabled,
+              title: Text(
+                '显示文章工具按钮',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '滑块默认关闭。开启后阅读长文章时在右侧出现进度条，可拖拽拇指跳转、点击轨道跳转进度。',
-              style: TextStyle(
+              ),
+              subtitle: Text(
+                '显示可拖动的主题色按钮，可快速回到开头或跳到结尾',
+                style: TextStyle(
                   color: AppPalette.of(context).muted,
                   fontSize: 12,
-                  height: 1.5),
+                ),
+              ),
+              secondary: CircleAvatar(
+                backgroundColor: AppPalette.of(
+                  context,
+                ).primary.withOpacity(.11),
+                foregroundColor: AppPalette.of(context).primary,
+                child: const Icon(Icons.article_outlined, size: 20),
+              ),
+              onChanged: _loaded
+                  ? (value) {
+                      setState(() => _articleToolsEnabled = value);
+                      UserPreferences.saveArticleToolsFab(value);
+                    }
+                  : null,
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              value: _fullCommentInput,
+              title: Text(
+                '显示完整评论输入框',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                '开启后文章、视频和动态页始终显示输入框；关闭时收纳为右下角按钮',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontSize: 12,
+                ),
+              ),
+              secondary: CircleAvatar(
+                backgroundColor: AppPalette.of(
+                  context,
+                ).primary.withOpacity(.11),
+                foregroundColor: AppPalette.of(context).primary,
+                child: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
+              ),
+              onChanged: _loaded
+                  ? (value) {
+                      setState(() => _fullCommentInput = value);
+                      UserPreferences.saveFullCommentInput(value);
+                    }
+                  : null,
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              value: _showDislike,
+              title: Text(
+                '显示点踩操作',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                '在文章、视频和动态详情页的互动栏中显示点踩按钮',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontSize: 12,
+                ),
+              ),
+              secondary: CircleAvatar(
+                backgroundColor: AppPalette.of(
+                  context,
+                ).primary.withOpacity(.11),
+                foregroundColor: AppPalette.of(context).primary,
+                child: const Icon(Icons.thumb_down_alt_outlined, size: 20),
+              ),
+              onChanged: _loaded
+                  ? (value) {
+                      setState(() => _showDislike = value);
+                      UserPreferences.saveShowDislike(value);
+                    }
+                  : null,
             ),
           ],
         ),
-      );
+        const SizedBox(height: 10),
+        Text(
+          '上述选项默认关闭。文章工具按钮可在阅读区域内拖动；评论输入框收纳后可从右下角展开。',
+          style: TextStyle(
+            color: AppPalette.of(context).muted,
+            fontSize: 12,
+            height: 1.5,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SettingsSection extends StatelessWidget {
@@ -1016,30 +1157,30 @@ class _SettingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: AppPalette.of(context).muted,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      _SettingsCard(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-            child: Text(
-              title,
-              style: TextStyle(
-                color: AppPalette.of(context).muted,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          _SettingsCard(
-            children: [
-              for (var index = 0; index < children.length; index++) ...[
-                children[index],
-                if (index != children.length - 1)
-                  const Divider(height: 1, indent: 56),
-              ],
-            ],
-          ),
+          for (var index = 0; index < children.length; index++) ...[
+            children[index],
+            if (index != children.length - 1)
+              const Divider(height: 1, indent: 56),
+          ],
         ],
-      );
+      ),
+    ],
+  );
 }
 
 class _SettingsCard extends StatelessWidget {
@@ -1049,9 +1190,9 @@ class _SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
-        clipBehavior: Clip.antiAlias,
-        child: Column(children: children),
-      );
+    clipBehavior: Clip.antiAlias,
+    child: Column(children: children),
+  );
 }
 
 class _ProfileEntryLayoutTile extends StatelessWidget {
@@ -1144,12 +1285,17 @@ class _SettingsTile extends StatelessWidget {
         foregroundColor: palette.primary,
         child: Icon(icon, size: 20),
       ),
-      title: Text(title,
-          style: TextStyle(
-              color: AppPalette.of(context).muted,
-              fontWeight: FontWeight.w700)),
-      subtitle: Text(subtitle,
-          style: TextStyle(color: AppPalette.of(context).muted, fontSize: 12)),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: AppPalette.of(context).muted,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(color: AppPalette.of(context).muted, fontSize: 12),
+      ),
       trailing: Icon(Icons.chevron_right_rounded, color: palette.muted),
     );
   }
@@ -1209,8 +1355,9 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       await widget.controller.updateUserAvatar(path);
       await widget.controller.refreshSession();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('头像已更新')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('头像已更新')));
     } catch (error) {
       if (mounted) {
         _toast('头像上传失败：$error');
@@ -1278,8 +1425,9 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         _initialBio = bio;
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('资料已更新')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('资料已更新')));
       Navigator.of(context).pop();
     } catch (error) {
       if (mounted) {
@@ -1290,117 +1438,120 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('编辑资料'),
-          centerTitle: true,
-          actions: [
-            TextButton(
-              onPressed: _isSaving ? null : _save,
-              child: _isSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('保存',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w700)),
-            ),
-          ],
+    appBar: AppBar(
+      title: const Text('编辑资料'),
+      centerTitle: true,
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : _save,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text(
+                  '保存',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
         ),
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+      ],
+    ),
+    body: ListView(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+      children: [
+        Text(
+          '只会保存发生变化的项目，可单独修改任意一项。',
+          style: TextStyle(color: AppPalette.of(context).muted, fontSize: 12),
+        ),
+        const SizedBox(height: 14),
+        Row(
           children: [
-            Text(
-              '只会保存发生变化的项目，可单独修改任意一项。',
-              style: TextStyle(
-                color: AppPalette.of(context).muted,
-                fontSize: 12,
+            CircleAvatar(
+              radius: 34,
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundImage:
+                  (widget.controller.session?.avatar.isEmpty ?? true)
+                  ? null
+                  : NetworkImage(widget.controller.session!.avatar),
+              child: Text(
+                widget.controller.session?.displayName.isEmpty ?? true
+                    ? 'U'
+                    : widget.controller.session!.displayName[0],
               ),
             ),
-            const SizedBox(height: 14),
-            Row(
+            const SizedBox(width: 14),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 34,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primaryContainer,
-                  foregroundImage:
-                      (widget.controller.session?.avatar.isEmpty ?? true)
-                          ? null
-                          : NetworkImage(widget.controller.session!.avatar),
-                  child: Text(
-                      widget.controller.session?.displayName.isEmpty ?? true
-                          ? 'U'
-                          : widget.controller.session!.displayName[0]),
+                Text(
+                  '头像',
+                  style: TextStyle(
+                    color: AppPalette.of(context).muted,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(width: 14),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('头像',
-                        style: TextStyle(
-                            color: AppPalette.of(context).muted,
-                            fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 4),
-                    OutlinedButton.icon(
-                      onPressed: _isUploadingAvatar ? null : _changeAvatar,
-                      icon: _isUploadingAvatar
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.photo_camera_outlined, size: 18),
-                      label: Text(_isUploadingAvatar ? '上传中…' : '更换头像'),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                OutlinedButton.icon(
+                  onPressed: _isUploadingAvatar ? null : _changeAvatar,
+                  icon: _isUploadingAvatar
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.photo_camera_outlined, size: 18),
+                  label: Text(_isUploadingAvatar ? '上传中…' : '更换头像'),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            TextField(
-              controller: _name,
-              maxLength: 16,
-              decoration: const InputDecoration(
-                labelText: '昵称',
-                counterText: '',
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (_genderInitialized)
-              DropdownButtonFormField<int>(
-                value: _gender,
-                decoration: const InputDecoration(labelText: '性别'),
-                items: _genderOptions.entries
-                    .map((entry) => DropdownMenuItem<int>(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        ))
-                    .toList(growable: false),
-                onChanged: (value) =>
-                    setState(() => _gender = value ?? _gender),
-              )
-            else
-              const LinearProgressIndicator(),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _bio,
-              minLines: 3,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                labelText: '简介',
-                hintText: '介绍一下自己吧',
-                alignLabelWithHint: true,
-              ),
-            ),
           ],
         ),
-      );
+        const SizedBox(height: 18),
+        TextField(
+          controller: _name,
+          maxLength: 16,
+          decoration: const InputDecoration(labelText: '昵称', counterText: ''),
+        ),
+        const SizedBox(height: 12),
+        if (_genderInitialized)
+          DropdownButtonFormField<int>(
+            value: _gender,
+            decoration: const InputDecoration(labelText: '性别'),
+            items: _genderOptions.entries
+                .map(
+                  (entry) => DropdownMenuItem<int>(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: (value) => setState(() => _gender = value ?? _gender),
+          )
+        else
+          const LinearProgressIndicator(),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _bio,
+          minLines: 3,
+          maxLines: 6,
+          decoration: const InputDecoration(
+            labelText: '简介',
+            hintText: '介绍一下自己吧',
+            alignLabelWithHint: true,
+          ),
+        ),
+      ],
+    ),
+  );
 }

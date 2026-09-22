@@ -1,9 +1,13 @@
 package com.ygen.mfuns_flutter
 
 import android.Manifest
+import android.app.PictureInPictureParams
 import android.content.ContentValues
+import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Color
+import android.net.wifi.WifiManager
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
@@ -11,6 +15,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import android.util.Rational
 import androidx.core.view.WindowCompat
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -20,6 +25,9 @@ import java.io.File
 import java.io.FileOutputStream
 
 class MainActivity : AudioServiceActivity() {
+    private var pipChannel: MethodChannel? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Flutter 首帧之前也启用 edge-to-edge，避免启动页到应用页之间导航栏闪黑。
@@ -55,6 +63,37 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        pipChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "mfuns/picture_in_picture",
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isAvailable" -> result.success(
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
+                    )
+                    "enter" -> enterMfunsPictureInPicture(call, result)
+                    else -> result.notImplemented()
+                }
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "mfuns/dlna_multicast",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "acquire" -> {
+                    acquireMulticastLock()
+                    result.success(null)
+                }
+                "release" -> {
+                    releaseMulticastLock()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mfuns/gallery")
             .setMethodCallHandler { call, result ->
                 if (call.method != "saveImage") {
@@ -84,6 +123,51 @@ class MainActivity : AudioServiceActivity() {
             Log.d("MfunsPlayback", call.arguments as? String ?: "")
             result.success(null)
         }
+    }
+
+    private fun enterMfunsPictureInPicture(call: MethodCall, result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            !packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        ) {
+            result.success(false)
+            return
+        }
+        val width = (call.argument<Int>("width") ?: 16).coerceAtLeast(1)
+        val height = (call.argument<Int>("height") ?: 9).coerceAtLeast(1)
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(width, height))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setSeamlessResizeEnabled(true)
+        }
+        result.success(enterPictureInPictureMode(builder.build()))
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        pipChannel?.invokeMethod("onPipChanged", isInPictureInPictureMode)
+    }
+
+    private fun acquireMulticastLock() {
+        if (multicastLock?.isHeld == true) return
+        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        multicastLock = wifiManager.createMulticastLock("mfuns-dlna-discovery").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseMulticastLock() {
+        multicastLock?.let { if (it.isHeld) it.release() }
+        multicastLock = null
+    }
+
+    override fun onDestroy() {
+        releaseMulticastLock()
+        pipChannel = null
+        super.onDestroy()
     }
 
     private fun saveImage(call: MethodCall, result: MethodChannel.Result) {

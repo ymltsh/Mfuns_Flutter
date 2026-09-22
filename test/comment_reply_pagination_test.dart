@@ -43,31 +43,20 @@ void main() {
     expect(replies, hasLength(20));
   });
 
-  test('formats structured nested replies as 回复@用户：内容', () {
-    final spans = replyDisplaySpans(const [
-      CommentSpan.mention('42', '小明'),
-      CommentSpan.text(' 评论内容'),
-      CommentSpan.sticker('s-1'),
-    ]);
+  test('inserts 回复@用户： into the actual nested-reply payload', () {
+    final initial = commentReplyInitialText(userName: '小明', userId: 42);
+    final spans = commentSpansFromText('$initial评论内容');
 
     expect(spans, const [
       CommentSpan.text('回复'),
       CommentSpan.mention('42', '小明'),
-      CommentSpan.text('：'),
-      CommentSpan.text('评论内容'),
-      CommentSpan.sticker('s-1'),
+      CommentSpan.text('：评论内容'),
     ]);
-  });
-
-  test('formats legacy plain-text nested replies consistently', () {
-    final spans = replyDisplaySpans(const [
-      CommentSpan.text('@小明 评论内容'),
-      CommentSpan.sticker('s-1'),
-    ]);
-
-    expect(spans, const [
-      CommentSpan.text('回复@小明：评论内容'),
-      CommentSpan.sticker('s-1'),
-    ]);
+    expect(
+      commentReplyQuillJson(spans),
+      '{"ops":[{"insert":"回复"},'
+      '{"insert":{"mention":{"id":"42","value":"小明"}}},'
+      '{"insert":"：评论内容\\n"}]}',
+    );
   });
 }

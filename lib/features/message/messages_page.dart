@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
 import '../../core/theme/app_theme.dart';
@@ -7,6 +8,7 @@ import '../../core/widgets/content_spans.dart';
 import '../../core/widgets/image_preview_page.dart';
 import '../../core/widgets/inline_emoji_input.dart';
 import '../home/home_repository.dart';
+import '../user/block_user_action.dart';
 import '../user/user_profile_page.dart';
 
 class MessageListPage extends StatefulWidget {
@@ -30,6 +32,7 @@ class MessageListPageState extends State<MessageListPage> {
   var _page = 1;
   var _hasMore = true;
   var _isLoadingMore = false;
+  final Set<int> _removingUserIds = <int>{};
   int _lastDmUnread = -1;
 
   @override
@@ -124,6 +127,54 @@ class MessageListPageState extends State<MessageListPage> {
     reload();
   }
 
+  Future<void> _confirmRemoveConversation(MessageConversation item) async {
+    if (item.userId <= 0 || _removingUserIds.contains(item.userId)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除会话'),
+        content: Text('确定从私信列表中删除与“${item.userName}”的会话吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _removingUserIds.add(item.userId));
+    try {
+      await widget.controller.removeMessageConversation(item.userId);
+      if (!mounted) return;
+      setState(() {
+        _items = _items
+            ?.where((conversation) => conversation.userId != item.userId)
+            .toList(growable: false);
+      });
+      widget.controller.refreshUnreadCounts();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('会话已删除')));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('删除会话失败：$error')));
+      }
+    } finally {
+      if (mounted) setState(() => _removingUserIds.remove(item.userId));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final body = _buildBody(context);
@@ -165,6 +216,8 @@ class MessageListPageState extends State<MessageListPage> {
           return _ConversationCard(
             item: items[index],
             onTap: () => _openConversation(items[index]),
+            onLongPress: () => _confirmRemoveConversation(items[index]),
+            removing: _removingUserIds.contains(items[index].userId),
           );
         },
       ),
@@ -173,10 +226,17 @@ class MessageListPageState extends State<MessageListPage> {
 }
 
 class _ConversationCard extends StatelessWidget {
-  const _ConversationCard({required this.item, required this.onTap});
+  const _ConversationCard({
+    required this.item,
+    required this.onTap,
+    required this.onLongPress,
+    required this.removing,
+  });
 
   final MessageConversation item;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  final bool removing;
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +244,8 @@ class _ConversationCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: ListTile(
-        onTap: onTap,
+        onTap: removing ? null : onTap,
+        onLongPress: removing ? null : onLongPress,
         contentPadding: const EdgeInsets.all(12),
         leading: CircleAvatar(
           radius: 23,
@@ -204,7 +265,13 @@ class _ConversationCard extends StatelessWidget {
                       color: AppPalette.of(context).muted,
                       fontWeight: FontWeight.w800)),
             ),
-            if (item.lastTime != null)
+            if (removing)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else if (item.lastTime != null)
               Text(_msgTime(item.lastTime!),
                   style: TextStyle(
                       color: AppPalette.of(context).muted, fontSize: 11)),
@@ -274,6 +341,10 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
   String? _nextCursor;
   int _lastDmUnread = -1;
   UserProfile? _peer;
+  bool? _blocked;
+  var _checkingBlockStatus = true;
+  var _blockStatusError = false;
+  var _updatingBlock = false;
 
   int? get _myId => widget.controller.session?.userId;
 
@@ -284,6 +355,52 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
     widget.controller.addListener(_onControllerChanged);
     _reload();
     _loadPeer();
+    _loadBlockStatus();
+  }
+
+  Future<void> _loadBlockStatus() async {
+    if (widget.controller.session == null || widget.peerId == _myId) {
+      if (mounted) setState(() => _checkingBlockStatus = false);
+      return;
+    }
+    setState(() {
+      _checkingBlockStatus = true;
+      _blockStatusError = false;
+    });
+    try {
+      final blocked = await widget.controller.isUserBlocked(widget.peerId);
+      if (mounted) {
+        setState(() {
+          _blocked = blocked;
+          _checkingBlockStatus = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _checkingBlockStatus = false;
+          _blockStatusError = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleBlocked() async {
+    if (_updatingBlock || widget.peerId == _myId) return;
+    final blocked = !(_blocked ?? false);
+    setState(() => _updatingBlock = true);
+    final success = await confirmSetUserBlocked(
+      context,
+      controller: widget.controller,
+      userId: widget.peerId,
+      userName: widget.peerName,
+      blocked: blocked,
+    );
+    if (!mounted) return;
+    setState(() {
+      _updatingBlock = false;
+      if (success) _blocked = blocked;
+    });
   }
 
   /// 对方资料（头像等）加载失败时静默，界面不依赖它。
@@ -404,6 +521,23 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
       appBar: AppBar(
         title: Text(widget.peerName),
         centerTitle: true,
+        actions: [
+          if (widget.peerId != _myId)
+            PopupMenuButton<String>(
+              tooltip: '更多',
+              icon: const Icon(Icons.more_vert_rounded),
+              onSelected: (action) {
+                if (action == 'retryBlockStatus') {
+                  _loadBlockStatus();
+                } else if (action == 'block') {
+                  _toggleBlocked();
+                }
+              },
+              itemBuilder: (context) => [
+                _buildBlockMenuItem(),
+              ],
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -486,6 +620,44 @@ class _MessageDetailPageState extends State<MessageDetailPage> {
       ),
     );
   }
+
+  PopupMenuEntry<String> _buildBlockMenuItem() {
+    if (_checkingBlockStatus) {
+      return const PopupMenuItem(
+        enabled: false,
+        child: ListTile(
+          leading: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          title: Text('正在校验黑名单状态…'),
+          contentPadding: EdgeInsets.zero,
+        ),
+      );
+    }
+    if (_blockStatusError) {
+      return const PopupMenuItem(
+        value: 'retryBlockStatus',
+        child: ListTile(
+          leading: Icon(Icons.refresh_rounded),
+          title: Text('重新校验黑名单状态'),
+          contentPadding: EdgeInsets.zero,
+        ),
+      );
+    }
+    return PopupMenuItem(
+      value: 'block',
+      enabled: !_updatingBlock,
+      child: ListTile(
+        leading: Icon(_blocked == true
+            ? Icons.person_add_alt_1_outlined
+            : Icons.person_off_outlined),
+        title: Text(_blocked == true ? '解除拉黑' : '拉黑用户'),
+        contentPadding: EdgeInsets.zero,
+      ),
+    );
+  }
 }
 
 class _MessageBubble extends StatelessWidget {
@@ -524,8 +696,17 @@ class _MessageBubble extends StatelessWidget {
       );
 
   /// 私信图片缩略图（横向滑动，点击进入全屏预览），参考评论区图片实现。
-  Widget _buildImages(BuildContext context) => SizedBox(
-        height: 76,
+  Widget _buildImages(BuildContext context) {
+    const imageExtent = 76.0;
+    const spacing = 8.0;
+    const maxVisibleImages = 3;
+    final visibleCount = record.images.length.clamp(1, maxVisibleImages);
+    final stripWidth =
+        visibleCount * imageExtent + (visibleCount - 1) * spacing;
+    return SizedBox(
+        key: const ValueKey('message-image-strip'),
+        width: stripWidth,
+        height: imageExtent,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: record.images.length,
@@ -566,6 +747,16 @@ class _MessageBubble extends StatelessWidget {
           },
         ),
       );
+  }
+
+  Future<void> _copyMessage(BuildContext context) async {
+    if (record.message.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: record.message));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('消息已复制')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Align(
@@ -588,66 +779,74 @@ class _MessageBubble extends StatelessWidget {
                       ? CrossAxisAlignment.end
                       : CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isMine
-                            ? palette.primary
-                            : Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest,
-                        borderRadius: BorderRadius.only(
-                          topLeft: const Radius.circular(12),
-                          topRight: const Radius.circular(12),
-                          bottomLeft: Radius.circular(isMine ? 12 : 2),
-                          bottomRight: Radius.circular(isMine ? 2 : 12),
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onLongPress: record.message.isEmpty
+                          ? null
+                          : () => _copyMessage(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isMine
+                              ? palette.primary
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(12),
+                            topRight: const Radius.circular(12),
+                            bottomLeft: Radius.circular(isMine ? 12 : 2),
+                            bottomRight: Radius.circular(isMine ? 2 : 12),
+                          ),
                         ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: isMine
-                            ? CrossAxisAlignment.end
-                            : CrossAxisAlignment.start,
-                        children: [
-                          if (record.spans.isNotEmpty)
-                            ContentSpans(
-                              spans: record.spans,
-                              stickerSize: 34,
-                              onLinkTap: (url) =>
-                                  openContentLink(context, controller, url),
-                              textStyle: TextStyle(
-                                color: isMine
-                                    ? Colors.white
-                                    : AppPalette.of(context).muted,
-                                height: 1.35,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: isMine
+                              ? CrossAxisAlignment.end
+                              : CrossAxisAlignment.start,
+                          children: [
+                            if (record.spans.isNotEmpty &&
+                                record.message.trim().isNotEmpty)
+                              ContentSpans(
+                                spans: record.spans,
+                                stickerSize: 34,
+                                onLinkTap: (url) =>
+                                    openContentLink(context, controller, url),
+                                textStyle: TextStyle(
+                                  color: isMine
+                                      ? Colors.white
+                                      : AppPalette.of(context).muted,
+                                  height: 1.35,
+                                ),
+                              )
+                            else if (record.message.isNotEmpty)
+                              Text(
+                                record.message,
+                                style: TextStyle(
+                                  color: isMine
+                                      ? Colors.white
+                                      : AppPalette.of(context).muted,
+                                  height: 1.35,
+                                ),
+                              )
+                            else if (record.images.isEmpty)
+                              Text(
+                                '（空消息）',
+                                style: TextStyle(
+                                  color: isMine
+                                      ? Colors.white
+                                      : AppPalette.of(context).muted,
+                                  height: 1.35,
+                                ),
                               ),
-                            )
-                          else if (record.message.isNotEmpty)
-                            Text(
-                              record.message,
-                              style: TextStyle(
-                                color: isMine
-                                    ? Colors.white
-                                    : AppPalette.of(context).muted,
-                                height: 1.35,
-                              ),
-                            )
-                          else if (record.images.isEmpty)
-                            Text(
-                              '（空消息）',
-                              style: TextStyle(
-                                color: isMine
-                                    ? Colors.white
-                                    : AppPalette.of(context).muted,
-                                height: 1.35,
-                              ),
-                            ),
-                          if (record.images.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            _buildImages(context),
+                            if (record.images.isNotEmpty) ...[
+                              if (record.message.trim().isNotEmpty)
+                                const SizedBox(height: 8),
+                              _buildImages(context),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                     if (record.time != null) ...[

@@ -7,7 +7,7 @@ import 'home_repository.dart';
 
 AppPalette _palette(BuildContext context) => AppPalette.of(context);
 
-/// 标签文章列表页：展示 `GET /v1/tag/article_list?tag=xxx` 返回的文章。
+/// 标签内容页：合并展示标签下的文章和视频，并支持连续分页。
 class TagArticlesPage extends StatefulWidget {
   const TagArticlesPage({
     super.key,
@@ -23,68 +23,168 @@ class TagArticlesPage extends StatefulWidget {
 }
 
 class _TagArticlesPageState extends State<TagArticlesPage> {
-  late Future<List<ContentPreview>> _future;
+  List<ContentPreview> _items = const [];
+  int? _articleLastId;
+  int? _videoLastId;
+  var _hasMoreArticles = true;
+  var _hasMoreVideos = true;
+  var _isInitialLoading = true;
+  var _isLoadingMore = false;
+  var _hasMore = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _future = widget.controller.tagArticles(widget.tag);
+    _load(refresh: true);
   }
 
-  void _reload() {
-    setState(() => _future = widget.controller.tagArticles(widget.tag));
+  Future<void> _load({bool refresh = false}) async {
+    if (_isLoadingMore || (!refresh && !_hasMore)) return;
+    setState(() {
+      _error = null;
+      if (refresh) {
+        _isInitialLoading = _items.isEmpty;
+      } else {
+        _isLoadingMore = true;
+      }
+    });
+    try {
+      final result = await widget.controller.tagContents(
+        widget.tag,
+        articleLastId: refresh ? null : _articleLastId,
+        videoLastId: refresh ? null : _videoLastId,
+        loadArticles: refresh || _hasMoreArticles,
+        loadVideos: refresh || _hasMoreVideos,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (refresh) {
+          _items = result.items;
+        } else {
+          final known = _items.map((item) => '${item.type}:${item.id}').toSet();
+          _items = [
+            ..._items,
+            ...result.items
+                .where((item) => known.add('${item.type}:${item.id}')),
+          ];
+        }
+        _articleLastId = result.articleLastId;
+        _videoLastId = result.videoLastId;
+        _hasMoreArticles = result.hasMoreArticles;
+        _hasMoreVideos = result.hasMoreVideos;
+        _hasMore = result.hasMore;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = '$error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isInitialLoading = false;
+          _isLoadingMore = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: Text('#${widget.tag}'), centerTitle: true),
-        body: FutureBuilder<List<ContentPreview>>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return Center(
-                  child: CircularProgressIndicator(
-                      color: _palette(context).primary));
-            }
-            if (snapshot.hasError) {
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('${snapshot.error}',
-                        style: TextStyle(
-                            color: AppPalette.of(context).muted,
-                            fontSize: 12.5)),
-                    TextButton(onPressed: _reload, child: const Text('重试')),
-                  ],
-                ),
-              );
-            }
-            final items = snapshot.data ?? const <ContentPreview>[];
-            if (items.isEmpty) {
-              return Center(
-                child: Text('这个标签下还没有文章',
+        body: _buildBody(),
+      );
+
+  Widget _buildBody() {
+    if (_isInitialLoading) {
+      return Center(
+          child: CircularProgressIndicator(color: _palette(context).primary));
+    }
+    if (_error != null && _items.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_error!,
+                style: TextStyle(
+                    color: AppPalette.of(context).muted, fontSize: 12.5)),
+            TextButton(
+                onPressed: () => _load(refresh: true), child: const Text('重试')),
+          ],
+        ),
+      );
+    }
+    if (_items.isEmpty) {
+      return RefreshIndicator(
+        color: _palette(context).accent,
+        onRefresh: () => _load(refresh: true),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: MediaQuery.sizeOf(context).height * .65,
+              child: Center(
+                child: Text('这个标签下还没有内容',
                     style: TextStyle(
                         color: AppPalette.of(context).muted, fontSize: 13)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return RefreshIndicator(
+      color: _palette(context).accent,
+      onRefresh: () => _load(refresh: true),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.metrics.extentAfter < 260 &&
+              _hasMore &&
+              !_isLoadingMore &&
+              _error == null) {
+            _load();
+          }
+          return false;
+        },
+        child: ListView.separated(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
+          physics: const AlwaysScrollableScrollPhysics(),
+          itemCount: _items.length + 1,
+          separatorBuilder: (_, index) => index >= _items.length - 1
+              ? const SizedBox.shrink()
+              : const SizedBox(height: 9),
+          itemBuilder: (context, index) {
+            if (index < _items.length) {
+              return _TagArticleCard(
+                controller: widget.controller,
+                item: _items[index],
               );
             }
-            return RefreshIndicator(
-              color: _palette(context).accent,
-              onRefresh: () async => _reload(),
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 9),
-                itemBuilder: (context, index) => _TagArticleCard(
-                  controller: widget.controller,
-                  item: items[index],
+            if (_isLoadingMore) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 18),
+                child:
+                    Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+              );
+            }
+            if (_error != null) {
+              return Center(
+                child: TextButton(
+                  onPressed: _load,
+                  child: Text('$_error，点击重试'),
                 ),
+              );
+            }
+            return Center(
+              child: TextButton(
+                onPressed: _hasMore ? _load : null,
+                child: Text(_hasMore ? '加载更多' : '已经到底了'),
               ),
             );
           },
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _TagArticleCard extends StatelessWidget {
@@ -126,7 +226,7 @@ class _TagArticleCard extends StatelessWidget {
                                 fontWeight: FontWeight.w700)),
                         const Spacer(),
                         Text(
-                          '${item.author.isEmpty ? 'Mfuns 用户' : item.author} · ${item.likes} 赞 · ${item.comments} 评论 · ${item.views} 浏览',
+                          '${item.isVideo ? '视频' : '文章'} · ${item.author.isEmpty ? 'Mfuns 用户' : item.author} · ${item.likes} 赞 · ${item.views} 浏览',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -172,6 +272,18 @@ class _Cover extends StatelessWidget {
                     style: const TextStyle(color: Colors.white, fontSize: 9)),
               ),
             ),
+          Positioned(
+            left: 4,
+            bottom: 4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(.56),
+                  borderRadius: BorderRadius.circular(4)),
+              child: Text(item.isVideo ? '视频' : '文章',
+                  style: const TextStyle(color: Colors.white, fontSize: 9)),
+            ),
+          ),
         ],
       );
 }
@@ -191,7 +303,11 @@ class _Fallback extends StatelessWidget {
           ),
         ),
         child: Center(
-            child: Icon(Icons.article_outlined,
-                color: Colors.white.withOpacity(.8), size: 34)),
+            child: Icon(
+                item.isVideo
+                    ? Icons.smart_display_outlined
+                    : Icons.article_outlined,
+                color: Colors.white.withOpacity(.8),
+                size: 34)),
       );
 }

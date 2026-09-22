@@ -16,9 +16,12 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.5.7+51
+version: 1.6.3+59
 environment:
-  sdk: ^3.5.4
+  # dlna_dart 0.1.x requires Dart 3.8; Flutter 3.32 is the smallest stable
+  # Flutter line that ships that Dart baseline.
+  sdk: ^3.8.0
+  flutter: ">=3.32.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -50,16 +53,17 @@ dependencies:
   app_links: 6.3.3
   audio_service: ^0.18.17
   flutter_local_notifications: ^19.5.0
-  # 10.1.x uses the legacy Android Gradle plugin API, compatible with this
-  # project's AGP 8.1 / Kotlin 1.8.22 toolchain (and resolves the web
-  # dependency shared with file_picker); 11+ breaks with the new SharePlus API.
+  # Keep the established SharePlus API while raising only the SDK/toolchain
+  # baseline required by DLNA support.
   share_plus: 10.1.4
   just_audio: ^0.9.46
   audio_session: ^0.1.25
   sqflite: 2.4.1
-  path: 1.9.0
+  # Flutter 3.32 的 flutter_test 固定使用 1.9.1。
+  path: 1.9.1
   path_provider: 2.1.4
   connectivity_plus: 6.1.0
+  dlna_dart: ^0.1.1
 
 dev_dependencies:
   flutter_test:
@@ -69,11 +73,9 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.4
 
 dependency_overrides:
-  # 2.1.3+ raises the Android/Kotlin baseline beyond this Flutter project's
-  # Gradle toolchain. Version 2.1.2 exposes the same brightness API.
+  # Retain the tested brightness implementation during the baseline migration.
   screen_brightness_android: 2.1.2
-  # 9.x uses the new Flutter plugin Gradle API, which this project's
-  # AGP 8.1 / Kotlin 1.8.22 toolchain cannot evaluate. 8.3.x is compatible.
+  # Retain the tested package-info API during the baseline migration.
   package_info_plus: 8.2.1
 
 # For information on the generic Dart part of this file, see the
@@ -91,6 +93,7 @@ flutter:
     - assets/mfuns_logo.png
     - assets/app_icon.png
     - assets/logo.png
+    - assets/constellation_starfield.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

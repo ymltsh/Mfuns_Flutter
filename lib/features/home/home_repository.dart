@@ -59,9 +59,87 @@ class ContentPreview {
       comments: _asInt(source['comment_count']) ?? 0,
       views: _asInt(source['view_count']) ?? 0,
       createdAt: _asDateTime(
-          source['created_at'] ?? source['time'] ?? source['createdAt']),
+        source['created_at'] ?? source['time'] ?? source['createdAt'],
+      ),
     );
   }
+}
+
+/// A single server-backed page of search results.
+class SearchResultPage<T> {
+  const SearchResultPage({
+    required this.items,
+    required this.page,
+    required this.size,
+    this.total,
+  });
+
+  final List<T> items;
+  final int page;
+  final int size;
+  final int? total;
+
+  bool get hasMore =>
+      total == null ? items.length >= size : page * size < total!;
+}
+
+class TagContentPage {
+  const TagContentPage({
+    required this.items,
+    required this.articleLastId,
+    required this.videoLastId,
+    required this.hasMoreArticles,
+    required this.hasMoreVideos,
+  });
+
+  final List<ContentPreview> items;
+  final int? articleLastId;
+  final int? videoLastId;
+  final bool hasMoreArticles;
+  final bool hasMoreVideos;
+
+  bool get hasMore => hasMoreArticles || hasMoreVideos;
+}
+
+class _TagContentTypePage {
+  const _TagContentTypePage({
+    required this.items,
+    required this.lastId,
+    required this.hasMore,
+  });
+
+  const _TagContentTypePage.empty()
+    : items = const [],
+      lastId = null,
+      hasMore = false;
+
+  final List<ContentPreview> items;
+  final int? lastId;
+  final bool hasMore;
+}
+
+enum SearchField {
+  titleAndContent(null),
+  title('title'),
+  content('content');
+
+  const SearchField(this.apiValue);
+
+  /// Null means using the API's default title-and-content scope.
+  final String? apiValue;
+}
+
+enum SearchSort {
+  relevance('all'),
+  newest('time'),
+  mostViewed('view'),
+  mostLiked('like'),
+  mostFavorited('favorite'),
+  mostRewarded('reward');
+
+  const SearchSort(this.apiValue);
+
+  final String apiValue;
 }
 
 /// A community post from `/v1/feeds/list` or `/v1/feeds/new_reply_list`.
@@ -119,35 +197,49 @@ class TimelineFeed {
       id: _asInt(source['id'] ?? source['feed_id']) ?? 0,
       author:
           '${user['name'] ?? user['username'] ?? source['user_name'] ?? source['author'] ?? ''}',
-      authorId: _asInt(user['id'] ??
-          user['user_id'] ??
-          source['user_id'] ??
-          source['author_id']),
-      avatar: _coverUrl(user['avatar'] ??
-          user['face'] ??
-          source['avatar'] ??
-          source['user_avatar']),
+      authorId: _asInt(
+        user['id'] ??
+            user['user_id'] ??
+            source['user_id'] ??
+            source['author_id'],
+      ),
+      avatar: _coverUrl(
+        user['avatar'] ??
+            user['face'] ??
+            source['avatar'] ??
+            source['user_avatar'],
+      ),
       content: _toPlainText(rawContent),
       spans: _commentSpans(rawContent),
       createdAt: _asDateTime(
-          source['created_at'] ?? source['time'] ?? source['createdAt']),
-      likes: _asInt(source['like_count'] ??
-              source['likes'] ??
-              like['count'] ??
-              resource['like_count']) ??
+        source['created_at'] ?? source['time'] ?? source['createdAt'],
+      ),
+      likes:
+          _asInt(
+            source['like_count'] ??
+                source['likes'] ??
+                like['count'] ??
+                resource['like_count'],
+          ) ??
           0,
-      comments: _asInt(source['comment_count'] ??
-              source['comments'] ??
-              resource['comment_count']) ??
+      comments:
+          _asInt(
+            source['comment_count'] ??
+                source['comments'] ??
+                resource['comment_count'],
+          ) ??
           0,
-      views: _asInt(source['view_count'] ??
-              source['views'] ??
-              resource['view_count']) ??
+      views:
+          _asInt(
+            source['view_count'] ?? source['views'] ?? resource['view_count'],
+          ) ??
           0,
-      images: _feedImages(source['images'] ??
-          source['image_list'] ??
-          source['pictures'] ??
-          extra['images']),
+      images: _feedImages(
+        source['images'] ??
+            source['image_list'] ??
+            source['pictures'] ??
+            extra['images'],
+      ),
       resource: _feedResource(source, user, autoSync),
       isAutoSync: autoSync,
     );
@@ -165,7 +257,8 @@ ContentPreview? _feedResource(
   final extraResource = _asMap(_asMap(source['extra'])['resource']);
   if (extraResource.isNotEmpty) {
     final resourceType = _asResourceType(
-        extraResource['type'] ?? extraResource['resource_type']);
+      extraResource['type'] ?? extraResource['resource_type'],
+    );
     if (resourceType == 3) {
       final resourceUser = _asMap(extraResource['user']);
       final resourceLike = _asMap(_asMap(extraResource['like_status'])['like']);
@@ -173,7 +266,8 @@ ContentPreview? _feedResource(
           '${extraResource['title'] ?? extraResource['content'] ?? extraResource['summary'] ?? ''}';
       final title = _toPlainText(rawContent).trim();
       final images = _feedImages(
-          extraResource['images'] ?? _asMap(extraResource['extra'])['images']);
+        extraResource['images'] ?? _asMap(extraResource['extra'])['images'],
+      );
       return ContentPreview(
         id: _asInt(extraResource['id'] ?? extraResource['resource_id']) ?? 0,
         title: title.isEmpty ? '动态内容' : title,
@@ -185,15 +279,20 @@ ContentPreview? _feedResource(
         type: 3,
         likes:
             _asInt(extraResource['like_count'] ?? resourceLike['count']) ?? 0,
-        comments: _asInt(extraResource['comment_count'] ??
-                extraResource['floor_count'] ??
-                extraResource['floor_num']) ??
+        comments:
+            _asInt(
+              extraResource['comment_count'] ??
+                  extraResource['floor_count'] ??
+                  extraResource['floor_num'],
+            ) ??
             0,
         views:
             _asInt(extraResource['view_count'] ?? extraResource['views']) ?? 0,
-        authorId: _asInt(resourceUser['id'] ??
-            resourceUser['user_id'] ??
-            extraResource['user_id']),
+        authorId: _asInt(
+          resourceUser['id'] ??
+              resourceUser['user_id'] ??
+              extraResource['user_id'],
+        ),
         authorAvatar: _coverUrl(resourceUser['avatar'] ?? resourceUser['face']),
         createdAt: _asDateTime(extraResource['created_at']),
       );
@@ -252,19 +351,19 @@ class UserProfile {
   final int totalLikes;
 
   UserProfile copyWith({int? fans, int? follows}) => UserProfile(
-        id: id,
-        name: name,
-        avatar: avatar,
-        avatarFrame: avatarFrame,
-        banner: banner,
-        bio: bio,
-        gender: gender,
-        level: level,
-        exp: exp,
-        fans: fans ?? this.fans,
-        follows: follows ?? this.follows,
-        totalLikes: totalLikes,
-      );
+    id: id,
+    name: name,
+    avatar: avatar,
+    avatarFrame: avatarFrame,
+    banner: banner,
+    bio: bio,
+    gender: gender,
+    level: level,
+    exp: exp,
+    fans: fans ?? this.fans,
+    follows: follows ?? this.follows,
+    totalLikes: totalLikes,
+  );
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     final source = _asMap(json['user']).isEmpty ? json : _asMap(json['user']);
@@ -278,16 +377,21 @@ class UserProfile {
       avatarFrame: _coverUrl(frame['image'] ?? source['avatar_frame']),
       banner: _coverUrl(source['banner_image'] ?? source['banner']),
       bio: _toPlainText(
-          '${source['bio'] ?? source['signature'] ?? (rawInfo is String ? rawInfo : '')}'),
+        '${source['bio'] ?? source['signature'] ?? (rawInfo is String ? rawInfo : '')}',
+      ),
       gender: '${source['gender'] ?? info['gender'] ?? ''}',
-      level: _asInt(source['level_id'] ?? info['level_id']) ??
+      level:
+          _asInt(source['level_id'] ?? info['level_id']) ??
           _levelFromBadges(source['badges']),
       exp: _asInt(source['exp'] ?? source['experience'] ?? info['exp']),
       fans: _asInt(source['fans'] ?? source['fans_count'] ?? info['fans']) ?? 0,
-      follows: _asInt(source['follows'] ??
-              source['follow_count'] ??
-              source['following'] ??
-              info['follows']) ??
+      follows:
+          _asInt(
+            source['follows'] ??
+                source['follow_count'] ??
+                source['following'] ??
+                info['follows'],
+          ) ??
           0,
       totalLikes:
           _asInt(source['total_likes_count'] ?? info['total_likes_count']) ?? 0,
@@ -303,10 +407,10 @@ class CategoryNode {
   final int? parentId;
 
   factory CategoryNode.fromJson(Map<String, dynamic> json) => CategoryNode(
-        id: _asInt(json['id']) ?? 0,
-        name: '${json['name'] ?? ''}',
-        parentId: _asInt(json['parent_id']),
-      );
+    id: _asInt(json['id']) ?? 0,
+    name: '${json['name'] ?? ''}',
+    parentId: _asInt(json['parent_id']),
+  );
 }
 
 /// 签到信息（`/v1/sign/sign_list`）：本月已签到日期与累计次数。
@@ -322,10 +426,10 @@ class SignInfo {
   final int allTimes;
 
   factory SignInfo.fromJson(Map<String, dynamic> json) => SignInfo(
-        signedDays: _signDays(json['list']),
-        monthTimes: _asInt(json['month_times']) ?? 0,
-        allTimes: _asInt(json['all_times']) ?? 0,
-      );
+    signedDays: _signDays(json['list']),
+    monthTimes: _asInt(json['month_times']) ?? 0,
+    allTimes: _asInt(json['all_times']) ?? 0,
+  );
 }
 
 /// 今日签到排行榜条目（`/v1/sign/sign_rank_today`）。
@@ -366,10 +470,8 @@ class SignAward {
   final String desc;
   final String type;
 
-  factory SignAward.fromJson(Map<String, dynamic> json) => SignAward(
-        desc: '${json['desc'] ?? ''}',
-        type: '${json['type'] ?? ''}',
-      );
+  factory SignAward.fromJson(Map<String, dynamic> json) =>
+      SignAward(desc: '${json['desc'] ?? ''}', type: '${json['type'] ?? ''}');
 }
 
 /// 一页浏览历史：条目与下一页游标（最后一条的 time，null 表示无更多）。
@@ -390,11 +492,11 @@ class HistoryPage {
     final rawList = data is List
         ? data
         : root['list'] ??
-            root['items'] ??
-            root['history'] ??
-            nested['list'] ??
-            nested['items'] ??
-            nested['history'];
+              root['items'] ??
+              root['history'] ??
+              nested['list'] ??
+              nested['items'] ??
+              nested['history'];
     final records = rawList is List ? rawList : const <Object?>[];
     final items = records
         .whereType<Map<String, dynamic>>()
@@ -402,34 +504,42 @@ class HistoryPage {
         .where((item) => item.id != 0)
         .toList(growable: false);
 
-    final explicitCursor = _nonEmptyString(root['next_start_time'] ??
-        root['nextStartTime'] ??
-        root['next_cursor'] ??
-        root['cursor'] ??
-        nested['next_start_time'] ??
-        nested['nextStartTime'] ??
-        nested['next_cursor'] ??
-        nested['cursor']);
+    final explicitCursor = _nonEmptyString(
+      root['next_start_time'] ??
+          root['nextStartTime'] ??
+          root['next_cursor'] ??
+          root['cursor'] ??
+          nested['next_start_time'] ??
+          nested['nextStartTime'] ??
+          nested['next_cursor'] ??
+          nested['cursor'],
+    );
     String? itemCursor;
     for (final entry in records.reversed) {
       if (entry is! Map<String, dynamic>) continue;
-      itemCursor = _nonEmptyString(entry['time'] ??
-          entry['start_time'] ??
-          entry['view_time'] ??
-          entry['created_at']);
+      itemCursor = _nonEmptyString(
+        entry['time'] ??
+            entry['start_time'] ??
+            entry['view_time'] ??
+            entry['created_at'],
+      );
       if (itemCursor != null) break;
     }
     final nextStartTime = explicitCursor ?? itemCursor;
-    final explicitHasMore = _asBool(root['has_more'] ??
-        root['hasMore'] ??
-        root['more'] ??
-        nested['has_more'] ??
-        nested['hasMore'] ??
-        nested['more']);
-    final total = _asInt(root['total'] ??
-        root['total_count'] ??
-        nested['total'] ??
-        nested['total_count']);
+    final explicitHasMore = _asBool(
+      root['has_more'] ??
+          root['hasMore'] ??
+          root['more'] ??
+          nested['has_more'] ??
+          nested['hasMore'] ??
+          nested['more'],
+    );
+    final total = _asInt(
+      root['total'] ??
+          root['total_count'] ??
+          nested['total'] ??
+          nested['total_count'],
+    );
     return HistoryPage(
       items: items,
       nextStartTime: nextStartTime,
@@ -463,13 +573,13 @@ class BackpackItem {
   final int count;
 
   factory BackpackItem.fromJson(Map<String, dynamic> json) => BackpackItem(
-        id: _asInt(json['id']) ?? 0,
-        name: '${json['name'] ?? ''}',
-        tag: '${json['tag'] ?? ''}',
-        description: '${json['description'] ?? ''}',
-        icon: _coverUrl(json['icon']),
-        count: _asInt(json['count']) ?? 0,
-      );
+    id: _asInt(json['id']) ?? 0,
+    name: '${json['name'] ?? ''}',
+    tag: '${json['tag'] ?? ''}',
+    description: '${json['description'] ?? ''}',
+    icon: _coverUrl(json['icon']),
+    count: _asInt(json['count']) ?? 0,
+  );
 }
 
 /// 等级经验区间（`/v1/user/level_section`）：达到该等级所需经验。
@@ -480,9 +590,9 @@ class LevelSection {
   final int experience;
 
   factory LevelSection.fromJson(Map<String, dynamic> json) => LevelSection(
-        levelId: _asInt(json['level_id'] ?? json['id']) ?? 0,
-        experience: _asInt(json['experience']) ?? 0,
-      );
+    levelId: _asInt(json['level_id'] ?? json['id']) ?? 0,
+    experience: _asInt(json['experience']) ?? 0,
+  );
 }
 
 /// Credentials + target for a VOD upload (`/v1/contribute/video/get_upload_auth`).
@@ -506,10 +616,12 @@ class VideoUploadAuth {
   final String objectKey;
 
   factory VideoUploadAuth.fromJson(Map<String, dynamic> json) {
-    final auth =
-        jsonDecode(utf8.decode(base64.decode('${json['UploadAuth']}'.trim())));
+    final auth = jsonDecode(
+      utf8.decode(base64.decode('${json['UploadAuth']}'.trim())),
+    );
     final address = jsonDecode(
-        utf8.decode(base64.decode('${json['UploadAddress']}'.trim())));
+      utf8.decode(base64.decode('${json['UploadAddress']}'.trim())),
+    );
     final authMap = auth is Map<String, dynamic> ? auth : const {};
     final addressMap = address is Map<String, dynamic> ? address : const {};
     var endpoint = '${addressMap['Endpoint'] ?? ''}';
@@ -554,10 +666,10 @@ class SubmissionItemsPage {
         : root['list'] ?? root['items'] ?? nested['list'] ?? nested['items'];
     final items = rawList is List
         ? rawList
-            .whereType<Map<String, dynamic>>()
-            .map(SubmissionItem.fromJson)
-            .where((item) => item.id != 0)
-            .toList(growable: false)
+              .whereType<Map<String, dynamic>>()
+              .map(SubmissionItem.fromJson)
+              .where((item) => item.id != 0)
+              .toList(growable: false)
         : const <SubmissionItem>[];
     final total = _asInt(root['total'] ?? nested['total']);
     return SubmissionItemsPage(
@@ -578,6 +690,11 @@ class SubmissionItem {
     required this.status,
     required this.createdAt,
     required this.cover,
+    required this.likes,
+    required this.comments,
+    required this.views,
+    required this.favorites,
+    this.visibility,
   });
 
   final int id;
@@ -586,6 +703,11 @@ class SubmissionItem {
   final int status;
   final DateTime? createdAt;
   final String cover;
+  final int likes;
+  final int comments;
+  final int views;
+  final int favorites;
+  final int? visibility;
 
   String get statusLabel => submissionStatusLabel(status);
 
@@ -598,6 +720,39 @@ class SubmissionItem {
       status: _asInt(json['status']) ?? 0,
       createdAt: _asDateTime(json['created_at']),
       cover: _coverUrl(json['cover'] ?? resource['cover']),
+      likes:
+          _asInt(
+            resource['like_count'] ??
+                resource['likes'] ??
+                json['like_count'] ??
+                json['likes'],
+          ) ??
+          0,
+      comments:
+          _asInt(
+            resource['comment_count'] ??
+                resource['comments'] ??
+                json['comment_count'] ??
+                json['comments'],
+          ) ??
+          0,
+      views:
+          _asInt(
+            resource['view_count'] ??
+                resource['views'] ??
+                json['view_count'] ??
+                json['views'],
+          ) ??
+          0,
+      favorites:
+          _asInt(
+            resource['favorite_count'] ??
+                resource['favorites'] ??
+                json['favorite_count'] ??
+                json['favorites'],
+          ) ??
+          0,
+      visibility: _asInt(resource['visibility'] ?? json['visibility']),
     );
   }
 }
@@ -614,11 +769,7 @@ class SubmissionVideoPart {
   });
 
   factory SubmissionVideoPart.direct(int libraryId, {required String title}) =>
-      SubmissionVideoPart(
-        type: 'direct',
-        content: libraryId,
-        title: title,
-      );
+      SubmissionVideoPart(type: 'direct', content: libraryId, title: title);
 
   final String type;
   final Object? content;
@@ -642,12 +793,12 @@ class SubmissionVideoPart {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        ...extra,
-        'type': type,
-        'content': content,
-        'title': title,
-        if (meta.isNotEmpty) 'meta': meta,
-      };
+    ...extra,
+    'type': type,
+    'content': content,
+    'title': title,
+    if (meta.isNotEmpty) 'meta': meta,
+  };
 }
 
 /// Submission detail from `/v1/contribute/get`.
@@ -681,8 +832,9 @@ class SubmissionDetail {
   String get statusLabel => submissionStatusLabel(status);
 
   factory SubmissionDetail.fromJson(Map<String, dynamic> json) {
-    final source =
-        _asMap(json['contribute']).isEmpty ? json : _asMap(json['contribute']);
+    final source = _asMap(json['contribute']).isEmpty
+        ? json
+        : _asMap(json['contribute']);
     final rawContent = '${source['content'] ?? source['summary'] ?? ''}';
     return SubmissionDetail(
       id: _asInt(source['id']) ?? 0,
@@ -703,14 +855,14 @@ class SubmissionDetail {
 }
 
 String submissionStatusLabel(int status) => switch (status) {
-      0 => '草稿',
-      1 => '已发布',
-      2 => '审核中',
-      3 => '驳回',
-      4 => '被驳回修改',
-      5 => '定时发布',
-      _ => '状态 $status',
-    };
+  0 => '草稿',
+  1 => '已发布',
+  2 => '审核中',
+  3 => '驳回',
+  4 => '被驳回修改',
+  5 => '定时发布',
+  _ => '状态 $status',
+};
 
 /// One page of favorite-folder items with the next cursor to request.
 class FavoriteItemsPage {
@@ -736,11 +888,11 @@ class FavoriteFolder {
   final int count;
 
   factory FavoriteFolder.fromJson(Map<String, dynamic> json) => FavoriteFolder(
-        id: _asInt(json['id']) ?? 0,
-        name: '${json['name'] ?? '未命名收藏夹'}',
-        description: '${json['desc'] ?? ''}',
-        count: _asInt(json['count']) ?? 0,
-      );
+    id: _asInt(json['id']) ?? 0,
+    name: '${json['name'] ?? '未命名收藏夹'}',
+    description: '${json['desc'] ?? ''}',
+    count: _asInt(json['count']) ?? 0,
+  );
 }
 
 class CommunityComment {
@@ -783,11 +935,13 @@ class CommunityComment {
           _asInt(json['user_id']) ?? _asInt(user['id'] ?? user['user_id']) ?? 0,
       authorName:
           '${user['name'] ?? user['username'] ?? user['nickname'] ?? json['user_name'] ?? json['nickname'] ?? ''}',
-      avatar: _coverUrl(user['avatar'] ??
-          user['face'] ??
-          user['user_avatar'] ??
-          json['avatar'] ??
-          json['user_avatar']),
+      avatar: _coverUrl(
+        user['avatar'] ??
+            user['face'] ??
+            user['user_avatar'] ??
+            json['avatar'] ??
+            json['user_avatar'],
+      ),
       content: spans
           .where((span) => !span.isSticker)
           .map((span) => span.isMention ? '@${span.mentionName}' : span.text)
@@ -803,6 +957,29 @@ class CommunityComment {
   }
 }
 
+class CommunityCommentPage {
+  const CommunityCommentPage({required this.comments, this.pinnedCommentId});
+
+  final List<CommunityComment> comments;
+  final int? pinnedCommentId;
+
+  List<CommunityComment> get displayComments {
+    final pinnedId = pinnedCommentId;
+    if (pinnedId == null) return comments;
+    final pinned = comments.where((comment) => comment.id == pinnedId);
+    final others = comments.where((comment) => comment.id != pinnedId);
+    return [...pinned, ...others];
+  }
+}
+
+enum FollowRelation { none, following, mutual }
+
+String followRelationLabel(FollowRelation relation) => switch (relation) {
+  FollowRelation.none => '关注',
+  FollowRelation.following => '已关注',
+  FollowRelation.mutual => '已互关',
+};
+
 /// One piece of a comment: plain text, a private-pack sticker, or a user
 /// mention.
 ///
@@ -811,16 +988,16 @@ class CommunityComment {
 /// are `{"insert": {"mention": {"id": "38461", "value": "少女乌斯"}}}`.
 class CommentSpan {
   const CommentSpan.text(this.text)
-      : stickerKey = '',
-        mentionId = '',
-        mentionName = '';
+    : stickerKey = '',
+      mentionId = '',
+      mentionName = '';
   const CommentSpan.sticker(this.stickerKey)
-      : text = '',
-        mentionId = '',
-        mentionName = '';
+    : text = '',
+      mentionId = '',
+      mentionName = '';
   const CommentSpan.mention(this.mentionId, this.mentionName)
-      : text = '',
-        stickerKey = '';
+    : text = '',
+      stickerKey = '';
 
   final String text;
   final String stickerKey;
@@ -856,8 +1033,9 @@ List<CommentSpan> _commentSpans(String raw) {
           if (spans.isNotEmpty &&
               !spans.last.isSticker &&
               !spans.last.isMention) {
-            spans[spans.length - 1] =
-                CommentSpan.text('${spans.last.text}$text');
+            spans[spans.length - 1] = CommentSpan.text(
+              '${spans.last.text}$text',
+            );
           } else {
             spans.add(CommentSpan.text(text));
           }
@@ -913,18 +1091,22 @@ List<CommentSpan> _htmlSpans(String html) {
   const stickerPattern = "<img[^>]*class=['\"][^'\"]*sticker[^'\"]*['\"][^>]*>";
   final spans = <CommentSpan>[];
   var cursor = 0;
-  for (final match
-      in RegExp(stickerPattern, caseSensitive: false).allMatches(html)) {
+  for (final match in RegExp(
+    stickerPattern,
+    caseSensitive: false,
+  ).allMatches(html)) {
     final before = _htmlToText(html.substring(cursor, match.start));
     cursor = match.end;
     if (before.isNotEmpty) spans.add(CommentSpan.text(before));
     final tag = match.group(0) ?? '';
-    final alt = RegExp("alt=['\"]([^'\"]+)['\"]", caseSensitive: false)
-        .firstMatch(tag)
-        ?.group(1);
-    final src = RegExp("src=['\"]([^'\"]+)['\"]", caseSensitive: false)
-        .firstMatch(tag)
-        ?.group(1);
+    final alt = RegExp(
+      "alt=['\"]([^'\"]+)['\"]",
+      caseSensitive: false,
+    ).firstMatch(tag)?.group(1);
+    final src = RegExp(
+      "src=['\"]([^'\"]+)['\"]",
+      caseSensitive: false,
+    ).firstMatch(tag)?.group(1);
     final key = _stickerKey(alt, src);
     spans.add(CommentSpan.sticker(key));
   }
@@ -955,8 +1137,9 @@ String _htmlToText(String raw) {
   final withLineBreaks = raw
       .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
       .replaceAll(
-          RegExp(r'</(?:p|div|li|blockquote|h[1-6])\s*>', caseSensitive: false),
-          '\n');
+        RegExp(r'</(?:p|div|li|blockquote|h[1-6])\s*>', caseSensitive: false),
+        '\n',
+      );
   final withoutTags = withLineBreaks.replaceAll(RegExp(r'<[^>]*>'), '');
   var decoded = withoutTags;
   try {
@@ -1009,39 +1192,55 @@ List<CommentSpan> commentSpansFromText(String raw) {
 String commentQuillJson(List<CommentSpan> spans) =>
     _buildQuillJson(spans, const []);
 
+/// 楼中楼回复中的“回复 + @用户 + ：”是同一行的连续内容，文本 span
+/// 之间不能自动插入换行。
+String commentReplyQuillJson(List<CommentSpan> spans) =>
+    _buildQuillJson(spans, const [], keepTextInline: true);
+
 /// 私信用：把文本/表情 spans 与图片一起编码为 Quill JSON。图片以
 /// `{"insert":{"image":"path"}}` 内嵌在内容中（与接收端解析一致）。
 String messageQuillJson(List<CommentSpan> spans, List<String> images) =>
     _buildQuillJson(spans, images);
 
-String _buildQuillJson(List<CommentSpan> spans, List<String> images) {
+String _buildQuillJson(
+  List<CommentSpan> spans,
+  List<String> images, {
+  bool keepTextInline = false,
+}) {
   final ops = <Map<String, Object?>>[];
   for (final span in spans) {
     if (span.isMention) {
       ops.add({
         'insert': {
-          'mention': {'id': span.mentionId, 'value': span.mentionName}
-        }
+          'mention': {'id': span.mentionId, 'value': span.mentionName},
+        },
       });
       continue;
     }
     if (span.isSticker) {
       ops.add({
-        'insert': {'sticker': span.stickerKey}
+        'insert': {'sticker': span.stickerKey},
       });
       continue;
     }
-    final lines = span.text.split('\n');
-    for (final line in lines) {
-      ops.add({'insert': '$line\n'});
+    if (keepTextInline) {
+      if (span.text.isNotEmpty) ops.add({'insert': span.text});
+    } else {
+      final lines = span.text.split('\n');
+      for (final line in lines) {
+        ops.add({'insert': '$line\n'});
+      }
     }
   }
   for (final image in images) {
     ops.add({
-      'insert': {'image': image}
+      'insert': {'image': image},
     });
   }
-  if (ops.isEmpty || ops.last['insert'] is! String) {
+  if (keepTextInline && ops.isNotEmpty && ops.last['insert'] is String) {
+    final text = ops.last['insert']! as String;
+    if (!text.endsWith('\n')) ops.last['insert'] = '$text\n';
+  } else if (ops.isEmpty || ops.last['insert'] is! String) {
     ops.add({'insert': '\n'});
   }
   return jsonEncode({'ops': ops});
@@ -1066,8 +1265,9 @@ class MessageConversation {
 
   factory MessageConversation.fromJson(Map<String, dynamic> json) {
     final user = _asMap(json['user']);
-    final last =
-        _asMap(_asMap(json['last_msg'] ?? json['last_message'])['data']);
+    final last = _asMap(
+      _asMap(json['last_msg'] ?? json['last_message'])['data'],
+    );
     final lastRaw = '${last['message'] ?? last['msg'] ?? ''}';
     var lastMessage = _quillToText(lastRaw);
     if (lastMessage.isEmpty &&
@@ -1140,23 +1340,26 @@ class MessageRecordsPage {
     final rawRecords = data is List
         ? data
         : root['list'] ??
-            root['records'] ??
-            root['items'] ??
-            root['messages'] ??
-            root['data'] ??
-            root;
+              root['records'] ??
+              root['items'] ??
+              root['messages'] ??
+              root['data'] ??
+              root;
     final items = _messageRecordsOf(rawRecords);
     if (items.isNotEmpty && items.every((item) => item.id.isNotEmpty)) {
       items.sort((a, b) => _compareMessageIds(a.id, b.id));
     }
 
-    final explicitCursor = _nonEmptyString(root['next_msg_id'] ??
-        root['next_cursor'] ??
-        root['last_id'] ??
-        root['cursor']);
+    final explicitCursor = _nonEmptyString(
+      root['next_msg_id'] ??
+          root['next_cursor'] ??
+          root['last_id'] ??
+          root['cursor'],
+    );
     final nextCursor = explicitCursor ?? _oldestMessageId(items);
-    final explicitHasMore =
-        _asBool(root['has_more'] ?? root['hasMore'] ?? root['more']);
+    final explicitHasMore = _asBool(
+      root['has_more'] ?? root['hasMore'] ?? root['more'],
+    );
     return MessageRecordsPage(
       items: items,
       nextCursor: nextCursor,
@@ -1185,23 +1388,27 @@ List<MessageRecord> _messageRecordsOf(Object? raw) {
     }
     if (value is! Map<String, dynamic>) return;
 
-    final isRecord = value.containsKey('uid') ||
+    final isRecord =
+        value.containsKey('uid') ||
         value.containsKey('message') ||
         value.containsKey('msg') ||
         _asMap(value['data']).containsKey('message') ||
         _asMap(value['data']).containsKey('msg');
     if (isRecord) {
-      records.add(MessageRecord.fromJson({
-        if (streamId != null &&
-            !value.containsKey('id') &&
-            !value.containsKey('msg_id'))
-          'id': streamId,
-        ...value,
-      }));
+      records.add(
+        MessageRecord.fromJson({
+          if (streamId != null &&
+              !value.containsKey('id') &&
+              !value.containsKey('msg_id'))
+            'id': streamId,
+          ...value,
+        }),
+      );
       return;
     }
 
-    final nested = value['list'] ??
+    final nested =
+        value['list'] ??
         value['records'] ??
         value['items'] ??
         value['messages'] ??
@@ -1246,8 +1453,9 @@ String? _oldestMessageId(List<MessageRecord> items) {
       .where((id) => id.isNotEmpty)
       .toList(growable: false);
   if (ids.isEmpty) return null;
-  return ids
-      .reduce((oldest, id) => _compareMessageIds(id, oldest) < 0 ? id : oldest);
+  return ids.reduce(
+    (oldest, id) => _compareMessageIds(id, oldest) < 0 ? id : oldest,
+  );
 }
 
 int _compareMessageIds(String a, String b) {
@@ -1288,12 +1496,12 @@ class NotifyCounts {
   final int message;
 
   factory NotifyCounts.fromJson(Map<String, dynamic> json) => NotifyCounts(
-        like: _asInt(json['like']) ?? 0,
-        comment: _asInt(json['comment']) ?? 0,
-        mention: _asInt(json['mention']) ?? 0,
-        system: _asInt(json['system']) ?? 0,
-        message: _asInt(json['message']) ?? 0,
-      );
+    like: _asInt(json['like']) ?? 0,
+    comment: _asInt(json['comment']) ?? 0,
+    mention: _asInt(json['mention']) ?? 0,
+    system: _asInt(json['system']) ?? 0,
+    message: _asInt(json['message']) ?? 0,
+  );
 }
 
 class NotifyItem {
@@ -1334,28 +1542,35 @@ class NotifyItem {
     return NotifyItem(
       senderUserId:
           _asInt(json['sender_user_id'] ?? sender['id'] ?? sender['user_id']) ??
-              0,
+          0,
       senderName: '${sender['name'] ?? sender['username'] ?? ''}',
       senderAvatar: _coverUrl(sender['avatar'] ?? sender['face']),
       createdAt: _asDateTime(json['created_at'] ?? json['time']),
       text: _notifyBodyText(
-          '${params['reply_text'] ?? params['text'] ?? params['content'] ?? json['content'] ?? json['text'] ?? json['title'] ?? ''}'),
+        '${params['reply_text'] ?? params['text'] ?? params['content'] ?? json['content'] ?? json['text'] ?? json['title'] ?? ''}',
+      ),
       commentId: _asInt(params['comment_id']),
       areaId: _asInt(params['area_id'] ?? json['area_id']),
-      resourceId: _asInt(params['resource_id'] ??
-          params['resourceId'] ??
-          json['resource_id'] ??
-          resource['id'] ??
-          resource['resource_id'] ??
-          json['content_id']),
-      resourceType: _asInt(params['resource_type'] ??
-              params['resourceType'] ??
-              json['resource_type'] ??
-              resource['type'] ??
-              resource['resource_type'] ??
-              json['content_type']) ??
+      resourceId: _asInt(
+        params['resource_id'] ??
+            params['resourceId'] ??
+            json['resource_id'] ??
+            resource['id'] ??
+            resource['resource_id'] ??
+            json['content_id'],
+      ),
+      resourceType:
+          _asInt(
+            params['resource_type'] ??
+                params['resourceType'] ??
+                json['resource_type'] ??
+                resource['type'] ??
+                resource['resource_type'] ??
+                json['content_type'],
+          ) ??
           _resourceTypeFromText(
-              '${params['resource_type'] ?? resource['type']}'),
+            '${params['resource_type'] ?? resource['type']}',
+          ),
     );
   }
 }
@@ -1472,24 +1687,64 @@ class HomeRepository {
     return _toPreviewList(response.data);
   }
 
-  Future<List<ContentPreview>> search(String text, {int type = -1}) async {
+  Future<SearchResultPage<ContentPreview>> search(
+    String text, {
+    int type = -1,
+    int page = 1,
+    int size = 20,
+    SearchField field = SearchField.titleAndContent,
+    SearchSort sort = SearchSort.relevance,
+  }) async {
     final response = await _client.get(
       '/v1/search/resource',
       query: {
         'text': text,
+        if (field.apiValue != null) 'fields': field.apiValue,
         'type': type,
-        'page': 1,
-        'size': 20,
-        // The mobile site currently requires this even though older docs mark it optional.
-        'sort': 'all',
+        'sort': sort.apiValue,
+        'page': page,
+        'size': size,
       },
     );
-    return _toPreviewList(response.data);
+    final root = _asMap(response.data);
+    return SearchResultPage(
+      items: _toPreviewList(response.data),
+      page: page,
+      size: size,
+      total: _asInt(root['total']),
+    );
   }
 
   Future<List<ContentPreview>> getHotRankings() async {
     final response = await _client.get('/v1/leaderboards/hot');
     return _toPreviewList(response.data);
+  }
+
+  /// 搜索页用户结果，保留服务端分页元数据。
+  Future<SearchResultPage<UserProfile>> searchUserPage(
+    String keyword, {
+    int page = 1,
+    int size = 20,
+  }) async {
+    final response = await _client.get(
+      '/v1/search/user',
+      query: {'user': keyword, 'page': page, 'size': size},
+    );
+    final root = _asMap(response.data);
+    final rawList = response.data is List ? response.data : root['list'];
+    final items = rawList is! List
+        ? const <UserProfile>[]
+        : rawList
+              .whereType<Map<String, dynamic>>()
+              .map(UserProfile.fromJson)
+              .where((user) => user.id != 0)
+              .toList(growable: false);
+    return SearchResultPage(
+      items: items,
+      page: page,
+      size: size,
+      total: _asInt(root['total']),
+    );
   }
 
   /// 搜索用户（@ 提及用）：`GET /v1/search/user`。
@@ -1498,18 +1753,8 @@ class HomeRepository {
     int page = 1,
     int size = 10,
   }) async {
-    final response = await _client.get(
-      '/v1/search/user',
-      query: {'user': keyword, 'page': page, 'size': size},
-    );
-    final root = _asMap(response.data);
-    final rawList = response.data is List ? response.data : root['list'];
-    if (rawList is! List) return const [];
-    return rawList
-        .whereType<Map<String, dynamic>>()
-        .map(UserProfile.fromJson)
-        .where((user) => user.id != 0)
-        .toList(growable: false);
+    final result = await searchUserPage(keyword, page: page, size: size);
+    return result.items;
   }
 
   Future<List<CategoryNode>> getCategories() async {
@@ -1533,13 +1778,95 @@ class HomeRepository {
     return _toPreviewList(response.data);
   }
 
-  /// 按标签获取文章列表：`GET /v1/tag/article_list?tag=xxx`。
-  Future<List<ContentPreview>> getTagArticles(String tag) async {
-    final response = await _client.get(
-      '/v1/tag/article_list',
-      query: {'tag': tag},
+  /// 获取标签下的文章和视频。两个接口独立分页，只要任一类型仍有数据，
+  /// 标签页就继续请求下一页。
+  Future<TagContentPage> getTagContents(
+    String tag, {
+    int? articleLastId,
+    int? videoLastId,
+    bool loadArticles = true,
+    bool loadVideos = true,
+    int size = 20,
+  }) async {
+    final articleFuture = loadArticles
+        ? _getTagContentPage(
+            '/v1/tag/article_list',
+            tag: tag,
+            lastId: articleLastId,
+            size: size,
+            resourceType: 0,
+          )
+        : Future.value(const _TagContentTypePage.empty());
+    final videoFuture = loadVideos
+        ? _getTagContentPage(
+            '/v1/tag/video_list',
+            tag: tag,
+            lastId: videoLastId,
+            size: size,
+            resourceType: 1,
+          )
+        : Future.value(const _TagContentTypePage.empty());
+    final pages = await Future.wait([articleFuture, videoFuture]);
+    final articlePage = pages[0];
+    final videoPage = pages[1];
+    final known = <String>{};
+    final items =
+        pages
+            .expand((result) => result.items)
+            .where((item) => known.add('${item.type}:${item.id}'))
+            .toList(growable: false)
+          ..sort((left, right) {
+            final leftTime = left.createdAt;
+            final rightTime = right.createdAt;
+            if (leftTime == null || rightTime == null) return 0;
+            return rightTime.compareTo(leftTime);
+          });
+    return TagContentPage(
+      items: items,
+      articleLastId: articlePage.lastId ?? articleLastId,
+      videoLastId: videoPage.lastId ?? videoLastId,
+      hasMoreArticles: loadArticles && articlePage.hasMore,
+      hasMoreVideos: loadVideos && videoPage.hasMore,
     );
-    return _toPreviewList(response.data);
+  }
+
+  Future<_TagContentTypePage> _getTagContentPage(
+    String path, {
+    required String tag,
+    required int? lastId,
+    required int size,
+    required int resourceType,
+  }) async {
+    final response = await _client.get(
+      path,
+      query: {'tag': tag, if (lastId != null) 'last_id': lastId, 'size': size},
+    );
+    final root = _asMap(response.data);
+    final rawList = response.data is List ? response.data : root['list'];
+    final rawCount = rawList is List ? rawList.length : 0;
+    final items = rawList is! List
+        ? const <ContentPreview>[]
+        : rawList
+              .whereType<Map<String, dynamic>>()
+              .map((item) {
+                final resource = _asMap(item['resource_info']);
+                return ContentPreview.fromJson({
+                  ...item,
+                  'type': resourceType,
+                  if (resource.isNotEmpty)
+                    'resource_info': {...resource, 'type': resourceType},
+                });
+              })
+              .where((item) => item.id != 0)
+              .toList(growable: false);
+    final rawLast = rawList is List && rawList.isNotEmpty
+        ? _asMap(rawList.last)['last_id'] ?? _asMap(rawList.last)['id']
+        : null;
+    return _TagContentTypePage(
+      items: items,
+      lastId: _asInt(rawLast),
+      hasMore: rawCount >= size,
+    );
   }
 
   Future<List<TimelineFeed>> getFeeds({
@@ -1769,11 +2096,10 @@ class HomeRepository {
     required int resourceId,
     required int resourceType,
     required String action,
-  }) =>
-      _client.postJson('/v1/like/$action', {
-        'id': resourceId,
-        'type': resourceType,
-      });
+  }) => _client.postJson('/v1/like/$action', {
+    'id': resourceId,
+    'type': resourceType,
+  });
 
   /// 投币（需登录）：`id` 为资源 id，`type` 0=文章、1=视频，
   /// `count` 为投币数量。成功返回服务端消息。
@@ -1805,23 +2131,21 @@ class HomeRepository {
     required int listId,
     required int resourceId,
     required int resourceType,
-  }) =>
-      _client.postJson('/v1/favorite/add_favorite', {
-        'list_id': listId,
-        'resource_id': resourceId,
-        'type': resourceType,
-      });
+  }) => _client.postJson('/v1/favorite/add_favorite', {
+    'list_id': listId,
+    'resource_id': resourceId,
+    'type': resourceType,
+  });
 
   Future<void> removeFavorite({
     required int listId,
     required int resourceId,
     required int resourceType,
-  }) =>
-      _client.postJson('/v1/favorite/remove_favorite_by_resource', {
-        'list_id': listId,
-        'resource_id': resourceId,
-        'type': resourceType,
-      });
+  }) => _client.postJson('/v1/favorite/remove_favorite_by_resource', {
+    'list_id': listId,
+    'resource_id': resourceId,
+    'type': resourceType,
+  });
 
   Future<List<ContentPreview>> getRelated(ContentPreview preview) async {
     final response = await _client.get(
@@ -1833,9 +2157,9 @@ class HomeRepository {
         'size': 6,
       },
     );
-    return _toPreviewList(response.data)
-        .where((item) => item.id != preview.id)
-        .toList(growable: false);
+    return _toPreviewList(
+      response.data,
+    ).where((item) => item.id != preview.id).toList(growable: false);
   }
 
   Future<List<CommunityComment>> getComments(int areaId, {int page = 1}) async {
@@ -1844,6 +2168,31 @@ class HomeRepository {
       query: {'area_id': areaId, 'page': page, 'order': 'desc', 'html': 0},
     );
     return _toComments(response.data);
+  }
+
+  Future<CommunityCommentPage> getCommentPage(
+    int areaId, {
+    int page = 1,
+  }) async {
+    final commentsFuture = getComments(areaId, page: page);
+    final pinnedCommentIdFuture = _getPinnedCommentId(areaId);
+    return CommunityCommentPage(
+      comments: await commentsFuture,
+      pinnedCommentId: await pinnedCommentIdFuture,
+    );
+  }
+
+  Future<int?> _getPinnedCommentId(int areaId) async {
+    try {
+      final response = await _client.get(
+        '/v1/comment/area_info',
+        query: {'area_id': areaId},
+      );
+      return _asInt(_asMap(response.data)['pin_floor_id']);
+    } on MfunsApiException {
+      // 评论列表仍可用时，不因置顶信息加载失败而隐藏整个评论区。
+      return null;
+    }
   }
 
   Future<List<CommunityComment>> getCommentReplies(
@@ -1876,7 +2225,7 @@ class HomeRepository {
   }) async {
     await _client.postJson('/v1/comment/create_reply', {
       'comment_id': commentId,
-      'content': commentQuillJson(spans),
+      'content': commentReplyQuillJson(spans),
       'images': '[]',
     });
   }
@@ -1894,9 +2243,11 @@ class HomeRepository {
 
   /// Deletes a comment (only the author's own comments).
   Future<void> deleteComment(int commentId) async {
-    await _client.postJson('/v1/comment/delete', {
-      'comment_id': commentId,
-    });
+    await _client.postJson('/v1/comment/delete', {'comment_id': commentId});
+  }
+
+  Future<void> pinComment(int commentId) async {
+    await _client.postJson('/v1/comment/pin', {'id': commentId});
   }
 
   /// Deletes a feed post (动态).
@@ -1925,10 +2276,7 @@ class HomeRepository {
   /// Uploads an image to the user media library and returns its relative
   /// path (`/static/xxx.jpg`) to be passed in comment `images` arrays or to
   /// `set_avatar`.
-  Future<String> uploadImage(
-    List<int> bytes,
-    String filename,
-  ) async {
+  Future<String> uploadImage(List<int> bytes, String filename) async {
     final response = await _client.postMultipart(
       '/v1/media/upload_image',
       field: 'file',
@@ -1947,20 +2295,29 @@ class HomeRepository {
   Future<List<MessageConversation>> getMessageConversations({
     int page = 1,
   }) async {
-    final response =
-        await _client.get('/v1/message/list', query: {'page': page});
+    final response = await _client.get(
+      '/v1/message/list',
+      query: {'page': page},
+    );
     return _toMessageConversations(response.data);
   }
+
+  /// 从私信会话列表移除指定用户的会话。
+  Future<void> removeMessageConversation(int userId) =>
+      _client.postJson('/v1/message/list_remove', {'uid': userId});
 
   Future<MessageRecordsPage> getMessageRecord(
     int userId, {
     String? msgId,
   }) async {
-    final response = await _client.get('/v1/message/record', query: {
-      'uid': userId,
-      if (msgId != null && msgId.isNotEmpty) 'msg_id': msgId,
-      'html': 1,
-    });
+    final response = await _client.get(
+      '/v1/message/record',
+      query: {
+        'uid': userId,
+        if (msgId != null && msgId.isNotEmpty) 'msg_id': msgId,
+        'html': 1,
+      },
+    );
     return MessageRecordsPage.fromData(response.data);
   }
 
@@ -1975,6 +2332,150 @@ class HomeRepository {
     });
   }
 
+  /// 当前账号的黑名单用户 ID。服务端历史版本可能返回 ID 列表、用户对象
+  /// 列表或带 `list` / `users` / `items` 包装的对象。
+  Future<Set<int>> getBlacklistUserIds() async {
+    final response = await _client.get('/v1/blacklist/get');
+    return _blacklistUserIds(response.data);
+  }
+
+  /// 黑名单管理页需要昵称和头像；黑名单接口只返回 ID 时，再从用户资料接口
+  /// 补齐展示信息。单个资料加载失败时保留该 ID，不影响其余条目。
+  Future<List<UserProfile>> getBlacklist() async {
+    final response = await _client.get('/v1/blacklist/get');
+    final ids = _blacklistUserIds(response.data);
+    final includedProfiles = _blacklistProfiles(response.data);
+    return Future.wait(
+      ids.map((id) async {
+        final included = includedProfiles[id];
+        if (included != null) return included;
+        try {
+          final response = await _client.get(
+            '/v1/user/get_user',
+            query: {'id': id},
+          );
+          final profile = UserProfile.fromJson(_asMap(response.data));
+          if (profile.id != 0) return profile;
+        } catch (_) {
+          // 列表仍可用于解除拉黑，资料可在下次刷新时重试。
+        }
+        return UserProfile.fromJson({'id': id, 'name': '用户 $id'});
+      }),
+    );
+  }
+
+  Future<bool> isUserBlocked(int userId) async {
+    final ids = await getBlacklistUserIds();
+    return ids.contains(userId);
+  }
+
+  Set<int> _blacklistUserIds(Object? data) {
+    final ids = <int>{};
+
+    void addId(Object? value) {
+      final id = _asInt(value);
+      if (id != null && id > 0) ids.add(id);
+    }
+
+    void collectEntry(Object? value) {
+      if (value is List) {
+        for (final item in value) {
+          collectEntry(item);
+        }
+        return;
+      }
+      if (value is! Map<String, dynamic>) {
+        addId(value);
+        return;
+      }
+
+      final user = _asMap(value['user']);
+      final nestedUserId = _asInt(user['id'] ?? user['user_id']);
+      if (nestedUserId != null && nestedUserId > 0) ids.add(nestedUserId);
+      // 实测响应中 user_id 是当前账号，black_user_id 才是被拉黑用户。
+      final explicitTargetId =
+          value['black_user_id'] ??
+          value['blocked_user_id'] ??
+          value['target_user_id'] ??
+          value['black_uid'] ??
+          value['uid'] ??
+          value['user_id'];
+      if (explicitTargetId != null) {
+        addId(explicitTargetId);
+      } else if (nestedUserId == null) {
+        // 用户对象本身使用 id；若存在嵌套 user，外层 id 可能只是黑名单记录 id。
+        addId(value['id']);
+      }
+
+      final nested =
+          value['list'] ??
+          value['users'] ??
+          value['items'] ??
+          value['blacklist'] ??
+          value['data'];
+      if (nested != null && !identical(nested, value)) {
+        collectEntry(nested);
+        return;
+      }
+
+      // 兼容以用户 ID 为 key 的对象，例如 `{ "74384": true }`。
+      for (final entry in value.entries) {
+        final keyId = int.tryParse(entry.key);
+        if (keyId != null && entry.value != false && entry.value != 0) {
+          addId(keyId);
+        } else if (entry.value is List || entry.value is Map<String, dynamic>) {
+          collectEntry(entry.value);
+        }
+      }
+    }
+
+    collectEntry(data);
+    return ids;
+  }
+
+  Map<int, UserProfile> _blacklistProfiles(Object? data) {
+    final profiles = <int, UserProfile>{};
+
+    void collect(Object? value) {
+      if (value is List) {
+        for (final item in value) {
+          collect(item);
+        }
+        return;
+      }
+      if (value is! Map<String, dynamic>) return;
+
+      // 当前接口字段：black_user_info 是被拉黑用户资料；不能使用外层
+      // user_id（它表示发起拉黑的当前账号）。
+      final info = _asMap(value['black_user_info']).isNotEmpty
+          ? _asMap(value['black_user_info'])
+          : _asMap(value['blocked_user_info']).isNotEmpty
+          ? _asMap(value['blocked_user_info'])
+          : _asMap(value['target_user_info']);
+      if (info.isNotEmpty) {
+        final profile = UserProfile.fromJson(info);
+        if (profile.id != 0) profiles[profile.id] = profile;
+      }
+
+      final nested =
+          value['list'] ??
+          value['users'] ??
+          value['items'] ??
+          value['blacklist'] ??
+          value['data'];
+      if (nested != null && !identical(nested, value)) collect(nested);
+    }
+
+    collect(data);
+    return profiles;
+  }
+
+  /// 添加或移除黑名单用户。
+  Future<void> setBlocked({required int userId, required bool blocked}) =>
+      _client.postJson(blocked ? '/v1/blacklist/add' : '/v1/blacklist/delete', {
+        'user_id': userId,
+      });
+
   Future<NotifyCounts> getNotifyCounts() async {
     final response = await _client.get('/v1/notify/count');
     return NotifyCounts.fromJson(_asMap(response.data));
@@ -1986,14 +2487,12 @@ class HomeRepository {
     int page = 1,
     int size = 20,
     int? status,
-  }) async =>
-      (await getSubmissionsPage(
-        type: type,
-        page: page,
-        size: size,
-        status: status,
-      ))
-          .items;
+  }) async => (await getSubmissionsPage(
+    type: type,
+    page: page,
+    size: size,
+    status: status,
+  )).items;
 
   Future<SubmissionItemsPage> getSubmissionsPage({
     required int type,
@@ -2001,27 +2500,25 @@ class HomeRepository {
     int size = 20,
     int? status,
   }) async {
-    final response = await _client.get('/v1/contribute/list', query: {
-      'type': type,
-      'page': page,
-      'size': size,
-      if (status != null) 'status': status,
-    });
-    return SubmissionItemsPage.fromData(
-      response.data,
-      page: page,
-      size: size,
+    final response = await _client.get(
+      '/v1/contribute/list',
+      query: {
+        'type': type,
+        'page': page,
+        'size': size,
+        if (status != null) 'status': status,
+      },
     );
+    return SubmissionItemsPage.fromData(response.data, page: page, size: size);
   }
 
   /// Total submission count for one type (0 = article, 1 = video), read
   /// from the list endpoint's `total` field with a single-item page.
   Future<int> getSubmissionTotal(int type) async {
-    final response = await _client.get('/v1/contribute/list', query: {
-      'type': type,
-      'page': 1,
-      'size': 1,
-    });
+    final response = await _client.get(
+      '/v1/contribute/list',
+      query: {'type': type, 'page': 1, 'size': 1},
+    );
     final root = _asMap(response.data);
     final total = _asInt(root['total']);
     if (total != null) return total;
@@ -2030,8 +2527,10 @@ class HomeRepository {
   }
 
   Future<SubmissionDetail> getSubmissionDetail(int contributeId) async {
-    final response = await _client
-        .get('/v1/contribute/get', query: {'contribute_id': contributeId});
+    final response = await _client.get(
+      '/v1/contribute/get',
+      query: {'contribute_id': contributeId},
+    );
     return SubmissionDetail.fromJson(_asMap(response.data));
   }
 
@@ -2119,16 +2618,28 @@ class HomeRepository {
     );
   }
 
+  /// Changes visibility of an already-published resource.
+  Future<void> updateResourceVisibility({
+    required int resourceType,
+    required int resourceId,
+    required int visibility,
+  }) async {
+    await _client.postJson('/v1/resource/visibility', {
+      'resource_type': resourceType,
+      'resource_id': resourceId,
+      'visibility': visibility,
+    });
+  }
+
   /// Requests VOD upload credentials for a local video file.
   Future<VideoUploadAuth> getVideoUploadAuth({
     required String fileName,
     required int fileSize,
   }) async {
-    final response =
-        await _client.postJson('/v1/contribute/video/get_upload_auth', {
-      'file_name': fileName,
-      'file_size': fileSize,
-    });
+    final response = await _client.postJson(
+      '/v1/contribute/video/get_upload_auth',
+      {'file_name': fileName, 'file_size': fileSize},
+    );
     final auth = VideoUploadAuth.fromJson(_asMap(response.data));
     if (auth.videoId.isEmpty ||
         auth.accessKeyId.isEmpty ||
@@ -2151,10 +2662,10 @@ class HomeRepository {
     const delay = Duration(seconds: 5);
     for (var attempt = 0; attempt < retries; attempt++) {
       try {
-        final response =
-            await _client.postJson('/v1/contribute/video/upload_complete', {
-          'videoId': videoId,
-        });
+        final response = await _client.postJson(
+          '/v1/contribute/video/upload_complete',
+          {'videoId': videoId},
+        );
         final data = _asMap(response.data);
         final libraryId = _asInt(data['id']);
         if (data['status'] == 1 || libraryId != null) {
@@ -2229,8 +2740,10 @@ class HomeRepository {
   /// Resolves the comment area of a comment (notification references point
   /// at comments). Returns null when the comment is gone.
   Future<int?> getCommentAreaId(int commentId) async {
-    final response = await _client
-        .get('/v1/comment/get', query: {'id': commentId, 'html': 0});
+    final response = await _client.get(
+      '/v1/comment/get',
+      query: {'id': commentId, 'html': 0},
+    );
     final comment = _asMap(_asMap(response.data)['comment']);
     return _asInt(comment['comment_area_id']);
   }
@@ -2239,8 +2752,10 @@ class HomeRepository {
   /// web frontend does (`/v1/comment/get_resource`). Returns
   /// `(resourceId, resourceType)` or null.
   Future<(int, int)?> getCommentResource(int commentId) async {
-    final response =
-        await _client.get('/v1/comment/get_resource', query: {'id': commentId});
+    final response = await _client.get(
+      '/v1/comment/get_resource',
+      query: {'id': commentId},
+    );
     final data = _asMap(response.data);
     final resourceId = _asInt(data['resource_id']);
     final resourceType = _asInt(data['resource_type']);
@@ -2251,8 +2766,10 @@ class HomeRepository {
   /// Resolves a comment area to its referenced resource.
   /// Returns `(resourceId, resourceType)` or null.
   Future<(int, int)?> getCommentAreaInfo(int areaId) async {
-    final response =
-        await _client.get('/v1/comment/area_info', query: {'area_id': areaId});
+    final response = await _client.get(
+      '/v1/comment/area_info',
+      query: {'area_id': areaId},
+    );
     final data = _asMap(response.data);
     final resourceId = _asInt(data['resource_id']);
     final resourceType = _asInt(data['resource_type']);
@@ -2264,16 +2781,20 @@ class HomeRepository {
     required int type,
     int page = 1,
   }) async {
-    final response = await _client
-        .get('/v1/notify/get', query: {'type': type, 'page': page});
+    final response = await _client.get(
+      '/v1/notify/get',
+      query: {'type': type, 'page': page},
+    );
     return _toNotifyItems(response.data);
   }
 
   /// 系统通知（站点公告等）走独立的 `/v1/notify/site` 接口，
   /// `html=1` 时正文为 HTML，解析时统一转为纯文本。
   Future<List<NotifyItem>> getSiteNotifications({int page = 1}) async {
-    final response =
-        await _client.get('/v1/notify/site', query: {'page': page, 'html': 1});
+    final response = await _client.get(
+      '/v1/notify/site',
+      query: {'page': page, 'html': 1},
+    );
     return _toNotifyItems(response.data);
   }
 
@@ -2357,7 +2878,8 @@ class HomeRepository {
       author: '${user['name'] ?? user['username'] ?? preview.author}',
       category: '${category['name'] ?? preview.category}',
       type: preview.type,
-      likes: _asInt(like['count']) ??
+      likes:
+          _asInt(like['count']) ??
           _asInt(resource['like_count']) ??
           preview.likes,
       comments: _detailCommentCount(root, resource) ?? preview.comments,
@@ -2365,10 +2887,13 @@ class HomeRepository {
           _asInt(root['view_count'] ?? resource['view_count']) ?? preview.views,
       authorId: _asInt(user['id'] ?? user['user_id']) ?? preview.authorId,
       authorAvatar: avatar.isEmpty ? preview.authorAvatar : avatar,
-      createdAt: _asDateTime(root['created_at'] ??
-              resource['created_at'] ??
-              root['time'] ??
-              resource['time']) ??
+      createdAt:
+          _asDateTime(
+            root['created_at'] ??
+                resource['created_at'] ??
+                root['time'] ??
+                resource['time'],
+          ) ??
           preview.createdAt,
     );
   }
@@ -2396,6 +2921,31 @@ class HomeRepository {
     return status == true || status == 1 || status == '1';
   }
 
+  Future<FollowRelation> getFollowRelation({
+    required int userId,
+    required int currentUserId,
+  }) async {
+    if (!await followStatus(userId)) return FollowRelation.none;
+
+    var cursor = -1;
+    while (true) {
+      final page = await getFollowList(
+        userId: userId,
+        type: 'follow',
+        lastId: cursor,
+      );
+      if (page.any((user) => user.id == currentUserId)) {
+        return FollowRelation.mutual;
+      }
+      if (page.isEmpty) return FollowRelation.following;
+      final nextCursor = page.last.id;
+      if (nextCursor == 0 || nextCursor == cursor) {
+        return FollowRelation.following;
+      }
+      cursor = nextCursor;
+    }
+  }
+
   Future<void> setFollow({required int userId, required bool follow}) =>
       _client.postJson('/v1/follow/follow', {
         'user_id': userId,
@@ -2411,11 +2961,7 @@ class HomeRepository {
   }) async {
     final response = await _client.get(
       '/v1/follow/list',
-      query: {
-        'user_id': userId,
-        'last_id': lastId,
-        'type': type,
-      },
+      query: {'user_id': userId, 'last_id': lastId, 'type': type},
     );
     final rawList = _asMap(response.data)['list'];
     if (rawList is! List) return const [];
@@ -2461,8 +3007,8 @@ class HomeRepository {
     final rawList = data is List
         ? data
         : data is Map<String, dynamic>
-            ? data['list']
-            : null;
+        ? data['list']
+        : null;
     if (rawList is! List) return const [];
     return rawList
         .whereType<Map<String, dynamic>>()
@@ -2496,9 +3042,9 @@ class HomeRepository {
     final rawList = data is List
         ? data
         : root['list'] ??
-            root['items'] ??
-            root['data'] ??
-            root['notifications'];
+              root['items'] ??
+              root['data'] ??
+              root['notifications'];
     if (rawList is! List) return const [];
     return rawList
         .whereType<Map<String, dynamic>>()
@@ -2508,8 +3054,9 @@ class HomeRepository {
 
   List<TimelineFeed> _toTimelineFeeds(Object? data) {
     final root = _asMap(data);
-    final rawList =
-        data is List ? data : root['list'] ?? root['feeds'] ?? root['data'];
+    final rawList = data is List
+        ? data
+        : root['list'] ?? root['feeds'] ?? root['data'];
     if (rawList is! List) return const [];
     return rawList
         .whereType<Map<String, dynamic>>()
@@ -2628,8 +3175,9 @@ Map<String, dynamic> _asMap(Object? value) =>
 int? _levelFromBadges(Object? value) {
   if (value is! List) return null;
   for (final entry in value) {
-    final id =
-        entry is Map ? _asInt(entry['badge_id'] ?? entry['id']) : _asInt(entry);
+    final id = entry is Map
+        ? _asInt(entry['badge_id'] ?? entry['id'])
+        : _asInt(entry);
     if (id != null && id >= 1 && id <= 10) return id;
   }
   return null;
@@ -2766,8 +3314,10 @@ List<String> _contentImages(String raw) {
       // Fall through to the HTML handling below.
     }
   }
-  final imgPattern = RegExp(r'''<img[^>]*\bsrc=['"]([^'"]+)['"][^>]*>''',
-      caseSensitive: false);
+  final imgPattern = RegExp(
+    r'''<img[^>]*\bsrc=['"]([^'"]+)['"][^>]*>''',
+    caseSensitive: false,
+  );
   return imgPattern
       .allMatches(value)
       // 表情包在 HTML 中也是 img 标签，但会由 [_htmlSpans] 转成 sticker
@@ -2779,9 +3329,9 @@ List<String> _contentImages(String raw) {
 }
 
 bool _isStickerImageTag(String tag) => RegExp(
-      r'''\bclass\s*=\s*['"][^'"]*\bsticker\b[^'"]*['"]''',
-      caseSensitive: false,
-    ).hasMatch(tag);
+  r'''\bclass\s*=\s*['"][^'"]*\bsticker\b[^'"]*['"]''',
+  caseSensitive: false,
+).hasMatch(tag);
 
 List<String> _uniqueImages(List<String> urls) {
   final seen = <String>{};

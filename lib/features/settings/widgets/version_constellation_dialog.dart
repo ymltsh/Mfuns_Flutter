@@ -15,8 +15,9 @@ class VersionConstellationDialog extends StatefulWidget {
 }
 
 class _VersionConstellationDialogState extends State<VersionConstellationDialog>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _controller;
+  late final AnimationController _ambientController;
 
   @override
   void initState() {
@@ -25,6 +26,10 @@ class _VersionConstellationDialogState extends State<VersionConstellationDialog>
       vsync: this,
       duration: const Duration(milliseconds: 6200),
     )..forward();
+    _ambientController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 22),
+    )..repeat();
   }
 
   double _reveal(double start, double end) =>
@@ -33,6 +38,7 @@ class _VersionConstellationDialogState extends State<VersionConstellationDialog>
   @override
   void dispose() {
     _controller.dispose();
+    _ambientController.dispose();
     super.dispose();
   }
 
@@ -42,14 +48,21 @@ class _VersionConstellationDialogState extends State<VersionConstellationDialog>
     return Material(
       color: Colors.black,
       child: AnimatedBuilder(
-        animation: _controller,
+        animation: Listenable.merge([_controller, _ambientController]),
         builder: (context, _) {
           return Stack(
             fit: StackFit.expand,
             children: [
+              _DeepStarfield(
+                revealProgress: _reveal(0, 0.24),
+                ambientProgress: _ambientController.value,
+              ),
+              _AnimatedStarfield(
+                revealProgress: _reveal(0, 0.28),
+                ambientProgress: _ambientController.value,
+              ),
               CustomPaint(
-                painter: _CasSequencePainter(
-                  backgroundProgress: _reveal(0, 0.28),
+                painter: _CygSequencePainter(
                   constellationProgress: _reveal(0.25, 0.5),
                   lineProgress: _reveal(0.48, 0.76),
                 ),
@@ -162,6 +175,110 @@ class _VersionConstellationDialogState extends State<VersionConstellationDialog>
   }
 }
 
+class _DeepStarfield extends StatelessWidget {
+  const _DeepStarfield({
+    required this.revealProgress,
+    required this.ambientProgress,
+  });
+
+  final double revealProgress;
+  final double ambientProgress;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+        painter: _DeepStarfieldPainter(
+          revealProgress: revealProgress,
+          ambientProgress: ambientProgress,
+        ),
+      );
+}
+
+class _DeepStarfieldPainter extends CustomPainter {
+  const _DeepStarfieldPainter({
+    required this.revealProgress,
+    required this.ambientProgress,
+  });
+
+  final double revealProgress;
+  final double ambientProgress;
+
+  static final _stars = _generateStars();
+
+  static List<({Offset position, double radius, double phase, double alpha})>
+      _generateStars() {
+    final random = math.Random(0x435947);
+    return List.generate(120, (_) {
+      return (
+        position: Offset(random.nextDouble(), random.nextDouble()),
+        radius: 0.28 + random.nextDouble() * 0.72,
+        phase: random.nextDouble() * math.pi * 2,
+        alpha: 0.16 + random.nextDouble() * 0.3,
+      );
+    }, growable: false);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = Colors.black);
+    final cycle = ambientProgress * math.pi * 2;
+    final drift = Offset(math.sin(cycle) * -5, math.cos(cycle) * -3);
+    for (final star in _stars) {
+      final depth = 0.35 + star.radius * 0.45;
+      final center = Offset(
+        (star.position.dx * size.width + drift.dx * depth) % size.width,
+        (star.position.dy * size.height + drift.dy * depth) % size.height,
+      );
+      final twinkle =
+          0.62 + 0.38 * ((math.sin(cycle * 0.7 + star.phase) + 1) / 2);
+      canvas.drawCircle(
+        center,
+        star.radius,
+        Paint()
+          ..color = Colors.white.withOpacity(
+            revealProgress * star.alpha * twinkle,
+          ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DeepStarfieldPainter oldDelegate) =>
+      revealProgress != oldDelegate.revealProgress ||
+      ambientProgress != oldDelegate.ambientProgress;
+}
+
+class _AnimatedStarfield extends StatelessWidget {
+  const _AnimatedStarfield({
+    required this.revealProgress,
+    required this.ambientProgress,
+  });
+
+  final double revealProgress;
+  final double ambientProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    final cycle = (1 - math.cos(ambientProgress * math.pi * 2)) / 2;
+    final brightness = 0.58 + cycle * 0.28;
+    final scale = 1.04 + cycle * 0.12;
+    return ClipRect(
+      child: Opacity(
+        opacity: revealProgress * brightness,
+        child: Transform.scale(
+          scale: scale,
+          child: Image.asset(
+            'assets/constellation_starfield.png',
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+            filterQuality: FilterQuality.medium,
+            gaplessPlayback: true,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FadeUp extends StatelessWidget {
   const _FadeUp({required this.progress, required this.child});
 
@@ -178,85 +295,35 @@ class _FadeUp extends StatelessWidget {
       );
 }
 
-class _CasSequencePainter extends CustomPainter {
-  const _CasSequencePainter({
-    required this.backgroundProgress,
+class _CygSequencePainter extends CustomPainter {
+  const _CygSequencePainter({
     required this.constellationProgress,
     required this.lineProgress,
   });
 
-  final double backgroundProgress;
   final double constellationProgress;
   final double lineProgress;
 
-  // Fixed, deliberately irregular field based on the white star language of
-  // NASA's meatball mark: mostly pinpoints with a few four-ray flare stars.
-  static const _backgroundStars =
-      <({Offset position, double radius, bool flare})>[
-    (position: Offset(0.08, 0.16), radius: 0.7, flare: false),
-    (position: Offset(0.19, 0.08), radius: 0.5, flare: false),
-    (position: Offset(0.31, 0.14), radius: 0.8, flare: false),
-    (position: Offset(0.46, 0.07), radius: 0.55, flare: false),
-    (position: Offset(0.63, 0.12), radius: 0.65, flare: false),
-    (position: Offset(0.79, 0.06), radius: 0.45, flare: false),
-    (position: Offset(0.91, 0.17), radius: 0.75, flare: false),
-    (position: Offset(0.13, 0.29), radius: 0.5, flare: false),
-    (position: Offset(0.25, 0.23), radius: 1.1, flare: true),
-    (position: Offset(0.39, 0.31), radius: 0.45, flare: false),
-    (position: Offset(0.55, 0.21), radius: 0.75, flare: false),
-    (position: Offset(0.7, 0.28), radius: 0.5, flare: false),
-    (position: Offset(0.84, 0.24), radius: 0.9, flare: false),
-    (position: Offset(0.95, 0.34), radius: 0.5, flare: false),
-    (position: Offset(0.05, 0.43), radius: 0.45, flare: false),
-    (position: Offset(0.17, 0.39), radius: 0.7, flare: false),
-    (position: Offset(0.3, 0.46), radius: 0.55, flare: false),
-    (position: Offset(0.43, 0.4), radius: 0.45, flare: false),
-    (position: Offset(0.58, 0.47), radius: 1.0, flare: true),
-    (position: Offset(0.74, 0.38), radius: 0.6, flare: false),
-    (position: Offset(0.88, 0.45), radius: 0.45, flare: false),
-    (position: Offset(0.1, 0.57), radius: 0.8, flare: false),
-    (position: Offset(0.22, 0.53), radius: 0.45, flare: false),
-    (position: Offset(0.36, 0.61), radius: 0.6, flare: false),
-    (position: Offset(0.49, 0.55), radius: 0.45, flare: false),
-    (position: Offset(0.65, 0.63), radius: 0.75, flare: false),
-    (position: Offset(0.8, 0.54), radius: 0.5, flare: false),
-    (position: Offset(0.93, 0.6), radius: 0.8, flare: false),
-    (position: Offset(0.04, 0.72), radius: 0.5, flare: false),
-    (position: Offset(0.16, 0.68), radius: 0.45, flare: false),
-    (position: Offset(0.28, 0.77), radius: 1.05, flare: true),
-    (position: Offset(0.42, 0.7), radius: 0.55, flare: false),
-    (position: Offset(0.56, 0.79), radius: 0.45, flare: false),
-    (position: Offset(0.71, 0.72), radius: 0.7, flare: false),
-    (position: Offset(0.85, 0.8), radius: 0.55, flare: false),
-    (position: Offset(0.96, 0.7), radius: 0.45, flare: false),
-    (position: Offset(0.09, 0.88), radius: 0.75, flare: false),
-    (position: Offset(0.21, 0.94), radius: 0.45, flare: false),
-    (position: Offset(0.35, 0.86), radius: 0.6, flare: false),
-    (position: Offset(0.5, 0.93), radius: 0.45, flare: false),
-    (position: Offset(0.64, 0.87), radius: 0.9, flare: true),
-    (position: Offset(0.77, 0.95), radius: 0.5, flare: false),
-    (position: Offset(0.9, 0.89), radius: 0.65, flare: false),
-  ];
-
   static const _stars = <Offset>[
-    Offset(0.08, 0.28),
-    Offset(0.28, 0.67),
-    Offset(0.5, 0.34),
-    Offset(0.72, 0.7),
-    Offset(0.92, 0.18),
+    Offset(0.50, 0.04),
+    Offset(0.50, 0.46),
+    Offset(0.50, 0.94),
+    Offset(0.30, 0.47),
+    Offset(0.06, 0.55),
+    Offset(0.70, 0.45),
+    Offset(0.94, 0.36),
   ];
   static const _links = <(int, int)>[
     (0, 1),
     (1, 2),
-    (2, 3),
+    (1, 3),
     (3, 4),
+    (1, 5),
+    (5, 6),
   ];
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = Colors.black);
-    _paintBackgroundStars(canvas, size);
-
     final field = Rect.fromCenter(
       center: Offset(size.width / 2, size.height * 0.32),
       width: math.min(size.width * 0.72, 560),
@@ -270,49 +337,6 @@ class _CasSequencePainter extends CustomPainter {
         .toList(growable: false);
     _paintConstellationStars(canvas, points);
     _paintLines(canvas, points);
-  }
-
-  void _paintBackgroundStars(Canvas canvas, Size size) {
-    final count = _backgroundStars.length;
-    final visible = (backgroundProgress * count).ceil().clamp(0, count);
-    for (var i = 0; i < visible; i++) {
-      final star = _backgroundStars[i];
-      final center = Offset(
-        star.position.dx * size.width,
-        star.position.dy * size.height,
-      );
-      final localFade = (backgroundProgress * count - i).clamp(0.0, 1.0);
-      canvas.drawCircle(
-        center,
-        star.radius,
-        Paint()..color = Colors.white.withOpacity(0.68 * localFade),
-      );
-      if (star.flare) _paintFlareStar(canvas, center, star.radius, localFade);
-    }
-  }
-
-  void _paintFlareStar(
-    Canvas canvas,
-    Offset center,
-    double radius,
-    double opacity,
-  ) {
-    final rayPaint = Paint()
-      ..color = Colors.white.withOpacity(0.46 * opacity)
-      ..strokeWidth = 0.7
-      ..strokeCap = StrokeCap.round;
-    final horizontal = radius * 3.6;
-    final vertical = radius * 5.2;
-    canvas.drawLine(
-      center.translate(-horizontal, 0),
-      center.translate(horizontal, 0),
-      rayPaint,
-    );
-    canvas.drawLine(
-      center.translate(0, -vertical),
-      center.translate(0, vertical),
-      rayPaint,
-    );
   }
 
   void _paintConstellationStars(Canvas canvas, List<Offset> points) {
@@ -354,8 +378,7 @@ class _CasSequencePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _CasSequencePainter oldDelegate) =>
-      backgroundProgress != oldDelegate.backgroundProgress ||
+  bool shouldRepaint(covariant _CygSequencePainter oldDelegate) =>
       constellationProgress != oldDelegate.constellationProgress ||
       lineProgress != oldDelegate.lineProgress;
 }

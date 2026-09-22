@@ -10,6 +10,13 @@ void main() {
       'status': 1,
       'created_at': 1786000000,
       'cover': '/static/list-cover.jpg',
+      'resource': {
+        'like_count': 12,
+        'comment_count': '5',
+        'view_count': 320,
+        'favorite_count': 7,
+        'visibility': 1,
+      },
     });
     expect(item.id, 99);
     expect(item.resourceId, 12345);
@@ -18,6 +25,11 @@ void main() {
     expect(item.statusLabel, '已发布');
     expect(item.createdAt, isNotNull);
     expect(item.cover, 'https://cdn2.mfuns.net/static/list-cover.jpg');
+    expect(item.likes, 12);
+    expect(item.comments, 5);
+    expect(item.views, 320);
+    expect(item.favorites, 7);
+    expect(item.visibility, 1);
   });
 
   test('parses submission detail from a nested contribute object', () {
@@ -32,7 +44,8 @@ void main() {
         'category_id': 44,
         'tags': ['Flutter', '教程'],
         'cover': '/static/cover.jpg',
-        'videos': '[{"type":"direct","content":7788,"title":"第一集",'
+        'videos':
+            '[{"type":"direct","content":7788,"title":"第一集",'
             '"meta":{"duration":120},"transcode_status":1}]',
       },
     });
@@ -65,35 +78,37 @@ void main() {
     expect(submissionStatusLabel(5), '定时发布');
   });
 
-  test('submission page uses total to determine whether another page exists',
-      () {
-    final first = SubmissionItemsPage.fromData(
-      {
-        'list': [
-          {'id': 3, 'title': '稿件 3'},
-          {'id': 2, 'title': '稿件 2'},
-        ],
-        'total': 3,
-      },
-      page: 1,
-      size: 2,
-    );
-    final last = SubmissionItemsPage.fromData(
-      {
-        'list': [
-          {'id': 1, 'title': '稿件 1'},
-        ],
-        'total': 3,
-      },
-      page: 2,
-      size: 2,
-    );
+  test(
+    'submission page uses total to determine whether another page exists',
+    () {
+      final first = SubmissionItemsPage.fromData(
+        {
+          'list': [
+            {'id': 3, 'title': '稿件 3'},
+            {'id': 2, 'title': '稿件 2'},
+          ],
+          'total': 3,
+        },
+        page: 1,
+        size: 2,
+      );
+      final last = SubmissionItemsPage.fromData(
+        {
+          'list': [
+            {'id': 1, 'title': '稿件 1'},
+          ],
+          'total': 3,
+        },
+        page: 2,
+        size: 2,
+      );
 
-    expect(first.items.map((item) => item.id), [3, 2]);
-    expect(first.hasMore, isTrue);
-    expect(first.total, 3);
-    expect(last.hasMore, isFalse);
-  });
+      expect(first.items.map((item) => item.id), [3, 2]);
+      expect(first.hasMore, isTrue);
+      expect(first.total, 3);
+      expect(last.hasMore, isFalse);
+    },
+  );
 
   test('submission page supports nested data and missing total fallback', () {
     final page = SubmissionItemsPage.fromData(

@@ -10,8 +10,9 @@ SystemUiOverlayStyle appSystemUiOverlayStyle({
   required Brightness brightness,
   Brightness statusBarIconBrightness = Brightness.light,
 }) {
-  final navigationIconBrightness =
-      brightness == Brightness.dark ? Brightness.light : Brightness.dark;
+  final navigationIconBrightness = brightness == Brightness.dark
+      ? Brightness.light
+      : Brightness.dark;
   return SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: statusBarIconBrightness,
@@ -87,17 +88,16 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Color? chip,
     Color? placeholder,
     Color? divider,
-  }) =>
-      AppPalette(
-        primary: primary ?? this.primary,
-        accent: accent ?? this.accent,
-        surface: surface ?? this.surface,
-        ink: ink ?? this.ink,
-        muted: muted ?? this.muted,
-        chip: chip ?? this.chip,
-        placeholder: placeholder ?? this.placeholder,
-        divider: divider ?? this.divider,
-      );
+  }) => AppPalette(
+    primary: primary ?? this.primary,
+    accent: accent ?? this.accent,
+    surface: surface ?? this.surface,
+    ink: ink ?? this.ink,
+    muted: muted ?? this.muted,
+    chip: chip ?? this.chip,
+    placeholder: placeholder ?? this.placeholder,
+    divider: divider ?? this.divider,
+  );
 
   @override
   AppPalette lerp(AppPalette? other, double t) {
@@ -115,8 +115,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
   }
 }
 
-AppPalette appPaletteFromSeed(Color seed,
-    {Brightness brightness = Brightness.light}) {
+AppPalette appPaletteFromSeed(
+  Color seed, {
+  Brightness brightness = Brightness.light,
+}) {
   final dark = brightness == Brightness.dark;
   final hue = HSLColor.fromColor(seed).hue;
   return AppPalette(
@@ -135,18 +137,18 @@ AppPalette appPaletteFromSeed(Color seed,
   );
 }
 
-ThemeData buildAppTheme(Color seed,
-    {Brightness brightness = Brightness.light}) {
+ThemeData buildAppTheme(
+  Color seed, {
+  Brightness brightness = Brightness.light,
+}) {
   final dark = brightness == Brightness.dark;
   final palette = appPaletteFromSeed(seed, brightness: brightness);
   return ThemeData(
     useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: brightness,
-    ),
-    scaffoldBackgroundColor:
-        dark ? const Color(0xFF121419) : const Color(0xfffafaff),
+    colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: brightness),
+    scaffoldBackgroundColor: dark
+        ? const Color(0xFF121419)
+        : const Color(0xfffafaff),
     appBarTheme: AppBarTheme(
       backgroundColor: palette.primary,
       foregroundColor: Colors.white,
@@ -157,7 +159,7 @@ ThemeData buildAppTheme(Color seed,
         statusBarIconBrightness: Brightness.light,
       ),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 0,
       margin: EdgeInsets.zero,
       surfaceTintColor: Colors.transparent,

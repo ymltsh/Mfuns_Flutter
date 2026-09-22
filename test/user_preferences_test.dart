@@ -26,4 +26,22 @@ void main() {
       ProfileEntryLayout.card,
     );
   });
+
+  test('详情页评论输入框默认收纳并可持久化完整显示设置', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    expect(await UserPreferences.loadFullCommentInput(), isFalse);
+
+    await UserPreferences.saveFullCommentInput(true);
+    expect(await UserPreferences.loadFullCommentInput(), isTrue);
+  });
+
+  test('文章工具按钮默认关闭并可持久化开启设置', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    expect(await UserPreferences.loadArticleToolsFab(), isFalse);
+
+    await UserPreferences.saveArticleToolsFab(true);
+    expect(await UserPreferences.loadArticleToolsFab(), isTrue);
+  });
 }

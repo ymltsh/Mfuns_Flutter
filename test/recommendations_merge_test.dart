@@ -56,12 +56,32 @@ void main() {
   test('caps the list at 100 and drops the oldest entries', () {
     final fresh = List.generate(10, (i) => _preview(1000 + i));
     final existing = List.generate(95, (i) => _preview(i));
-    final merged =
-        AppController.mergeRecommendations(fresh, existing);
+    final merged = AppController.mergeRecommendations(fresh, existing);
 
     expect(merged.length, AppController.maxRecommendations);
     expect(merged.first.id, 1000);
     expect(merged.last.id, 89);
     expect(_ids(merged), containsAll(List.generate(10, (i) => 1000 + i)));
+  });
+
+  test('bottom loading appends unseen recommendations in response order', () {
+    final merged = AppController.appendRecommendations(
+      [_preview(1), _preview(2)],
+      [_preview(2), _preview(3), _preview(4)],
+    );
+
+    expect(_ids(merged), [1, 2, 3, 4]);
+  });
+
+  test('bottom loading keeps the newest tail when the cache reaches its cap',
+      () {
+    final existing = List.generate(100, _preview);
+    final fresh = List.generate(10, (index) => _preview(100 + index));
+
+    final merged = AppController.appendRecommendations(existing, fresh);
+
+    expect(merged.length, AppController.maxRecommendations);
+    expect(merged.first.id, 10);
+    expect(merged.last.id, 109);
   });
 }

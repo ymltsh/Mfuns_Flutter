@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
+import 'package:markdown/markdown.dart' as md;
 
 /// 把服务端返回的富文本（HTML / Quill JSON / 纯文本）规范化为 Markdown。
 ///
@@ -25,9 +26,73 @@ String normalizeRichContent(String source) {
   }
   if (!RegExp(r'<[A-Za-z][^>]*>').hasMatch(value)) return value;
   final root = html_parser.parseFragment(value);
-  return _renderChildren(root.nodes)
+  return _renderChildren(
+    root.nodes,
+  ).replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+}
+
+/// 将文章富文本转换成适合系统文本选择与剪贴板的纯文本。
+///
+/// 阅读页继续使用 Markdown 展示；专用复制页使用此结果，避免把 HTML、
+/// Markdown 标记或图片地址一并复制给用户。
+String richContentToPlainText(String source) {
+  final markdown = normalizeRichContent(source);
+  if (markdown.isEmpty) return '';
+  final document = md.Document(extensionSet: md.ExtensionSet.gitHubFlavored);
+  final blocks = document.parseLines(markdown.split('\n'));
+  return blocks
+      .map(_plainTextBlock)
+      .where((block) => block.isNotEmpty)
+      .join('\n\n')
       .replaceAll(RegExp(r'\n{3,}'), '\n\n')
       .trim();
+}
+
+String _plainTextBlock(md.Node node) {
+  if (node is md.Text) return node.text.trim();
+  if (node is! md.Element) return '';
+  switch (node.tag) {
+    case 'ul':
+      return _plainTextList(node, ordered: false);
+    case 'ol':
+      return _plainTextList(node, ordered: true);
+    case 'blockquote':
+      return _plainTextChildren(node).trim();
+    case 'hr':
+      return '——';
+    default:
+      return _plainTextChildren(node).trim();
+  }
+}
+
+String _plainTextList(md.Element list, {required bool ordered}) {
+  var index = 1;
+  final lines = <String>[];
+  for (final child in list.children ?? const <md.Node>[]) {
+    if (child is! md.Element || child.tag != 'li') continue;
+    final text = _plainTextChildren(child).trim();
+    if (text.isEmpty) continue;
+    final prefix = ordered ? '${index++}.' : '•';
+    lines.add('$prefix $text');
+  }
+  return lines.join('\n');
+}
+
+String _plainTextChildren(md.Element element) =>
+    (element.children ?? const <md.Node>[]).map(_plainTextInline).join();
+
+String _plainTextInline(md.Node node) {
+  if (node is md.Text) return node.text;
+  if (node is! md.Element) return '';
+  if (node.tag == 'br') return '\n';
+  if (node.tag == 'img') {
+    final alt = node.attributes['alt']?.trim() ?? '';
+    if (alt.startsWith('sticker:')) {
+      return '[${alt.substring('sticker:'.length)}]';
+    }
+    return alt.isEmpty ? '[图片]' : '[$alt]';
+  }
+  return _plainTextChildren(node);
 }
 
 String _quillToMarkdown(List<dynamic> ops) {
@@ -65,7 +130,7 @@ String _quillToMarkdown(List<dynamic> ops) {
           'https://resource.mfuns.net/image/sticker/x.png)',
         );
       }
-      final image = safeHttpUri('${insert['image'] ?? ''}');
+      final image = safeMediaUri('${insert['image'] ?? ''}');
       if (image != null) line.write('![图片]($image)');
       continue;
     }
@@ -151,9 +216,10 @@ String _renderNode(dom.Node node) {
       final link = safeHttpUri(node.attributes['href']);
       return link == null || text.isEmpty ? text : '[$text]($link)';
     case 'img':
-      final image = safeHttpUri(node.attributes['src']);
-      final isSticker =
-          (node.attributes['class'] ?? '').toLowerCase().contains('sticker');
+      final image = safeMediaUri(node.attributes['src']);
+      final isSticker = (node.attributes['class'] ?? '').toLowerCase().contains(
+        'sticker',
+      );
       if (isSticker) {
         final key = _stickerKey(node.attributes['alt'], node.attributes['src']);
         if (key != null && image != null) return '![sticker:$key]($image)';
@@ -185,6 +251,22 @@ Uri? safeHttpUri(String? value) {
     return null;
   }
   return uri;
+}
+
+/// 正文图片除了完整 http(s) URL，还可能以 Mfuns 的 `/static/...` 或
+/// `static/...` 路径返回。编辑和预览时必须补全 CDN 主机，否则再次保存会
+/// 静默丢失这些图片。
+Uri? safeMediaUri(String? value) {
+  final raw = value?.trim() ?? '';
+  if (raw.isEmpty) return null;
+  if (raw.startsWith('//')) return safeHttpUri(raw);
+  if (raw.startsWith('/')) {
+    return Uri.parse('https://cdn2.mfuns.net$raw');
+  }
+  if (raw.startsWith('static/')) {
+    return Uri.parse('https://cdn2.mfuns.net/$raw');
+  }
+  return safeHttpUri(raw);
 }
 
 /// Extracts the `pack-id` sticker key from an `<img>` alt (`[s-1]`) or from

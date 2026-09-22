@@ -1,19 +1,8 @@
 # 更新发布流程（Update.md）
 
 本文档说明 Mfuns Flutter 的版本发布流程与「检查更新」接口的维护方式。
-Environment：C:\Users\YGen\Documents\flutter
+Environment：path
 默认情况只推送version.json和GitHub 发布页 | `https://github.com/ymltsh/Mfuns_Flutter/releases/latest`，代码提交全仓库提交耗时过长，所以默认不这么做。
-
-## 当前待发布更新说明
-
-工作区当前已完成、待纳入下一版本的功能改动如下，发布时可直接整理为 `version.json` 的 `latest.notes`：
-
-- 新增黑名单管理，可在用户主页、私信详情和设置中拉黑或解除拉黑用户。
-- 用户主页支持系统分享，系统分享不可用时自动复制分享内容。
-- 私信气泡支持长按复制文本消息。
-- 修复楼中楼回复的“回复 + @用户 + ：”内容保存与展示不一致的问题。
-
-发布前仍需按本文档的版本号、构建号、检查、构建和 GitHub Release 流程执行；本节只记录功能变更，不代表版本号已经更新或发布完成。
 
 ## 一、检查更新接口
 

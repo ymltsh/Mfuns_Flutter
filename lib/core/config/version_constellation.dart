@@ -15,11 +15,11 @@ class VersionConstellation {
   final String latinName;
   final String tagline;
 
-  /// Current 1.5.x releases still use the CAS constellation codename.
+  /// Current 1.6.x releases use the CYG constellation codename.
   static const current = VersionConstellation(
-    releaseLine: '1.5',
-    name: '仙后座',
-    latinName: 'CAS',
-    tagline: '守望北天，于长夜中指引方向。',
+    releaseLine: '1.6',
+    name: '天鹅座',
+    latinName: 'CYG',
+    tagline: '振翼越过长夜，向更远的星河启程。',
   );
 }

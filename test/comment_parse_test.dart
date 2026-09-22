@@ -2,6 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mfuns_flutter/features/home/home_repository.dart';
 
 void main() {
+  test('moves the pinned comment to the top of the display list', () {
+    final first = CommunityComment.fromJson({'id': 1, 'content': '第一条'});
+    final pinned = CommunityComment.fromJson({'id': 2, 'content': '置顶条'});
+    final page = CommunityCommentPage(
+      comments: [first, pinned],
+      pinnedCommentId: 2,
+    );
+
+    expect(page.displayComments.map((comment) => comment.id), [2, 1]);
+  });
+
   test('parses a comment with an embedded user object', () {
     final comment = CommunityComment.fromJson({
       'id': 101,
@@ -11,11 +22,7 @@ void main() {
       'like_count': 3,
       'reply_count': 1,
       'created_at': '2026-08-11 10:00:00',
-      'user': {
-        'id': 7,
-        'name': '小明',
-        'avatar': '/static/comment_avatar.png',
-      },
+      'user': {'id': 7, 'name': '小明', 'avatar': '/static/comment_avatar.png'},
     });
     expect(comment.id, 101);
     expect(comment.userId, 7);
@@ -132,7 +139,9 @@ void main() {
       const CommentSpan.mention('38461', '少女乌斯'),
       const CommentSpan.text('QWQ'),
     ]);
-    expect(payload,
-        '{"ops":[{"insert":{"mention":{"id":"38461","value":"少女乌斯"}}},{"insert":"QWQ\\n"}]}');
+    expect(
+      payload,
+      '{"ops":[{"insert":{"mention":{"id":"38461","value":"少女乌斯"}}},{"insert":"QWQ\\n"}]}',
+    );
   });
 }

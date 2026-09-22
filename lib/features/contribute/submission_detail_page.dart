@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
 import '../../core/theme/app_theme.dart';
+import '../content/rich_content_card.dart';
 import '../home/home_repository.dart';
 import '../home/tag_articles_page.dart';
 import 'submission_editor_page.dart';
@@ -66,13 +67,16 @@ class _SubmissionDetailPageState extends State<SubmissionDetailPage> {
     if (confirmed != true || !mounted) return;
     try {
       await widget.controller.deleteSubmission(
-          type: widget.type, contributeId: widget.contributeId);
+        type: widget.type,
+        contributeId: widget.contributeId,
+      );
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('删除失败：$error')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('删除失败：$error')));
       }
     }
   }
@@ -126,14 +130,17 @@ class _SubmissionDetailPageState extends State<SubmissionDetailPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('加载失败：${snapshot.error}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppPalette.of(context).muted)),
+                    Text(
+                      '加载失败：${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppPalette.of(context).muted),
+                    ),
                     const SizedBox(height: 10),
                     TextButton.icon(
-                        onPressed: _reload,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('重试')),
+                      onPressed: _reload,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('重试'),
+                    ),
                   ],
                 ),
               ),
@@ -146,50 +153,65 @@ class _SubmissionDetailPageState extends State<SubmissionDetailPage> {
               Row(
                 children: [
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: palette.primary.withOpacity(.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: Text(detail.statusLabel,
-                        style: TextStyle(color: palette.primary, fontSize: 12)),
+                    child: Text(
+                      detail.statusLabel,
+                      style: TextStyle(color: palette.primary, fontSize: 12),
+                    ),
                   ),
                   if (detail.resourceId != null) ...[
                     const SizedBox(width: 8),
-                    Text('资源 ID ${detail.resourceId}',
-                        style: TextStyle(
-                            color: AppPalette.of(context).muted, fontSize: 12)),
+                    Text(
+                      '资源 ID ${detail.resourceId}',
+                      style: TextStyle(
+                        color: AppPalette.of(context).muted,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ],
               ),
               const SizedBox(height: 10),
-              Text(detail.title.isEmpty ? '未命名投稿' : detail.title,
-                  style: TextStyle(
-                      color: AppPalette.of(context).muted,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800)),
+              Text(
+                detail.title.isEmpty ? '未命名投稿' : detail.title,
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               if (detail.tags.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
                   children: detail.tags
-                      .map((tag) => ActionChip(
-                            label: Text('#$tag',
-                                style: const TextStyle(fontSize: 12)),
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => TagArticlesPage(
-                                  controller: widget.controller,
-                                  tag: tag,
-                                ),
+                      .map(
+                        (tag) => ActionChip(
+                          label: Text(
+                            '#$tag',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => TagArticlesPage(
+                                controller: widget.controller,
+                                tag: tag,
                               ),
                             ),
-                          ))
+                          ),
+                        ),
+                      )
                       .toList(),
                 ),
               ],
@@ -199,24 +221,44 @@ class _SubmissionDetailPageState extends State<SubmissionDetailPage> {
                   borderRadius: BorderRadius.circular(10),
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
-                    child: Image.network(detail.cover,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => ColoredBox(
-                              color: AppPalette.of(context).placeholder,
-                              child: Icon(Icons.image_outlined,
-                                  color: AppPalette.of(context).muted),
-                            )),
+                    child: Image.network(
+                      detail.cover,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => ColoredBox(
+                        color: AppPalette.of(context).placeholder,
+                        child: Icon(
+                          Icons.image_outlined,
+                          color: AppPalette.of(context).muted,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
               const SizedBox(height: 16),
               Text(
-                detail.content.isEmpty ? '（暂无简介内容）' : detail.content,
-                style: TextStyle(
+                widget.type == 0 ? '正文预览' : '简介',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              if (detail.rawContent.isEmpty)
+                Text(
+                  '（暂无内容）',
+                  style: TextStyle(color: AppPalette.of(context).muted),
+                )
+              else if (widget.type == 0)
+                RichContentCard(source: detail.rawContent)
+              else
+                SelectableText(
+                  detail.content,
+                  style: TextStyle(
                     color: AppPalette.of(context).muted,
                     height: 1.6,
-                    fontSize: 15),
-              ),
+                    fontSize: 15,
+                  ),
+                ),
             ],
           );
         },
