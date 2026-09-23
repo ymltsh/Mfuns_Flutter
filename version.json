@@ -1,17 +1,30 @@
 {
   "latest": {
-    "version": "1.6.4",
-    "build": 60,
-    "name": "Mfuns Flutter v1.6.4 天鹅座",
+    "version": "1.6.5",
+    "build": 61,
+    "name": "Mfuns Flutter v1.6.5 天鹅座",
     "date": "2026-09-23",
-    "notes": "修复\n- 修复文章正文图片加载时滚动位置跳动\n\n新增\n- 恢复可拖动的文章阅读进度滑块，并支持设置开关\n- 点击文章正文图片可查看原图",
+    "notes": "新增\n- 提供 Windows 基础安装程序，同时保留便携版\n\n优化\n- 文章阅读进度滑块缩至半屏并在右侧居中\n- 发布评论后自动跳转到评论区底部\n- 优化文章图片加载与原图查看体验\n- 修复关注状态刷新与互相关注显示",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.4/mfuns-flutter-1.6.4.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.4/mfuns-flutter-windows-1.6.4.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.5/mfuns-flutter-1.6.5.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.5/mfuns-flutter-setup-1.6.5.exe",
+      "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.5/mfuns-flutter-windows-1.6.5.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.4"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.5"
   },
   "history": [
+    {
+      "version": "1.6.4",
+      "build": 60,
+      "name": "Mfuns Flutter v1.6.4 天鹅座",
+      "date": "2026-09-23",
+      "notes": "修复\n- 修复文章正文图片加载时滚动位置跳动\n\n新增\n- 恢复可拖动的文章阅读进度滑块，并支持设置开关\n- 点击文章正文图片可查看原图",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.4/mfuns-flutter-1.6.4.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.4/mfuns-flutter-windows-1.6.4.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.4"
+    },
     {
       "version": "1.6.3",
       "build": 59,
