@@ -1,17 +1,29 @@
 {
   "latest": {
-    "version": "1.6.3",
-    "build": 59,
-    "name": "Mfuns Flutter v1.6.3 天鹅座",
-    "date": "2026-09-21",
-    "notes": "新增\n- 完善黑名单管理与用户主页分享\n- 增强文章、动态及评论互动体验\n\n优化\n- 优化视频播放、投屏控制和详情页交互\n- 优化首页、标签内容及投稿管理体验",
+    "version": "1.6.4",
+    "build": 60,
+    "name": "Mfuns Flutter v1.6.4 天鹅座",
+    "date": "2026-09-23",
+    "notes": "修复\n- 修复文章正文图片加载时滚动位置跳动\n\n新增\n- 恢复可拖动的文章阅读进度滑块，并支持设置开关\n- 点击文章正文图片可查看原图",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.3/mfuns-flutter-1.6.3.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.3/mfuns-flutter-windows-1.6.3.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.4/mfuns-flutter-1.6.4.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.4/mfuns-flutter-windows-1.6.4.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.3"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.4"
   },
   "history": [
+    {
+      "version": "1.6.3",
+      "build": 59,
+      "name": "Mfuns Flutter v1.6.3 天鹅座",
+      "date": "2026-09-21",
+      "notes": "新增\n- 完善黑名单管理与用户主页分享\n- 增强文章、动态及评论互动体验\n\n优化\n- 优化视频播放、投屏控制和详情页交互\n- 优化首页、标签内容及投稿管理体验",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.3/mfuns-flutter-1.6.3.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.3/mfuns-flutter-windows-1.6.3.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.3"
+    },
     {
       "version": "1.6.2",
       "build": 58,
