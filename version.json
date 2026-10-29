@@ -1,18 +1,36 @@
 {
   "latest": {
-    "version": "1.6.7",
-    "build": 63,
-    "name": "Mfuns Flutter v1.6.7 天鹅座",
+    "version": "1.6.8",
+    "build": 64,
+    "name": "Mfuns Flutter v1.6.8 天鹅座",
     "date": "2026-10-30",
-    "notes": "修复\n- 修复断网启动时“我的”页面误显示未登录的问题，保留缓存的账号基础资料，支持联网后重试同步\n- 升级至 Flutter 3.47.8 / Dart 3.13.7，包含 eMudhra TLS 证书安全修复\n\n优化\n- 推荐、排行及动态等页面增加“似乎有问题，请尝试刷新”提示和刷新按钮\n- 新增自适应提示图，适配手机、横屏、桌面宽屏和大字体\n\n兼容性\n- Android 最低支持 Android 7.0（API 24），目标 SDK 更新至 36\n- 提供 Android APK、Windows 安装版和 Windows 便携版",
+    "notes": "优化\n- 提示图宽高缩小至原来的 1/4，改善小屏与大字体下的展示和刷新按钮可操作性\n- Android 安装包按 ARM32、ARM64、x86_64 分别打包，单个包显著缩小\n- 新版客户端检查更新时按系统支持的架构自动选择兼容安装包\n- 发布流程改为全部安装包上传完成后公开版本，再推送更新清单\n\n下载说明\n- 旧版客户端默认下载 ARM64（arm64-v8a）安装包\n- 32 位 Android 与 x86_64 设备请在发布页选择对应安装包，安装新版后自动匹配\n- Android 最低支持 Android 7.0（API 24）；Windows 提供安装版和便携版",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.7/mfuns-flutter-1.6.7.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.7/mfuns-flutter-setup-1.6.7.exe",
-      "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.7/mfuns-flutter-windows-1.6.7.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.8/mfuns-flutter-1.6.8-arm64-v8a.apk",
+      "android_abis": {
+        "armeabi-v7a": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.8/mfuns-flutter-1.6.8-armeabi-v7a.apk",
+        "arm64-v8a": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.8/mfuns-flutter-1.6.8-arm64-v8a.apk",
+        "x86_64": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.8/mfuns-flutter-1.6.8-x86_64.apk"
+      },
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.8/mfuns-flutter-setup-1.6.8.exe",
+      "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.8/mfuns-flutter-windows-1.6.8.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.7"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.8"
   },
   "history": [
+    {
+      "version": "1.6.7",
+      "build": 63,
+      "name": "Mfuns Flutter v1.6.7 天鹅座",
+      "date": "2026-10-30",
+      "notes": "修复\n- 修复断网启动时“我的”页面误显示未登录的问题，保留缓存的账号基础资料，支持联网后重试同步\n- 升级至 Flutter 3.47.8 / Dart 3.13.7，包含 eMudhra TLS 证书安全修复\n\n优化\n- 推荐、排行及动态等页面增加“似乎有问题，请尝试刷新”提示和刷新按钮\n- 新增自适应提示图，适配手机、横屏、桌面宽屏和大字体\n\n兼容性\n- Android 最低支持 Android 7.0（API 24），目标 SDK 更新至 36\n- 提供 Android APK、Windows 安装版和 Windows 便携版",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.7/mfuns-flutter-1.6.7.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.7/mfuns-flutter-setup-1.6.7.exe",
+        "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.7/mfuns-flutter-windows-1.6.7.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.7"
+    },
     {
       "version": "1.6.6",
       "build": 62,
