@@ -5,10 +5,10 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show AssetBundle, rootBundle;
 
-/// Temporary trust-store compatibility for Mfuns' Sectigo E46 API chain.
+/// Temporary trust-store compatibility for Mfuns' Sectigo E46 chain.
 ///
 /// Keeps the operating system's trusted roots and normal TLS validation.
-/// The extra root is used only by HttpClients explicitly created here.
+/// Covers API clients and default Dart HttpClients used by NetworkImage.
 class MfunsTls {
   MfunsTls._();
 
@@ -39,13 +39,15 @@ class MfunsTls {
       throw StateError('Sectigo E46 certificate fingerprint mismatch');
     }
 
-    final context = SecurityContext(withTrustedRoots: true);
     // dart:io requires a single DER certificate on iOS; other platforms
     // accept PEM. Do not use withTrustedRoots:false or badCertificateCallback.
-    context.setTrustedCertificatesBytes(
-      Platform.isIOS ? der : utf8.encode(pem),
-    );
+    final certBytes = Platform.isIOS ? der : utf8.encode(pem);
+    final context = SecurityContext(withTrustedRoots: true)
+      ..setTrustedCertificatesBytes(certBytes);
     _context = context;
+    // NetworkImage 创建自己的 HttpClient，需在 runApp 前补充本 isolate 的默认根。
+    // 仍执行正常 TLS 校验；不影响 WebView、原生播放器等其他网络栈。
+    SecurityContext.defaultContext.setTrustedCertificatesBytes(certBytes);
   }
 
   static HttpClient createHttpClient() => HttpClient(context: _context);

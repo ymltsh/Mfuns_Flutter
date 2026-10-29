@@ -14,6 +14,19 @@ spec.loader.exec_module(release)
 
 
 class ReleaseScriptTest(unittest.TestCase):
+    def test_four_part_hotfix_keeps_legal_pub_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pubspec = Path(directory) / "pubspec.yaml"
+            config = Path(directory) / "app_config.dart"
+            pubspec.write_text("version: 1.6.9+65\n", encoding="utf-8")
+            config.write_text("static const appVersion = '1.6.9';\nstatic const appBuild = 65;", encoding="utf-8")
+            with patch.object(release, "PUBSPEC", str(pubspec)), patch.object(release, "APP_CONFIG", str(config)):
+                release.bump_pubspec("1.6.9.1", 66)
+                release.bump_app_config("1.6.9.1", 66)
+                self.assertEqual(release.current_version(), (1, 6, 9, 66))
+            self.assertEqual(pubspec.read_text(encoding="utf-8").strip(), "version: 1.6.9+66")
+            self.assertIn("appVersion = '1.6.9.1'", config.read_text(encoding="utf-8"))
+
     def test_split_apks_have_exactly_one_correct_abi(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(release, "APK_DIR", directory):
             paths = release.android_apk_paths()

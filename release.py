@@ -178,7 +178,10 @@ def version_string(parts):
 
 def bump_pubspec(version, build):
     text = read_file(PUBSPEC)
-    text = VER_RE.sub(f"version: {version}+{build}", text, count=1)
+    # Pub requires three numeric version components; the app/manifest retain
+    # an optional fourth hotfix component for display and update comparison.
+    package_version = ".".join(version.split(".")[:3])
+    text = VER_RE.sub(f"version: {package_version}+{build}", text, count=1)
     write_file(PUBSPEC, text)
 
 
@@ -414,7 +417,7 @@ def guided_notes():
 def main():
     parser = argparse.ArgumentParser(
         description="Mfuns Flutter 一键发布工具（引导或 CLI 模式）")
-    parser.add_argument("--version", help="新版本号，如 1.1.7")
+    parser.add_argument("--version", help="新版本号，如 1.1.7 或热修复 1.6.9.1")
     parser.add_argument("--build", type=int, help="构建号（默认当前+1）")
     parser.add_argument("--beta", action="store_true", help="Beta 发布（预发布）")
     parser.add_argument("--beta2", action="store_true", help="Beta2 发布（预发布）")
@@ -459,7 +462,7 @@ def main():
         version = args.version
         if not version:
             version = f"{current[0]}.{current[1]}.{current[2] + 1}"
-        if not re.match(r"^\d+\.\d+\.\d+$", version):
+        if not re.match(r"^\d+\.\d+\.\d+(?:\.\d+)?$", version):
             die(f"版本号格式不正确：{version}")
         build = args.build or cur_build + 1
         beta2 = args.beta2

@@ -25,7 +25,7 @@ void main() {
   );
 
   test(
-    'API trust context is dedicated and never sets a certificate bypass',
+    'API and default image clients never set a certificate bypass',
     () async {
       await MfunsTls.initialize();
       final contexts = <SecurityContext?>[];

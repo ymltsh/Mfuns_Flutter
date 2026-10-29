@@ -3,6 +3,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mfuns_flutter/core/network/update_checker.dart';
 
 void main() {
+  test('四段热修复版本与旧三段版本正确比较，构建号只在版本相同时比较', () {
+    expect(UpdateChecker.isNewer('1.6.9.1', 66, '1.6.9', 999), isTrue);
+    expect(UpdateChecker.isNewer('1.6.9', 999, '1.6.9.1', 66), isFalse);
+    expect(UpdateChecker.isNewer('1.6.9.2', 1, '1.6.9.1', 999), isTrue);
+    expect(UpdateChecker.isNewer('1.6.10', 1, '1.6.9.1', 66), isTrue);
+    expect(UpdateChecker.isNewer('1.6.9.1', 66, '1.6.9.1', 66), isFalse);
+    expect(UpdateChecker.isNewer('1.6.9.1', 67, '1.6.9.1', 66), isTrue);
+    expect(UpdateChecker.isNewer('1.6.9.0', 66, '1.6.9', 66), isFalse);
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('按系统 ABI 优先级匹配，兼容 32 位系统与 x86_64', () {

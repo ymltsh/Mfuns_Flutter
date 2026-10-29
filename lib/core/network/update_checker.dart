@@ -126,10 +126,13 @@ class UpdateChecker {
   ) {
     final candidateParts = _versionParts(candidate);
     final currentParts = _versionParts(current);
-    for (var i = 0; i < 3; i++) {
-      if (candidateParts[i] != currentParts[i]) {
-        return candidateParts[i] > currentParts[i];
-      }
+    final length = candidateParts.length > currentParts.length
+        ? candidateParts.length
+        : currentParts.length;
+    for (var i = 0; i < length; i++) {
+      final candidatePart = i < candidateParts.length ? candidateParts[i] : 0;
+      final currentPart = i < currentParts.length ? currentParts[i] : 0;
+      if (candidatePart != currentPart) return candidatePart > currentPart;
     }
     return (candidateBuild ?? 0) > (currentBuild ?? 0);
   }

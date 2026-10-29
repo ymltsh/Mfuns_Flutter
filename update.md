@@ -307,3 +307,7 @@ Invoke-RestMethod "https://hub.wgen.top/https://raw.githubusercontent.com/ymltsh
 | release.py 提示无 GitHub Token | 先 `git push` 一次保存凭据，或使用 `--token` 显式传入 |
 | 发布后构建号与产物不一致 | 避免重复运行 release.py；用 `--build N` 显式指定构建号 |
 | Windows 构建失败（exe 被占用） | 关闭运行中的 mfuns_flutter 后重试（工具引导模式会自动询问） |
+
+### 四段热修复版本
+
+发布脚本支持 `--version 1.6.9.1 --build 66`：发布标签、AppConfig 和更新清单使用完整四段版本；pubspec 与原生包的版本名保留合法三段 `1.6.9+66`。应用内按完整版本及基础构建号比较更新，旧客户端依靠递增构建号获得兼容更新。

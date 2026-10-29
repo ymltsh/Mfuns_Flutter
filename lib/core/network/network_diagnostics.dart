@@ -317,6 +317,7 @@ class NetworkDiagnostics {
     final urls = <String>[
       'https://${AppConfig.apiHost}/',
       'https://${AppConfig.latestMfunsHost}/',
+      'https://resource.mfuns.net/',
       'https://cdn2.mfuns.net/',
       'https://vod.mfuns.net/',
     ];
