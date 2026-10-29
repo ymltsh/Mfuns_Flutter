@@ -1,18 +1,31 @@
 {
   "latest": {
-    "version": "1.6.6",
-    "build": 62,
-    "name": "Mfuns Flutter v1.6.6 天鹅座",
-    "date": "2026-09-30",
-    "notes": "新增\n- 评论区支持取消置顶，文章、动态、评论与私信中的 @用户可进入个人主页\n- 文章阅读进度滑块支持设置开关，发表评论后自动定位到评论区\n- 提供 Windows 基础安装程序并保留便携版\n\n优化\n- 文章内 MA、MV 和用户主页链接高亮，并在应用内打开\n- 用户主页完整显示长简介，完善关注与互相关注状态刷新\n- 纯图片评论与回复直接展示图片，不再显示空文本提示\n- 优化文章图片加载、原图查看与评论区交互",
+    "version": "1.6.7",
+    "build": 63,
+    "name": "Mfuns Flutter v1.6.7 天鹅座",
+    "date": "2026-10-30",
+    "notes": "修复\n- 修复断网启动时“我的”页面误显示未登录的问题，保留缓存的账号基础资料，支持联网后重试同步\n- 升级至 Flutter 3.47.8 / Dart 3.13.7，包含 eMudhra TLS 证书安全修复\n\n优化\n- 推荐、排行及动态等页面增加“似乎有问题，请尝试刷新”提示和刷新按钮\n- 新增自适应提示图，适配手机、横屏、桌面宽屏和大字体\n\n兼容性\n- Android 最低支持 Android 7.0（API 24），目标 SDK 更新至 36\n- 提供 Android APK、Windows 安装版和 Windows 便携版",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.6/mfuns-flutter-1.6.6.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.6/mfuns-flutter-setup-1.6.6.exe",
-      "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.6/mfuns-flutter-windows-1.6.6.zip"
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.7/mfuns-flutter-1.6.7.apk",
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.7/mfuns-flutter-setup-1.6.7.exe",
+      "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.7/mfuns-flutter-windows-1.6.7.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.6"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.7"
   },
   "history": [
+    {
+      "version": "1.6.6",
+      "build": 62,
+      "name": "Mfuns Flutter v1.6.6 天鹅座",
+      "date": "2026-09-30",
+      "notes": "新增\n- 评论区支持取消置顶，文章、动态、评论与私信中的 @用户可进入个人主页\n- 文章阅读进度滑块支持设置开关，发表评论后自动定位到评论区\n- 提供 Windows 基础安装程序并保留便携版\n\n优化\n- 文章内 MA、MV 和用户主页链接高亮，并在应用内打开\n- 用户主页完整显示长简介，完善关注与互相关注状态刷新\n- 纯图片评论与回复直接展示图片，不再显示空文本提示\n- 优化文章图片加载、原图查看与评论区交互",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.6/mfuns-flutter-1.6.6.apk",
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.6/mfuns-flutter-setup-1.6.6.exe",
+        "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.6/mfuns-flutter-windows-1.6.6.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.6"
+    },
     {
       "version": "1.6.5",
       "build": 61,
