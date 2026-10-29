@@ -11,8 +11,8 @@ import '../features/home/home_repository.dart';
 import '../features/latest/latest_mfuns_repository.dart';
 
 class AppController extends ChangeNotifier {
-  AppController({SessionStore? sessionStore})
-    : _api = MfunsApiClient(),
+  AppController({SessionStore? sessionStore, MfunsApiClient? apiClient})
+    : _api = apiClient ?? MfunsApiClient(),
       _sessionStore = sessionStore ?? SessionStore(),
       _recommendations = const [],
       _searchResults = const [],
@@ -88,6 +88,11 @@ class AppController extends ChangeNotifier {
   bool _isLoadingMoreFavorites = false;
   int _submissionTotal = 0;
   UserSession? _session;
+  String? _sessionSyncError;
+  bool _isRefreshingSession = false;
+
+  String? get sessionSyncError => _sessionSyncError;
+  bool get isRefreshingSession => _isRefreshingSession;
 
   /// 本机保存的全部登录账号（含当前账号），按最近使用时间排序。
   List<StoredAccount> _accounts = const [];
@@ -315,8 +320,10 @@ class AppController extends ChangeNotifier {
             _session = restored;
             await _sessionStore.writeAccounts(accounts);
           }
-        } finally {
           await _sessionStore.clearLegacy();
+        } on MfunsApiException {
+          // 迁移遇到断网时保留旧凭证，下次启动继续尝试。
+          _api.clearAccessToken();
         }
       }
     }
@@ -333,13 +340,35 @@ class AppController extends ChangeNotifier {
     if (_session != null) return;
     // 从最近使用的账号开始逐个校验，跳过已失效的，保证启动即登录可用账号。
     for (final account in accounts) {
-      final restored = await _auth.restore(account.accessToken);
+      _session = account.toSession();
+      _api.setAccessToken(account.accessToken);
+      notifyListeners();
+      final restored = await _restoreSavedAccount(account);
       if (restored != null) {
         _session = restored;
+        _accounts = [
+          for (final item in accounts)
+            if (item.key == account.key)
+              StoredAccount.fromSession(restored, lastUsedAt: item.lastUsedAt)
+            else
+              item,
+        ];
         await _persistAccounts();
         return;
       }
+      _session = null;
       _expiredAccountKeys.add(account.key);
+    }
+  }
+
+  Future<UserSession?> _restoreSavedAccount(StoredAccount account) async {
+    _sessionSyncError = null;
+    try {
+      return await _auth.restore(account.accessToken);
+    } on MfunsApiException catch (error) {
+      _sessionSyncError = error.message;
+      _api.setAccessToken(account.accessToken);
+      return account.toSession();
     }
   }
 
@@ -1198,6 +1227,7 @@ class AppController extends ChangeNotifier {
     try {
       final session = await authenticate();
       _session = session;
+      _sessionSyncError = null;
       // 同一账号重复登录时更新已有快照与凭证，其余账号保持不变。
       await _commitActiveSession();
       await loadFavoriteFolders();
@@ -1236,7 +1266,7 @@ class AppController extends ChangeNotifier {
     _isSwitchingAccount = true;
     notifyListeners();
     try {
-      final restored = await _auth.restore(account.accessToken);
+      final restored = await _restoreSavedAccount(account);
       if (restored == null) {
         _expiredAccountKeys.add(account.key);
         // 校验失败会清空客户端 token，需恢复上一个账号的凭证。
@@ -1265,6 +1295,7 @@ class AppController extends ChangeNotifier {
     final activeKey = activeAccountKey;
     _stopUnreadPolling();
     _session = null;
+    _sessionSyncError = null;
     _api.clearAccessToken();
     if (activeKey != null) {
       _accounts = _accounts
@@ -1299,7 +1330,7 @@ class AppController extends ChangeNotifier {
             .compareTo(a.lastUsedAt ?? DateTime.fromMillisecondsSinceEpoch(0)),
       );
     for (final account in ordered) {
-      final restored = await _auth.restore(account.accessToken);
+      final restored = await _restoreSavedAccount(account);
       if (restored == null) {
         _expiredAccountKeys.add(account.key);
         continue;
@@ -1425,7 +1456,8 @@ class AppController extends ChangeNotifier {
 
   Future<void> deleteComment(int commentId) => _home.deleteComment(commentId);
 
-  Future<void> pinComment(int commentId) => _home.pinComment(commentId);
+  Future<void> pinComment(int commentId, {bool cancel = false}) =>
+      _home.pinComment(commentId, cancel: cancel);
 
   /// 投币（需登录）：type 0=文章、1=视频，成功返回服务端消息。
   Future<String> reward({
@@ -1746,11 +1778,32 @@ class AppController extends ChangeNotifier {
   /// everywhere immediately.
   Future<void> refreshSession() async {
     final session = _session;
-    if (session == null) return;
-    final restored = await _auth.restore(session.accessToken);
-    if (restored != null) {
+    if (session == null || _isRefreshingSession) return;
+    _isRefreshingSession = true;
+    notifyListeners();
+    try {
+      final restored = await _auth.restore(session.accessToken);
+      // 校验期间可能发生账号切换或退出，旧响应不能覆盖当前账号。
+      if (!identical(_session, session)) {
+        final current = _session;
+        if (current == null) {
+          _api.clearAccessToken();
+        } else {
+          _api.setAccessToken(current.accessToken);
+        }
+        return;
+      }
+      _sessionSyncError = null;
+      if (restored == null) {
+        _expiredAccountKeys.add(
+          StoredAccount.keyFor(session.userId, session.accessToken),
+        );
+        _session = null;
+        _stopUnreadPolling();
+        _clearUserData();
+        return;
+      }
       _session = restored;
-      // 同步更新已保存账号的用户信息快照（昵称/头像/喵币等），保留最近使用时间。
       final snapshot = StoredAccount.fromSession(restored);
       final updated = <StoredAccount>[];
       var found = false;
@@ -1765,11 +1818,14 @@ class AppController extends ChangeNotifier {
       if (!found) updated.add(snapshot);
       _accounts = updated;
       await _persistAccounts();
+    } on MfunsApiException catch (error) {
+      if (identical(_session, session)) {
+        _sessionSyncError = error.message;
+        _api.setAccessToken(session.accessToken);
+      }
+    } finally {
+      _isRefreshingSession = false;
       notifyListeners();
-    } else {
-      // 校验失败（会话过期或网络异常）都会清空客户端 token：恢复凭证
-      // 保持当前会话可用，具体失效由登录入口/账号管理重新处理。
-      _api.setAccessToken(session.accessToken);
     }
   }
 
@@ -1821,10 +1877,7 @@ class AppController extends ChangeNotifier {
   Future<FollowRelation> followRelation(int userId) {
     final currentUserId = _session?.userId;
     if (currentUserId == null) return Future.value(FollowRelation.none);
-    return _home.getFollowRelation(
-      userId: userId,
-      currentUserId: currentUserId,
-    );
+    return _home.getFollowRelation(userId);
   }
 
   Future<void> setFollow({required int userId, required bool follow}) =>

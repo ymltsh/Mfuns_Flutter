@@ -76,6 +76,7 @@ class ContentSpans extends StatelessWidget {
     this.textStyle,
     this.stickerSize = 42,
     this.onLinkTap,
+    this.onMentionTap,
   });
 
   final List<CommentSpan> spans;
@@ -84,6 +85,9 @@ class ContentSpans extends StatelessWidget {
 
   /// 链接点击回调；为 null 时使用系统浏览器打开。
   final void Function(String url)? onLinkTap;
+
+  /// 点击带有效用户 ID 的 @ 提及时打开该用户主页。
+  final void Function(int userId)? onMentionTap;
 
   @override
   Widget build(BuildContext context) {
@@ -111,9 +115,13 @@ class ContentSpans extends StatelessWidget {
                 ),
               )
             else if (span.isMention)
-              TextSpan(
-                text: '@${span.mentionName}',
-                style: mentionStyle,
+              WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                child: GestureDetector(
+                  onTap: _mentionTap(span.mentionId),
+                  child: Text('@${span.mentionName}', style: mentionStyle),
+                ),
               )
             else
               ..._textSegments(
@@ -130,6 +138,12 @@ class ContentSpans extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  VoidCallback? _mentionTap(String rawId) {
+    final id = int.tryParse(rawId);
+    if (id == null || id <= 0 || onMentionTap == null) return null;
+    return () => onMentionTap!(id);
   }
 
   List<InlineSpan> _textSegments(

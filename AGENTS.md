@@ -6,7 +6,7 @@
 
 - 本项目是 Mfuns 社区的 Flutter 客户端，包名为 `mfuns_flutter`。
 - 主要目标平台为 Android 和 Windows；修改公共 Dart 代码时也要避免无意破坏 iOS 等 Flutter 平台。
-- 当前基线为 Flutter 3.24、Dart 3.5（`pubspec.yaml` 要求 Dart `^3.5.4`）。不要引入需要更高 SDK、Android Gradle Plugin 或 Kotlin 基线的依赖。
+- 当前最低基线为 Flutter 3.47.8、Dart 3.13.7（包含 eMudhra TLS 证书安全修复），Android 使用 AGP 8.11.1、Gradle 8.14.3、Kotlin 2.2.21 和 JDK 17。不要引入需要更高工具链基线的依赖。
 - 应用使用 Material Design，无第三方状态管理框架。全局状态主要由 `AppController`、`ChangeNotifier` 和 `ValueNotifier` 管理，数据访问通过 Repository / Service 层完成。
 - Environment：C:\Users\YGen\Documents\flutter
 - "C:\Users\YGen\Desktop\Doc\Mfuns-Flutter\.idea\mfuns_api_docs.md"
@@ -42,8 +42,8 @@
 
 ## 依赖、版本与生成文件
 
-- 添加或升级依赖前检查 Flutter 3.24、Dart 3.5、AGP 8.1 和 Kotlin 1.8.22 的兼容性，并说明新增依赖的必要性。
-- 修改依赖时提交对应的 `pubspec.lock`，不要随意删除 `dependency_overrides`；其中包含为现有 Android 工具链保留的兼容性约束。
+- 添加或升级依赖前检查 Flutter 3.47.8、Dart 3.13.7、AGP 8.11.1、Gradle 8.14.3 和 Kotlin 2.2.21 的兼容性，并说明新增依赖的必要性。
+- 修改依赖时提交对应的 `pubspec.lock`，不要随意删除 `dependency_overrides`；其中包含保留现有插件 API 和实现的兼容性约束。
 - 版本发布改动需同步核对 `pubspec.yaml`、`lib/core/config/app_config.dart` 和 `version.json`，但普通功能修改不要自行提升版本号。
 - 不编辑或提交 `build/`、`.dart_tool/`、`.flutter-plugins*` 等生成产物。平台插件注册文件应由 Flutter 工具生成，而非手工维护。
 - 不提交网络抓包、密钥、签名材料、个人路径或本地缓存。

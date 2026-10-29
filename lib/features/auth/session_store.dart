@@ -33,6 +33,16 @@ class StoredAccount {
   /// 最近一次登录/切换时间，用于排序与登录失效后的自动回退。
   final DateTime? lastUsedAt;
 
+  UserSession toSession() => UserSession(
+    accessToken: accessToken,
+    userId: userId,
+    displayName: displayName,
+    avatar: avatar,
+    levelId: levelId,
+    exp: exp,
+    nekoCoin: nekoCoin,
+  );
+
   /// 账号在本地存储中的唯一标识：优先 UID，缺失时回退为 token 指纹。
   String get key => keyFor(userId, accessToken);
 
@@ -51,43 +61,42 @@ class StoredAccount {
     double? Function()? nekoCoin,
     DateTime? lastUsedAt,
     bool clearLastUsedAt = false,
-  }) =>
-      StoredAccount(
-        accessToken: accessToken ?? this.accessToken,
-        userId: userId != null ? userId() : this.userId,
-        displayName: displayName ?? this.displayName,
-        avatar: avatar ?? this.avatar,
-        levelId: levelId != null ? levelId() : this.levelId,
-        exp: exp != null ? exp() : this.exp,
-        nekoCoin: nekoCoin != null ? nekoCoin() : this.nekoCoin,
-        lastUsedAt: clearLastUsedAt ? null : (lastUsedAt ?? this.lastUsedAt),
-      );
+  }) => StoredAccount(
+    accessToken: accessToken ?? this.accessToken,
+    userId: userId != null ? userId() : this.userId,
+    displayName: displayName ?? this.displayName,
+    avatar: avatar ?? this.avatar,
+    levelId: levelId != null ? levelId() : this.levelId,
+    exp: exp != null ? exp() : this.exp,
+    nekoCoin: nekoCoin != null ? nekoCoin() : this.nekoCoin,
+    lastUsedAt: clearLastUsedAt ? null : (lastUsedAt ?? this.lastUsedAt),
+  );
 
   /// 用登录后的会话创建存储快照；[lastUsedAt] 缺省时取当前时间。
-  factory StoredAccount.fromSession(UserSession session,
-          {DateTime? lastUsedAt}) =>
-      StoredAccount(
-        accessToken: session.accessToken,
-        userId: session.userId,
-        displayName: session.displayName,
-        avatar: session.avatar,
-        levelId: session.levelId,
-        exp: session.exp,
-        nekoCoin: session.nekoCoin,
-        lastUsedAt: lastUsedAt ?? DateTime.now(),
-      );
+  factory StoredAccount.fromSession(
+    UserSession session, {
+    DateTime? lastUsedAt,
+  }) => StoredAccount(
+    accessToken: session.accessToken,
+    userId: session.userId,
+    displayName: session.displayName,
+    avatar: session.avatar,
+    levelId: session.levelId,
+    exp: session.exp,
+    nekoCoin: session.nekoCoin,
+    lastUsedAt: lastUsedAt ?? DateTime.now(),
+  );
 
   Map<String, Object?> toJson() => {
-        'access_token': accessToken,
-        if (userId != null) 'user_id': userId,
-        'name': displayName,
-        'avatar': avatar,
-        if (levelId != null) 'level_id': levelId,
-        if (exp != null) 'exp': exp,
-        if (nekoCoin != null) 'neko_coin': nekoCoin,
-        if (lastUsedAt != null)
-          'last_used_at': lastUsedAt!.millisecondsSinceEpoch,
-      };
+    'access_token': accessToken,
+    if (userId != null) 'user_id': userId,
+    'name': displayName,
+    'avatar': avatar,
+    if (levelId != null) 'level_id': levelId,
+    if (exp != null) 'exp': exp,
+    if (nekoCoin != null) 'neko_coin': nekoCoin,
+    if (lastUsedAt != null) 'last_used_at': lastUsedAt!.millisecondsSinceEpoch,
+  };
 
   static StoredAccount fromJson(Map<String, dynamic> json) {
     final rawLastUsed = json['last_used_at'];
@@ -118,7 +127,7 @@ class StoredAccount {
 /// 存入安全存储；旧的单账号 token 在首次读取时迁移为账号列表。
 class SessionStore {
   SessionStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   static const _accountsKey = 'mfuns.community.saved_accounts.v1';
 
@@ -136,7 +145,8 @@ class SessionStore {
       final accounts = <StoredAccount>[];
       for (final item in decoded) {
         if (item is Map<String, dynamic>) {
-          accounts.add(StoredAccount.fromJson(item));
+          final account = StoredAccount.fromJson(item);
+          if (account.accessToken.trim().isNotEmpty) accounts.add(account);
         }
       }
       return accounts;
@@ -146,9 +156,11 @@ class SessionStore {
   }
 
   Future<void> writeAccounts(List<StoredAccount> accounts) => _storage.write(
-      key: _accountsKey,
-      value: jsonEncode(
-          accounts.map((account) => account.toJson()).toList(growable: false)));
+    key: _accountsKey,
+    value: jsonEncode(
+      accounts.map((account) => account.toJson()).toList(growable: false),
+    ),
+  );
 
   Future<String?> readLegacyToken() => _storage.read(key: _legacyTokenKey);
 

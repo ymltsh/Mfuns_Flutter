@@ -923,10 +923,11 @@ class CommunityComment {
   final DateTime? createdAt;
 
   factory CommunityComment.fromJson(Map<String, dynamic> json) {
+    final rawContent = '${json['content'] ?? ''}';
     final user = _asMap(json['user']).isEmpty
         ? _asMap(json['user_info'])
         : _asMap(json['user']);
-    final spans = _commentSpans('${json['content'] ?? ''}');
+    final spans = _commentSpans(rawContent);
     final ext = _asMap(json['content_ext']);
     final like = _asMap(_asMap(json['like_status'])['like']);
     return CommunityComment(
@@ -948,7 +949,10 @@ class CommunityComment {
           .join()
           .trim(),
       spans: spans,
-      images: _feedImages(ext['images'] ?? json['images']),
+      images: _uniqueImages([
+        ..._feedImages(ext['images'] ?? json['images']),
+        ..._contentImages(rawContent),
+      ]),
       likes: _asInt(like['count']) ?? _asInt(json['like_count']) ?? 0,
       liked: like['is_active'] == true || like['is_active'] == 1,
       replyCount: _asInt(json['reply_count']) ?? 0,
@@ -1089,16 +1093,24 @@ List<CommentSpan> _commentSpans(String raw) {
 /// so they can be rendered as images instead of being stripped as tags.
 List<CommentSpan> _htmlSpans(String html) {
   const stickerPattern = "<img[^>]*class=['\"][^'\"]*sticker[^'\"]*['\"][^>]*>";
+  const mentionPattern = r'<(?:span|a)\b[^>]*>[^<]*</(?:span|a)>';
   final spans = <CommentSpan>[];
   var cursor = 0;
   for (final match in RegExp(
-    stickerPattern,
+    '$stickerPattern|$mentionPattern',
     caseSensitive: false,
   ).allMatches(html)) {
+    final tag = match.group(0) ?? '';
+    final mention = _htmlMention(tag);
+    final isSticker = tag.toLowerCase().startsWith('<img');
+    if (!isSticker && mention == null) continue;
     final before = _htmlToText(html.substring(cursor, match.start));
     cursor = match.end;
     if (before.isNotEmpty) spans.add(CommentSpan.text(before));
-    final tag = match.group(0) ?? '';
+    if (mention != null) {
+      spans.add(mention);
+      continue;
+    }
     final alt = RegExp(
       "alt=['\"]([^'\"]+)['\"]",
       caseSensitive: false,
@@ -1113,6 +1125,33 @@ List<CommentSpan> _htmlSpans(String html) {
   final tail = _htmlToText(html.substring(cursor));
   if (tail.isNotEmpty) spans.add(CommentSpan.text(tail));
   return spans.isEmpty ? [CommentSpan.text(_htmlToText(html))] : spans;
+}
+
+CommentSpan? _htmlMention(String source) {
+  final element = html_parser.parseFragment(source).children.firstOrNull;
+  if (element == null) return null;
+  final href = Uri.tryParse(element.attributes['href'] ?? '');
+  final isMemberLink =
+      href != null &&
+      (href.host.isEmpty ||
+          href.host == 'mfuns.net' ||
+          href.host.endsWith('.mfuns.net')) &&
+      href.pathSegments.length == 2 &&
+      href.pathSegments.first == 'member';
+  if (!element.classes.contains('mention') &&
+      !element.attributes.containsKey('data-id') &&
+      !isMemberLink) {
+    return null;
+  }
+  final id = _asInt(
+    element.attributes['data-id'] ??
+        element.attributes['data-user-id'] ??
+      (isMemberLink ? href.pathSegments.last : null),
+  );
+  if (id == null || id <= 0) return null;
+  final name = (element.attributes['data-value'] ?? element.text).trim();
+  if (name.isEmpty) return null;
+  return CommentSpan.mention('$id', name.replaceFirst(RegExp(r'^@'), ''));
 }
 
 String _stickerKey(String? alt, String? src) {
@@ -2246,8 +2285,11 @@ class HomeRepository {
     await _client.postJson('/v1/comment/delete', {'comment_id': commentId});
   }
 
-  Future<void> pinComment(int commentId) async {
-    await _client.postJson('/v1/comment/pin', {'id': commentId});
+  Future<void> pinComment(int commentId, {bool cancel = false}) async {
+    await _client.postJson('/v1/comment/pin', {
+      'id': commentId,
+      if (cancel) 'cancel': 1,
+    });
   }
 
   /// Deletes a feed post (动态).
@@ -2912,39 +2954,21 @@ class HomeRepository {
     return _asInt(root['floor_num'] ?? resource['floor_num']);
   }
 
-  Future<bool> followStatus(int userId) async {
+  Future<FollowRelation> getFollowRelation(int userId) async {
     final response = await _client.get(
       '/v1/follow/status',
       query: {'user_id': userId},
     );
     final status = _asMap(response.data)['status'];
-    return status == true || status == 1 || status == '1';
+    return switch (_asInt(status)) {
+      2 => FollowRelation.mutual,
+      1 => FollowRelation.following,
+      _ => status == true ? FollowRelation.following : FollowRelation.none,
+    };
   }
 
-  Future<FollowRelation> getFollowRelation({
-    required int userId,
-    required int currentUserId,
-  }) async {
-    if (!await followStatus(userId)) return FollowRelation.none;
-
-    var cursor = -1;
-    while (true) {
-      final page = await getFollowList(
-        userId: userId,
-        type: 'follow',
-        lastId: cursor,
-      );
-      if (page.any((user) => user.id == currentUserId)) {
-        return FollowRelation.mutual;
-      }
-      if (page.isEmpty) return FollowRelation.following;
-      final nextCursor = page.last.id;
-      if (nextCursor == 0 || nextCursor == cursor) {
-        return FollowRelation.following;
-      }
-      cursor = nextCursor;
-    }
-  }
+  Future<bool> followStatus(int userId) async =>
+      await getFollowRelation(userId) != FollowRelation.none;
 
   Future<void> setFollow({required int userId, required bool follow}) =>
       _client.postJson('/v1/follow/follow', {

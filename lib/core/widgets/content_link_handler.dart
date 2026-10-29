@@ -4,12 +4,13 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app/app_controller.dart';
 import '../../features/home/home_repository.dart';
 import '../../features/video/content_detail_page.dart';
+import '../../features/user/user_profile_page.dart';
 
 /// 站内链接目标。
 class MfunsLinkTarget {
   const MfunsLinkTarget({required this.type, required this.id});
 
-  /// video / article / feed。
+  /// video / article / feed / user。
   final String type;
   final int id;
 }
@@ -52,7 +53,10 @@ MfunsLinkTarget? parseMfunsLink(String url) {
     final id = int.tryParse(idText ?? '');
     if (id != null &&
         id > 0 &&
-        (type == 'video' || type == 'article' || type == 'feed')) {
+        (type == 'video' ||
+            type == 'article' ||
+            type == 'feed' ||
+            type == 'user')) {
       return MfunsLinkTarget(type: type!, id: id);
     }
     return null;
@@ -74,11 +78,15 @@ MfunsLinkTarget? parseMfunsLink(String url) {
     id = int.tryParse(segments.first.substring(2));
     type = 'video';
   } else if (segments.length >= 2) {
-    type = segments[0].toLowerCase();
+    type = segments[0].toLowerCase() == 'member'
+        ? 'user'
+        : segments[0].toLowerCase();
     id = int.tryParse(segments[1]);
   }
   if (id == null || id <= 0) return null;
-  if (type != 'video' && type != 'article' && type != 'feed') return null;
+  if (type != 'video' && type != 'article' && type != 'feed' && type != 'user') {
+    return null;
+  }
   return MfunsLinkTarget(type: type!, id: id);
 }
 
@@ -129,7 +137,18 @@ void pushMfunsTargetOnNavigator(
         builder: (_) =>
             FeedDetailPage(controller: controller, feedId: target.id),
       ));
+    case 'user':
+      navigator.push(MaterialPageRoute<void>(
+        builder: (_) => UserProfilePage(controller: controller, userId: target.id),
+      ));
   }
+}
+
+void openMentionUser(BuildContext context, AppController controller, int userId) {
+  if (userId <= 0) return;
+  Navigator.of(context).push(MaterialPageRoute<void>(
+    builder: (_) => UserProfilePage(controller: controller, userId: userId),
+  ));
 }
 
 /// 处理内容中的链接：Mfuns 站内链接在应用内打开对应页面，

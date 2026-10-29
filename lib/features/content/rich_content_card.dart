@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show TargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:html/parser.dart' as html_parser;
 import 'package:markdown/markdown.dart' as md;
 
 import '../../core/widgets/image_preview_page.dart';
@@ -41,10 +42,18 @@ class RichContentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final markdown = normalizeRichContent(source);
-    return _buildContent(context, markdown: markdown);
+    return _buildContent(
+      context,
+      markdown: markdown,
+      imageAspectRatios: articleImageAspectRatios(source),
+    );
   }
 
-  Widget _buildContent(BuildContext context, {required String markdown}) {
+  Widget _buildContent(
+    BuildContext context, {
+    required String markdown,
+    required Map<Uri, double> imageAspectRatios,
+  }) {
     final colors = Theme.of(context).colorScheme;
     final styleSheet = MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
       p: Theme.of(
@@ -78,7 +87,7 @@ class RichContentCard extends StatelessWidget {
         color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(10),
       ),
-      a: TextStyle(color: colors.primary),
+      a: TextStyle(color: colors.primary, fontWeight: FontWeight.w600),
     );
     // Markdown 自身保持不可选择，避免多个 SelectableText 与文章列表争抢
     // 拖动手势。桌面端由一个 SelectionArea 统一处理跨段落选择；移动端
@@ -97,10 +106,14 @@ class RichContentCard extends StatelessWidget {
             ),
           );
         }
-        return _ArticleImage(uri: uri, alt: alt ?? '图片');
+        return _ArticleImage(
+          uri: uri,
+          alt: alt ?? '图片',
+          aspectRatio: imageAspectRatios[uri],
+        );
       },
       onTapLink: (_, href, __) {
-        final link = safeHttpUri(href);
+        final link = safeContentLinkUri(href);
         if (link == null) return;
         if (onLinkTap != null) {
           onLinkTap!(link.toString());
@@ -168,10 +181,11 @@ class RichContentCard extends StatelessWidget {
 enum _MobileCopyAction { open }
 
 class _ArticleImage extends StatelessWidget {
-  const _ArticleImage({required this.uri, required this.alt});
+  const _ArticleImage({required this.uri, required this.alt, this.aspectRatio});
 
   final Uri uri;
   final String alt;
+  final double? aspectRatio;
 
   @override
   Widget build(BuildContext context) {
@@ -203,16 +217,67 @@ class _ArticleImage extends StatelessWidget {
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => ImagePreviewPage(
-              uri: uri,
+              uri: originalArticleImageUri(uri),
               alt: alt,
               heroTag: 'article-image-$uri',
             ),
           ),
         ),
-        child: Hero(tag: 'article-image-$uri', child: image),
+        child: aspectRatio == null
+            ? Hero(tag: 'article-image-$uri', child: image)
+            : AspectRatio(
+                aspectRatio: aspectRatio!,
+                child: Hero(tag: 'article-image-$uri', child: image),
+              ),
       ),
     );
   }
+}
+
+/// 正文接口中的缩略图 URL 去掉处理参数后才是预览用的原图。
+Uri originalArticleImageUri(Uri uri) {
+  if (uri.host != 'cdn2.mfuns.net' ||
+      !uri.queryParameters.containsKey('image_process')) {
+    return uri;
+  }
+  final query = Map<String, String>.of(uri.queryParameters)
+    ..remove('image_process');
+  return Uri(
+    scheme: uri.scheme,
+    userInfo: uri.userInfo,
+    host: uri.host,
+    port: uri.hasPort ? uri.port : null,
+    path: uri.path,
+    queryParameters: query.isEmpty ? null : query,
+    fragment: uri.hasFragment ? uri.fragment : null,
+  );
+}
+
+/// 读取原始 HTML 的图片尺寸，供缩略图加载前预留正确高度。
+Map<Uri, double> articleImageAspectRatios(String source) {
+  if (!source.contains('<img')) return const {};
+  final ratios = <Uri, double>{};
+  for (final image
+      in html_parser.parseFragment(source).querySelectorAll('img')) {
+    final uri = safeMediaUri(image.attributes['src']);
+    final width = double.tryParse(
+      image.attributes['data-width'] ?? image.attributes['width'] ?? '',
+    );
+    final height = double.tryParse(
+      image.attributes['data-height'] ?? image.attributes['height'] ?? '',
+    );
+    if (uri == null ||
+        width == null ||
+        height == null ||
+        !width.isFinite ||
+        !height.isFinite ||
+        width <= 0 ||
+        height <= 0) {
+      continue;
+    }
+    ratios[uri] = width / height;
+  }
+  return ratios;
 }
 
 /// 代码块渲染器：保留默认代码块样式（横向滚动 + 背景），并在右上角

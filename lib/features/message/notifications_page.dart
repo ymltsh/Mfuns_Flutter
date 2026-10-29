@@ -6,12 +6,7 @@ import '../home/home_repository.dart';
 import '../user/user_profile_page.dart';
 import '../video/content_detail_page.dart';
 
-const _notifyTypes = <int, String>{
-  1: '赞',
-  2: '评论',
-  3: '提及',
-  4: '系统',
-};
+const _notifyTypes = <int, String>{1: '赞', 2: '评论', 3: '提及', 4: '系统'};
 
 class NotificationsPage extends StatefulWidget {
   const NotificationsPage({
@@ -64,9 +59,12 @@ class NotificationsPageState extends State<NotificationsPage>
 
   void _openUser(BuildContext context, int userId) {
     if (userId == 0) return;
-    Navigator.of(context).push(MaterialPageRoute<void>(
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
         builder: (_) =>
-            UserProfilePage(controller: widget.controller, userId: userId)));
+            UserProfilePage(controller: widget.controller, userId: userId),
+      ),
+    );
   }
 
   @override
@@ -92,15 +90,21 @@ class NotificationsPageState extends State<NotificationsPage>
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Row(
                 children: [
-                  Text('未读',
-                      style: TextStyle(
-                          color: palette.primary, fontWeight: FontWeight.w800)),
+                  Text(
+                    '未读',
+                    style: TextStyle(
+                      color: palette.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '赞 ${counts.like} · 评论 ${counts.comment} · 提及 ${counts.mention} · 系统 ${counts.system}',
                       style: TextStyle(
-                          color: AppPalette.of(context).muted, fontSize: 13),
+                        color: AppPalette.of(context).muted,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ],
@@ -119,18 +123,20 @@ class NotificationsPageState extends State<NotificationsPage>
         Expanded(
           child: TabBarView(
             controller: _notifyTabs,
-            children: _notifyTypes.entries.map((entry) {
-              // 系统通知走独立的 /v1/notify/site 接口，卡片样式也不同。
-              if (entry.key == 4) {
-                return _SystemNotifyTab(controller: widget.controller);
-              }
-              return _NotifyTab(
-                controller: widget.controller,
-                type: entry.key,
-                onOpenUser: (userId) => _openUser(context, userId),
-                userCache: _userCache,
-              );
-            }).toList(growable: false),
+            children: _notifyTypes.entries
+                .map((entry) {
+                  // 系统通知走独立的 /v1/notify/site 接口，卡片样式也不同。
+                  if (entry.key == 4) {
+                    return _SystemNotifyTab(controller: widget.controller);
+                  }
+                  return _NotifyTab(
+                    controller: widget.controller,
+                    type: entry.key,
+                    onOpenUser: (userId) => _openUser(context, userId),
+                    userCache: _userCache,
+                  );
+                })
+                .toList(growable: false),
           ),
         ),
       ],
@@ -153,16 +159,16 @@ class _NotifyTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _PagedNotifyListView(
-        loadPage: (page) => controller.notifications(type: type, page: page),
-        onLoaded: controller.refreshUnreadCounts,
-        emptyMessage: '暂无此类通知',
-        itemBuilder: (context, item) => _NotifyCard(
-          item: item,
-          controller: controller,
-          userCache: userCache,
-          onOpenUser: onOpenUser,
-        ),
-      );
+    loadPage: (page) => controller.notifications(type: type, page: page),
+    onLoaded: controller.refreshUnreadCounts,
+    emptyMessage: '暂无此类通知',
+    itemBuilder: (context, item) => _NotifyCard(
+      item: item,
+      controller: controller,
+      userCache: userCache,
+      onOpenUser: onOpenUser,
+    ),
+  );
 }
 
 class _NotifyEmpty extends StatelessWidget {
@@ -173,22 +179,25 @@ class _NotifyEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.notifications_off_outlined,
-                color: AppPalette.of(context).muted, size: 42),
-            const SizedBox(height: 10),
-            Text(message,
-                style: TextStyle(color: AppPalette.of(context).muted)),
-            const SizedBox(height: 6),
-            TextButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('刷新')),
-          ],
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.notifications_off_outlined,
+          color: AppPalette.of(context).muted,
+          size: 42,
         ),
-      );
+        const SizedBox(height: 10),
+        Text(message, style: TextStyle(color: AppPalette.of(context).muted)),
+        const SizedBox(height: 6),
+        TextButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('刷新'),
+        ),
+      ],
+    ),
+  );
 }
 
 /// 系统通知（站点公告等）：独立接口 `/v1/notify/site`，
@@ -200,11 +209,11 @@ class _SystemNotifyTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _PagedNotifyListView(
-        loadPage: (page) => controller.siteNotifications(page: page),
-        onLoaded: controller.refreshUnreadCounts,
-        emptyMessage: '暂无系统通知',
-        itemBuilder: (context, item) => _SystemNotifyCard(item: item),
-      );
+    loadPage: (page) => controller.siteNotifications(page: page),
+    onLoaded: controller.refreshUnreadCounts,
+    emptyMessage: '暂无系统通知',
+    itemBuilder: (context, item) => _SystemNotifyCard(item: item),
+  );
 }
 
 /// 通知类列表（赞/评论/提及/系统）的分页加载：
@@ -324,14 +333,17 @@ class _PagedNotifyListViewState extends State<_PagedNotifyListView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('加载失败：$_error',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppPalette.of(context).muted)),
+              Text(
+                '加载失败：$_error',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppPalette.of(context).muted),
+              ),
               const SizedBox(height: 10),
               TextButton.icon(
-                  onPressed: _loadFirst,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('重试')),
+                onPressed: _loadFirst,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('重试'),
+              ),
             ],
           ),
         ),
@@ -387,9 +399,10 @@ class _NotifyLoadMoreFooter extends StatelessWidget {
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text('没有更多了',
-              style: TextStyle(
-                  color: AppPalette.of(context).muted, fontSize: 12)),
+          child: Text(
+            '没有更多了',
+            style: TextStyle(color: AppPalette.of(context).muted, fontSize: 12),
+          ),
         ),
       );
     }
@@ -426,25 +439,33 @@ class _SystemNotifyCard extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text('系统通知',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: AppPalette.of(context).muted,
-                                fontWeight: FontWeight.w800)),
+                        child: Text(
+                          '系统通知',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
                       if (item.createdAt != null)
-                        Text(_notifyTime(item.createdAt!),
-                            style: TextStyle(
-                                color: AppPalette.of(context).muted,
-                                fontSize: 11)),
+                        Text(
+                          _notifyTime(item.createdAt!),
+                          style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontSize: 11,
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text(
                     item.text.isEmpty ? '（空通知）' : item.text,
                     style: TextStyle(
-                        color: AppPalette.of(context).muted, height: 1.4),
+                      color: AppPalette.of(context).muted,
+                      height: 1.4,
+                    ),
                   ),
                 ],
               ),
@@ -557,7 +578,7 @@ class _NotifyCardState extends State<_NotifyCard> {
     try {
       final areaId = await widget.controller.commentAreaId(commentId);
       if (areaId != null) {
-        return widget.controller.commentAreaInfo(areaId);
+        return await widget.controller.commentAreaInfo(areaId);
       }
     } catch (_) {}
     return null;
@@ -585,17 +606,27 @@ class _NotifyCardState extends State<_NotifyCard> {
       if (type == 4) {
         await widget.controller.feedDetail(resourceId);
         if (!mounted) return false;
-        await Navigator.of(context).push(MaterialPageRoute<void>(
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
             builder: (_) => FeedDetailPage(
-                controller: widget.controller, feedId: resourceId)));
+              controller: widget.controller,
+              feedId: resourceId,
+            ),
+          ),
+        );
         return true;
       }
       final preview = _minimalPreview(resourceId, type);
       await widget.controller.contentDetail(preview);
       if (!mounted) return false;
-      await Navigator.of(context).push(MaterialPageRoute<void>(
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
           builder: (_) => ContentDetailPage(
-              controller: widget.controller, preview: preview)));
+            controller: widget.controller,
+            preview: preview,
+          ),
+        ),
+      );
       return true;
     } catch (_) {
       return false;
@@ -603,17 +634,17 @@ class _NotifyCardState extends State<_NotifyCard> {
   }
 
   ContentPreview _minimalPreview(int resourceId, int type) => ContentPreview(
-        id: resourceId,
-        title: '通知内容',
-        summary: '',
-        cover: '',
-        author: '',
-        category: '',
-        type: type,
-        likes: 0,
-        comments: 0,
-        views: 0,
-      );
+    id: resourceId,
+    title: '通知内容',
+    summary: '',
+    cover: '',
+    author: '',
+    category: '',
+    type: type,
+    likes: 0,
+    comments: 0,
+    views: 0,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -644,15 +675,15 @@ class _NotifyCardState extends State<_NotifyCard> {
                     foregroundImage: (item.senderAvatar.isNotEmpty
                         ? NetworkImage(item.senderAvatar)
                         : (profile?.avatar.isEmpty ?? true)
-                            ? null
-                            : NetworkImage(profile!.avatar)),
+                        ? null
+                        : NetworkImage(profile!.avatar)),
                     foregroundColor: palette.primary,
                     child: Text(
                       name.isNotEmpty
                           ? name.substring(0, 1)
                           : item.senderUserId == 0
-                              ? 'U'
-                              : '${item.senderUserId}'.substring(0, 1),
+                          ? 'U'
+                          : '${item.senderUserId}'.substring(0, 1),
                     ),
                   );
                 },
@@ -689,18 +720,22 @@ class _NotifyCardState extends State<_NotifyCard> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                        color: AppPalette.of(context).muted,
-                                        fontWeight: FontWeight.w800),
+                                      color: AppPalette.of(context).muted,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   );
                                 },
                               ),
                             ),
                           ),
                           if (item.createdAt != null)
-                            Text(_notifyTime(item.createdAt!),
-                                style: TextStyle(
-                                    color: AppPalette.of(context).muted,
-                                    fontSize: 11)),
+                            Text(
+                              _notifyTime(item.createdAt!),
+                              style: TextStyle(
+                                color: AppPalette.of(context).muted,
+                                fontSize: 11,
+                              ),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -709,7 +744,9 @@ class _NotifyCardState extends State<_NotifyCard> {
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            color: AppPalette.of(context).muted, height: 1.4),
+                          color: AppPalette.of(context).muted,
+                          height: 1.4,
+                        ),
                       ),
                       if (_openingReference) ...[
                         const SizedBox(height: 6),
@@ -722,24 +759,31 @@ class _NotifyCardState extends State<_NotifyCard> {
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            Icon(Icons.open_in_new_rounded,
-                                size: 13,
-                                color: Theme.of(context).colorScheme.primary),
+                            Icon(
+                              Icons.open_in_new_rounded,
+                              size: 13,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                             const SizedBox(width: 3),
-                            Text('查看原内容',
-                                style: TextStyle(
-                                    fontSize: 11.5,
-                                    color:
-                                        Theme.of(context).colorScheme.primary)),
+                            Text(
+                              '查看原内容',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
                           ],
                         ),
                       ],
                       if (item.commentId != null) ...[
                         const SizedBox(height: 4),
-                        Text('评论 ID ${item.commentId}',
-                            style: TextStyle(
-                                color: AppPalette.of(context).muted,
-                                fontSize: 11.5)),
+                        Text(
+                          '评论 ID ${item.commentId}',
+                          style: TextStyle(
+                            color: AppPalette.of(context).muted,
+                            fontSize: 11.5,
+                          ),
+                        ),
                       ],
                     ],
                   ),

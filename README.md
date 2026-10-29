@@ -38,12 +38,15 @@
 
 ## 技术栈
 
-- Flutter 3.24 / Dart 3.5
+- Flutter >= 3.47.8 / Dart >= 3.13.7（包含 eMudhra TLS 证书安全修复）
+- Android：JDK 17、AGP 8.11.1、Gradle 8.14.3、Kotlin 2.2.21；最低 Android 7.0（API 24），编译/目标 SDK 36
 - 依赖：`video_player`（Android/iOS）+ `video_player_win`（Windows）、`flutter_secure_storage`、`shared_preferences`、`image_picker`、`file_picker`、`html`、`flutter_markdown_plus`、`crypto`
 - 视频上传：VOD 凭证（`/v1/contribute/video/get_upload_auth`）→ 标准 OSS 签名 PUT（纯 Dart 实现）→ `/v1/contribute/video/upload_complete`
 - 无第三方状态管理，基于 `ChangeNotifier`（`AppController`）+ `ThemeExtension` 主题
 
 ## 本地开发
+
+请先用 `flutter --version` 确认 SDK 达到上述最低版本，再解析依赖和构建。证书修复需要重新编译并分发 Android / Windows 应用；仅修改版本约束或升级设备系统不会修复已安装的旧应用。详见 [Dart SDK 安全公告](https://github.com/dart-lang/sdk/security/advisories/GHSA-frr6-h895-5pxp)。
 
 ```bash
 flutter pub get
@@ -55,9 +58,11 @@ flutter analyze
 打包：
 
 ```bash
-flutter build apk --release          # Android APK
+flutter build apk --release --split-per-abi  # Android：按 ARM32 / ARM64 / x86_64 分包
 flutter build windows --release      # Windows exe
 ```
+
+Android 更新会按系统支持的 ABI 自动选择对应安装包；旧版客户端默认下载 ARM64 包，其他架构可从发布页选择。完整打包及更新清单规则见 [update.md](update.md)。
 
 可选：覆盖默认 User-Agent（兼容性测试）：
 

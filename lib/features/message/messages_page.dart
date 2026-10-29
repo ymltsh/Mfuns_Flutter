@@ -813,6 +813,8 @@ class _MessageBubble extends StatelessWidget {
                                 stickerSize: 34,
                                 onLinkTap: (url) =>
                                     openContentLink(context, controller, url),
+                                onMentionTap: (userId) =>
+                                    openMentionUser(context, controller, userId),
                                 textStyle: TextStyle(
                                   color: isMine
                                       ? Colors.white

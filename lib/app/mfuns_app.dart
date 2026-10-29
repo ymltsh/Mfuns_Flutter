@@ -14,6 +14,7 @@ import '../core/widgets/content_link_handler.dart';
 import '../core/widgets/content_spans.dart';
 import '../core/widgets/dlna_cast_widgets.dart';
 import '../core/widgets/image_preview_page.dart';
+import '../core/widgets/network_retry_state.dart';
 import '../features/auth/account_manage_page.dart';
 import '../features/auth/auth_repository.dart';
 import '../features/auth/login_sheet.dart';
@@ -920,7 +921,9 @@ class _DiscoverPageState extends State<_DiscoverPage>
                         items: items,
                         isLoading: widget.controller.isLoadingHome,
                         error: widget.controller.homeError,
-                        emptyText: '暂时没有推荐内容',
+                        emptyText: NetworkRetryState.message,
+                        onRefresh: _refreshHome,
+                        retryWhenEmpty: true,
                         scrollController: _homeScroll,
                         junctionIndex: _homeNewCount > 0 ? _homeNewCount : null,
                         onJunctionTap: _onHomeJunctionTap,
@@ -956,6 +959,7 @@ class _DiscoverPageState extends State<_DiscoverPage>
                             widget.controller.categoryContentsError ??
                             widget.controller.categoriesError,
                         emptyText: '请选择分区查看内容',
+                        onRefresh: refreshActiveTab,
                         onLoadMore: _categoryId == null
                             ? null
                             : () => widget.controller.loadMoreCategoryContents(
@@ -1280,9 +1284,8 @@ class _TimelinePageState extends State<_TimelinePage>
       );
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('操作失败：$error')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('操作失败：$error')));
       }
     }
   }
@@ -1366,7 +1369,9 @@ class _TimelinePageState extends State<_TimelinePage>
                       onOpenUser: _openUserProfile,
                       onOpenResource: _openContentDetail,
                       onOpenFeed: _openFeedDetail,
-                      emptyText: '时间线暂时没有可展示的动态',
+                      emptyText: NetworkRetryState.message,
+                      onRefresh: widget.controller.loadFeeds,
+                      retryWhenEmpty: true,
                       scrollController: _feedScroll,
                     ),
                   ),
@@ -1386,6 +1391,7 @@ class _TimelinePageState extends State<_TimelinePage>
                       onOpenUser: _openUserProfile,
                       onOpenItem: _openLatestItem,
                       onMarkItem: _markLatestItem,
+                      onRefresh: widget.controller.loadLatestItems,
                       scrollController: _latestScroll,
                     ),
                   ),
@@ -1412,6 +1418,7 @@ class _TimelinePageState extends State<_TimelinePage>
                             onOpenResource: _openContentDetail,
                             onOpenFeed: _openFeedDetail,
                             emptyText: '还没有关注动态，先去时间线发现创作者吧',
+                            onRefresh: widget.controller.loadFollowingFeeds,
                             scrollController: _followingScroll,
                           ),
                         ),
@@ -1436,6 +1443,7 @@ class _LatestItemList extends StatelessWidget {
     required this.onOpenUser,
     required this.onOpenItem,
     required this.onMarkItem,
+    required this.onRefresh,
     this.scrollController,
   });
 
@@ -1449,13 +1457,16 @@ class _LatestItemList extends StatelessWidget {
   final ValueChanged<LatestMfunsItem> onOpenItem;
   final ValueChanged<LatestMfunsItem> onMarkItem;
   final ScrollController? scrollController;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
     if (isLoading && items.isEmpty) return const _LoadingState();
-    if (error != null && items.isEmpty) return _MessageState(message: error!);
     if (items.isEmpty) {
-      return const _MessageState(message: '最新内容暂时没有可展示的帖子');
+      return NetworkRetryState(
+        onRefresh: onRefresh,
+        scrollController: scrollController,
+      );
     }
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
@@ -1975,6 +1986,8 @@ class _TimelineFeedList extends StatelessWidget {
     required this.onOpenFeed,
     required this.emptyText,
     required this.controller,
+    required this.onRefresh,
+    this.retryWhenEmpty = false,
     this.scrollController,
   });
 
@@ -1990,11 +2003,18 @@ class _TimelineFeedList extends StatelessWidget {
   final String emptyText;
   final AppController controller;
   final ScrollController? scrollController;
+  final Future<void> Function() onRefresh;
+  final bool retryWhenEmpty;
 
   @override
   Widget build(BuildContext context) {
     if (isLoading && items.isEmpty) return const _LoadingState();
-    if (error != null && items.isEmpty) return _MessageState(message: error!);
+    if (items.isEmpty && (error != null || retryWhenEmpty)) {
+      return NetworkRetryState(
+        onRefresh: onRefresh,
+        scrollController: scrollController,
+      );
+    }
     if (items.isEmpty) return _MessageState(message: emptyText);
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
@@ -2143,6 +2163,8 @@ class _TimelineFeedCard extends StatelessWidget {
                           spans: item.spans,
                           onLinkTap: (url) =>
                               openContentLink(context, controller, url),
+                          onMentionTap: (userId) =>
+                              openMentionUser(context, controller, userId),
                           textStyle: TextStyle(
                             color: _palette(context).ink,
                             height: 1.45,
@@ -2517,6 +2539,7 @@ class _SearchPageState extends State<_SearchPage> {
                       isLoading: widget.controller.isSearching,
                       error: widget.controller.searchError,
                       emptyText: '输入关键词，寻找同好',
+                      onRefresh: () => _search(),
                       onLoadMore: widget.controller.loadMoreSearch,
                       isLoadingMore: widget.controller.isLoadingMoreSearch,
                       hasMore: widget.controller.hasMoreSearchResults,
@@ -2892,7 +2915,15 @@ class _ProfilePageState extends State<_ProfilePage> {
                   constraints: const BoxConstraints(maxWidth: 1000),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(22, 26, 22, 20),
-                    child: session == null
+                    child:
+                        session == null && widget.controller.isRestoringSession
+                        ? const Center(
+                            child: Text(
+                              '正在恢复账号信息…',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          )
+                        : session == null
                         ? _GuestProfile(
                             onLogin: () =>
                                 showLoginSheet(context, widget.controller),
@@ -2910,6 +2941,28 @@ class _ProfilePageState extends State<_ProfilePage> {
               ),
             ),
             const SizedBox(height: 18),
+            if (session != null && widget.controller.sessionSyncError != null)
+              Align(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1000),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: ListTile(
+                      leading: const Icon(Icons.cloud_off_outlined),
+                      title: const Text('暂时无法同步账号信息，正在显示本地缓存'),
+                      subtitle: Text(widget.controller.sessionSyncError!),
+                      trailing: TextButton(
+                        onPressed: widget.controller.isRefreshingSession
+                            ? null
+                            : widget.controller.refreshSession,
+                        child: Text(
+                          widget.controller.isRefreshingSession ? '同步中' : '重试',
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
@@ -3195,14 +3248,12 @@ class _ThemeSheetState extends State<_ThemeSheet> {
         await AppBackgroundStorage.removeManagedImage(oldPath);
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('应用背景已更新')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('应用背景已更新')));
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('选择背景失败：$error')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('选择背景失败：$error')));
       }
     } finally {
       if (mounted) setState(() => _isPickingBackground = false);
@@ -3580,9 +3631,8 @@ class _ProfileGuestBody extends StatelessWidget {
   final ValueChanged<AppThemeMode> onModeChanged;
 
   void _requestLogin(BuildContext context) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('登录后即可查看该内容')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('登录后即可查看该内容')));
     showLoginSheet(context, controller);
   }
 
@@ -4289,6 +4339,7 @@ class _HistoryPageState extends State<_HistoryPage> {
             isLoading: widget.controller.isLoadingHistory,
             error: widget.controller.historyError,
             emptyText: '还没有浏览记录',
+            onRefresh: widget.controller.loadHistory,
             onLoadMore: widget.controller.loadMoreHistory,
             isLoadingMore: widget.controller.isLoadingMoreHistory,
             hasMore: widget.controller.hasMoreHistory,
@@ -4348,9 +4399,8 @@ class _FavoriteFoldersPageState extends State<_FavoriteFoldersPage> {
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(16),
                     leading: CircleAvatar(
-                      backgroundColor: _palette(
-                        context,
-                      ).primary.withOpacity(.13),
+                      backgroundColor: _palette(context).primary
+                          .withOpacity(.13),
                       foregroundColor: _palette(context).primary,
                       child: const Icon(Icons.bookmark_rounded),
                     ),
@@ -4447,14 +4497,12 @@ class _FavoriteItemsPageState extends State<_FavoriteItemsPage> {
       await widget.controller.loadFavoriteItems(widget.folder.id);
       await widget.controller.loadFavoriteFolders();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已移出收藏夹')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已移出收藏夹')));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('移出失败：$error')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('移出失败：$error')));
     }
   }
 
@@ -4474,6 +4522,8 @@ class _FavoriteItemsPageState extends State<_FavoriteItemsPage> {
             isLoading: widget.controller.isLoadingFavorites,
             error: widget.controller.favoritesError,
             emptyText: '收藏夹里还没有内容',
+            onRefresh: () =>
+                widget.controller.loadFavoriteItems(widget.folder.id),
             onLoadMore: () => widget.controller.loadFavoriteItems(
               widget.folder.id,
               loadMore: true,
@@ -4498,6 +4548,8 @@ class _ContentGrid extends StatelessWidget {
     this.onLoadMore,
     this.isLoadingMore = false,
     this.hasMore = false,
+    required this.onRefresh,
+    this.retryWhenEmpty = false,
     this.scrollController,
     this.junctionIndex,
     this.onJunctionTap,
@@ -4513,6 +4565,8 @@ class _ContentGrid extends StatelessWidget {
   final bool isLoadingMore;
   final bool hasMore;
   final ScrollController? scrollController;
+  final Future<void> Function() onRefresh;
+  final bool retryWhenEmpty;
 
   /// 新内容交界位置：在此处插入“刚刚看到这里”标记（行首全宽）。
   final int? junctionIndex;
@@ -4524,7 +4578,12 @@ class _ContentGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading && items.isEmpty) return const _LoadingState();
-    if (error != null && items.isEmpty) return _MessageState(message: error!);
+    if (items.isEmpty && (error != null || retryWhenEmpty)) {
+      return NetworkRetryState(
+        onRefresh: onRefresh,
+        scrollController: scrollController,
+      );
+    }
     if (items.isEmpty) return _MessageState(message: emptyText);
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -4894,7 +4953,9 @@ class _RankingList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loading && items.isEmpty) return const _LoadingState();
-    if (error != null && items.isEmpty) return _MessageState(message: error!);
+    if (items.isEmpty) {
+      return NetworkRetryState(onRefresh: controller.loadHotRankings);
+    }
     final ranked = [...items]..sort((a, b) => b.views.compareTo(a.views));
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 82),

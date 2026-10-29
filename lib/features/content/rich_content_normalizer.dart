@@ -123,6 +123,10 @@ String _quillToMarkdown(List<dynamic> ops) {
     final attributes = _asAttributes(op['attributes']);
     final insert = op['insert'];
     if (insert is Map<String, dynamic>) {
+      final mention = insert['mention'];
+      if (mention is Map<String, dynamic>) {
+        line.write(_mentionMarkdown(mention['id'], mention['value']));
+      }
       final sticker = insert['sticker'];
       if (sticker is String && sticker.isNotEmpty) {
         line.write(
@@ -156,9 +160,22 @@ String _formatQuillInline(String text, Map<String, dynamic> attributes) {
   if (attributes['bold'] == true) result = '**$result**';
   if (attributes['italic'] == true) result = '*$result*';
   if (attributes['strike'] == true) result = '~~$result~~';
-  final link = safeHttpUri('${attributes['link'] ?? ''}');
+  final link = safeContentLinkUri('${attributes['link'] ?? ''}');
   if (link != null) result = '[$result]($link)';
   return result;
+}
+
+String _mentionMarkdown(Object? rawId, Object? rawName) {
+  final name = '${rawName ?? ''}'.trim();
+  if (name.isEmpty) return '';
+  final label = name.startsWith('@') ? name : '@$name';
+  final id = int.tryParse('${rawId ?? ''}');
+  if (id == null || id <= 0) return label;
+  final safeLabel = label
+      .replaceAll('\\', '\\\\')
+      .replaceAll('[', '\\[')
+      .replaceAll(']', '\\]');
+  return '[$safeLabel](https://mfuns.net/member/$id)';
 }
 
 String _renderChildren(Iterable<dom.Node> nodes) =>
@@ -213,8 +230,22 @@ String _renderNode(dom.Node node) {
     case 'li':
       return text;
     case 'a':
-      final link = safeHttpUri(node.attributes['href']);
+      if ((node.attributes['class'] ?? '').split(' ').contains('mention')) {
+        final id =
+            node.attributes['data-id'] ?? node.attributes['data-user-id'];
+        if (id != null) return _mentionMarkdown(id, text);
+      }
+      final href = node.attributes['href'];
+      final link = safeContentLinkUri(href);
       return link == null || text.isEmpty ? text : '[$text]($link)';
+    case 'span':
+      if ((node.attributes['class'] ?? '').split(' ').contains('mention')) {
+        return _mentionMarkdown(
+          node.attributes['data-id'] ?? node.attributes['data-user-id'],
+          node.attributes['data-value'] ?? text,
+        );
+      }
+      return _renderChildren(node.nodes);
     case 'img':
       final image = safeMediaUri(node.attributes['src']);
       final isSticker = (node.attributes['class'] ?? '').toLowerCase().contains(
@@ -229,6 +260,28 @@ String _renderNode(dom.Node node) {
     default:
       return _renderChildren(node.nodes);
   }
+}
+
+/// 只补全 Mfuns 的内容/用户相对链接，其他相对路径不作为可点击链接。
+Uri? safeContentLinkUri(String? href) {
+  final absolute = safeHttpUri(href);
+  if (absolute != null) return absolute;
+  final uri = Uri.tryParse(href?.trim() ?? '');
+  if (uri == null || uri.hasScheme || uri.hasAuthority) return null;
+  final segments = uri.pathSegments.where((part) => part.isNotEmpty).toList();
+  if (segments.length != 2 ||
+      !const {
+        'article',
+        'video',
+        'feed',
+        'member',
+        'user',
+      }.contains(segments.first)) {
+    return null;
+  }
+  final id = int.tryParse(segments.last);
+  if (id == null || id <= 0) return null;
+  return Uri.parse('https://mfuns.net/${segments.first}/$id');
 }
 
 String _renderList(dom.Element list, {required bool ordered}) {

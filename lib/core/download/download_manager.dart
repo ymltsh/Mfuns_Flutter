@@ -43,15 +43,16 @@ class DownloadManager {
     DownloadEnvironment? environment,
     DownloadPolicy? initialPolicy,
     this.sourceResolver,
-  })  : _repository = repository ??
-            DownloadRepository(
-              store: _defaultTaskStore(),
-              storage: DownloadStorage(),
-            ),
-        _transport = transport ?? HttpClientDownloadTransport(),
-        _environment = environment ?? ConnectivityDownloadEnvironment(),
-        _policy = initialPolicy ?? DownloadPolicy.defaults,
-        _initialPolicyProvided = initialPolicy != null;
+  }) : _repository =
+           repository ??
+           DownloadRepository(
+             store: _defaultTaskStore(),
+             storage: DownloadStorage(),
+           ),
+       _transport = transport ?? HttpClientDownloadTransport(),
+       _environment = environment ?? ConnectivityDownloadEnvironment(),
+       _policy = initialPolicy ?? DownloadPolicy.defaults,
+       _initialPolicyProvided = initialPolicy != null;
 
   /// 全局单例：App 启动时调用 [initialize]。
   static DownloadManager instance = DownloadManager();
@@ -107,9 +108,11 @@ class DownloadManager {
     _initialized = true;
     _queue
       ..clear()
-      ..addAll(_repository.tasks
-          .where((task) => task.status.isActive)
-          .map((task) => task.taskId));
+      ..addAll(
+        _repository.tasks
+            .where((task) => task.status.isActive)
+            .map((task) => task.taskId),
+      );
     _subscribeNetwork();
     _pump();
   }
@@ -192,8 +195,11 @@ class DownloadManager {
         !task.status.isActive) {
       return;
     }
-    await _repository.setTaskStatus(task, DownloadStatus.pending,
-        errorMessage: '');
+    await _repository.setTaskStatus(
+      task,
+      DownloadStatus.pending,
+      errorMessage: '',
+    );
     if (!_queue.contains(taskId)) _queue.add(taskId);
     _pump();
   }
@@ -207,18 +213,20 @@ class DownloadManager {
     }
     // 未完成分P回到排队态，已完成分P保留。
     final resetParts = task.parts
-        .map((part) => part.isPlayable
-            ? part
-            : part.copyWith(
-                status: DownloadStatus.pending,
-                errorMessage: '',
-              ))
+        .map(
+          (part) => part.isPlayable
+              ? part
+              : part.copyWith(status: DownloadStatus.pending, errorMessage: ''),
+        )
         .toList(growable: false);
     await _repository.updateParts(taskId, resetParts);
     final resetTask = await _repository.task(taskId);
     if (resetTask != null) {
-      await _repository.setTaskStatus(resetTask, DownloadStatus.pending,
-          errorMessage: '');
+      await _repository.setTaskStatus(
+        resetTask,
+        DownloadStatus.pending,
+        errorMessage: '',
+      );
     }
     if (!_queue.contains(taskId)) _queue.add(taskId);
     _pump();
@@ -332,8 +340,7 @@ class DownloadManager {
   Future<DownloadTask?> findTask({
     required int videoId,
     required String quality,
-  }) =>
-      _repository.findTask(videoId: videoId, quality: quality);
+  }) => _repository.findTask(videoId: videoId, quality: quality);
 
   /// 查询 `videoId + part + quality` 对应的可离线播放文件。
   Future<String?> localFileFor({
@@ -347,9 +354,9 @@ class DownloadManager {
 
   /// 媒体请求头：User-Agent / Referer，绝不含社区登录凭证。
   Map<String, String> _mediaHeaders() => {
-        HttpHeaders.userAgentHeader: AppConfig.userAgent,
-        HttpHeaders.refererHeader: 'https://${AppConfig.apiHost}/',
-      };
+    HttpHeaders.userAgentHeader: AppConfig.userAgent,
+    HttpHeaders.refererHeader: 'https://${AppConfig.apiHost}/',
+  };
 
   /// 队列调度：在最大并发数内启动排队任务。
   void _pump() {
@@ -415,7 +422,10 @@ class DownloadManager {
         final next = latest.parts.where((p) => !p.isPlayable).firstOrNull;
         if (next == null) break; // 全部分P完成
         await _repository.setPartStatus(
-            latest, next.part, DownloadStatus.downloading);
+          latest,
+          next.part,
+          DownloadStatus.downloading,
+        );
         final success = await _downloadPartLoop(taskId, next, control);
         if (!success) return; // 失败已落库
         // 分P下载完成：重命名 .part → 正式文件；全部分P完成后任务自动 completed。
@@ -451,18 +461,20 @@ class DownloadManager {
     final stoppedTask = await _repository.task(taskId);
     if (stoppedTask == null) return;
     final parts = stoppedTask.parts
-        .map((part) => part.isPlayable
-            ? part
-            : part.copyWith(
-                status: DownloadStatus.pending,
-                errorMessage: '',
-              ))
+        .map(
+          (part) => part.isPlayable
+              ? part
+              : part.copyWith(status: DownloadStatus.pending, errorMessage: ''),
+        )
         .toList(growable: false);
     await _repository.updateParts(taskId, parts);
     final latest = await _repository.task(taskId);
     if (latest != null) {
-      await _repository.setTaskStatus(latest, DownloadStatus.failed,
-          errorMessage: message);
+      await _repository.setTaskStatus(
+        latest,
+        DownloadStatus.failed,
+        errorMessage: message,
+      );
     }
   }
 
@@ -474,9 +486,11 @@ class DownloadManager {
     if (stoppedTask == null) return;
     if (stopped == DownloadStatus.canceled) {
       final parts = stoppedTask.parts
-          .map((part) => part.isPlayable
-              ? part
-              : part.copyWith(status: DownloadStatus.canceled))
+          .map(
+            (part) => part.isPlayable
+                ? part
+                : part.copyWith(status: DownloadStatus.canceled),
+          )
           .toList(growable: false);
       for (final part in parts) {
         if (part.isPlayable) continue;
@@ -488,9 +502,11 @@ class DownloadManager {
       await _upsertPartsAndStatus(taskId, parts, DownloadStatus.canceled);
     } else {
       final parts = stoppedTask.parts
-          .map((part) => part.status == DownloadStatus.downloading
-              ? part.copyWith(status: DownloadStatus.paused)
-              : part)
+          .map(
+            (part) => part.status == DownloadStatus.downloading
+                ? part.copyWith(status: DownloadStatus.paused)
+                : part,
+          )
           .toList(growable: false);
       await _upsertPartsAndStatus(taskId, parts, DownloadStatus.paused);
     }
@@ -523,8 +539,12 @@ class DownloadManager {
     while (true) {
       if (control.wantsStop) throw const DownloadCancelledException();
       try {
-        final result =
-            await _downloadPartAttempt(taskId, part, headers, control);
+        final result = await _downloadPartAttempt(
+          taskId,
+          part,
+          headers,
+          control,
+        );
         if (result) return true;
         // 本次响应结束但未达总大小（服务器提前截断）：续传重试。
         if (retries >= maxAutoRetries) {
@@ -557,7 +577,7 @@ class DownloadManager {
     if (resolver == null || task == null) return false;
     try {
       final sources = await resolver(task.videoId, task.quality);
-      return _repository.updatePartSources(taskId, sources);
+      return await _repository.updatePartSources(taskId, sources);
     } catch (_) {
       return false;
     }
@@ -572,8 +592,9 @@ class DownloadManager {
   ) async {
     final task = await _repository.task(taskId);
     if (task == null) throw const DownloadCancelledException();
-    final currentPart =
-        task.parts.where((p) => p.part == part.part).firstOrNull;
+    final currentPart = task.parts
+        .where((p) => p.part == part.part)
+        .firstOrNull;
     if (currentPart == null) throw const DownloadCancelledException();
     if (currentPart.isPlayable) return true;
     // 断点：以 .part 文件实际大小为准（覆盖记录，避免记录与文件不一致）。
@@ -656,8 +677,8 @@ class DownloadManager {
       final total = (rangeTotal != null && rangeTotal > 0)
           ? rangeTotal
           : (connection.contentLength != null && connection.contentLength! >= 0)
-              ? offset + connection.contentLength!
-              : currentPart.totalBytes;
+          ? offset + connection.contentLength!
+          : currentPart.totalBytes;
 
       final finalLength = await _appendPartBody(
         taskId,

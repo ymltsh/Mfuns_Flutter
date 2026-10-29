@@ -89,6 +89,28 @@ void main() {
     expect(tapped, 'https://m.mfuns.net/article/122326');
   });
 
+  testWidgets('ContentSpans opens mentions only when a user ID is present',
+      (tester) async {
+    final tapped = <int>[];
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ContentSpans(
+          spans: const [
+            CommentSpan.mention('38461', '少女乌斯'),
+            CommentSpan.text(' 和 '),
+            CommentSpan.mention('', '未知用户'),
+          ],
+          onMentionTap: tapped.add,
+        ),
+      ),
+    ));
+
+    await tester.tap(find.text('@少女乌斯'));
+    expect(tapped, [38461]);
+    await tester.tap(find.text('@未知用户'));
+    expect(tapped, [38461]);
+  });
+
   testWidgets('recognizes bare mv numbers as video links', (tester) async {
     String? tapped;
     await tester.pumpWidget(MaterialApp(
@@ -144,6 +166,8 @@ void main() {
       'https://m.mfuns.net/video/60751': ('video', 60751),
       'https://www.mfuns.net/article/122326': ('article', 122326),
       'https://m.mfuns.net/feed/273061': ('feed', 273061),
+      'https://mfuns.net/member/38461': ('user', 38461),
+      'https://m.mfuns.net/member/83597': ('user', 83597),
       'mv60751': ('video', 60751),
     };
     cases.forEach((url, expected) {

@@ -31,6 +31,7 @@ import '../../core/widgets/inline_emoji_input.dart';
 import '../../core/widgets/player_more_overlay.dart';
 import '../content/export/article_exporter.dart';
 import '../content/export/comment_collector.dart';
+import '../content/article_progress_slider.dart';
 import '../content/rich_content_card.dart';
 import '../download/download_picker_sheet.dart';
 import '../download/widgets/download_button.dart';
@@ -720,6 +721,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
   final _commentSectionKey = GlobalKey<_CommentSectionState>();
   final _commentComposerKey = GlobalKey<CommentComposerBarState>();
   var _articleToolsEnabled = false;
+  var _scrollbarEnabled = false;
   var _showFullCommentInput = false;
   var _commentComposerExpanded = false;
 
@@ -733,12 +735,14 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
   Future<void> _loadReaderPreferences() async {
     final values = await Future.wait<bool>([
       UserPreferences.loadArticleToolsFab(),
+      UserPreferences.loadArticleScrollbar(),
       UserPreferences.loadFullCommentInput(),
     ]);
     if (!mounted) return;
     setState(() {
       _articleToolsEnabled = values[0];
-      _showFullCommentInput = values[1];
+      _scrollbarEnabled = values[1];
+      _showFullCommentInput = values[2];
     });
   }
 
@@ -747,6 +751,17 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _commentComposerKey.currentState?.focusInput();
     });
+  }
+
+  Future<void> _onCommentSubmitted() async {
+    // The comment section is a lazy ListView child and may not exist yet.
+    _jumpToArticleEnd(_scrollController);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    final section = _commentSectionKey.currentState;
+    if (section != null) await section.reloadAndWait();
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) _jumpToArticleEnd(_scrollController);
   }
 
   @override
@@ -869,7 +884,14 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
         };
         return Stack(
           children: [
-            Positioned.fill(child: articleList),
+            Positioned.fill(
+              child: ArticleReaderScrollScope(
+                disableAutomaticScrollbar: _scrollbarEnabled,
+                child: articleList,
+              ),
+            ),
+            if (_scrollbarEnabled)
+              ArticleProgressSlider(controller: _scrollController),
             if (_articleToolsEnabled)
               Positioned.fill(
                 child: ArticleToolsOverlay(
@@ -888,7 +910,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
                   areaId: commentAreaId,
                   collapsed: !showCommentComposer,
                   onExpand: _expandCommentComposer,
-                  onSubmitted: () => _commentSectionKey.currentState?.reload(),
+                  onSubmitted: _onCommentSubmitted,
                 ),
               ),
           ],
@@ -955,6 +977,12 @@ class _ArticleToolsOverlayState extends State<ArticleToolsOverlay> {
 }
 
 /// 文章快捷工具：目前提供回到开头和跳到结尾两个定位操作。
+void _jumpToArticleEnd(ScrollController controller) {
+  if (controller.hasClients) {
+    controller.jumpTo(controller.position.maxScrollExtent);
+  }
+}
+
 class ArticleToolsFab extends StatefulWidget {
   const ArticleToolsFab({
     super.key,
@@ -982,8 +1010,7 @@ class _ArticleToolsFabState extends State<ArticleToolsFab> {
 
   void _jumpToEnd() {
     setState(() => _expanded = false);
-    if (!widget.controller.hasClients) return;
-    widget.controller.jumpTo(widget.controller.position.maxScrollExtent);
+    _jumpToArticleEnd(widget.controller);
   }
 
   @override
@@ -2610,8 +2637,11 @@ class _AuthorBar extends StatefulWidget {
 }
 
 class _AuthorBarState extends State<_AuthorBar> {
-  bool? _following;
+  FollowRelation? _followRelation;
   var _isUpdating = false;
+  var _checkingStatus = false;
+  var _statusError = false;
+  var _statusRequestVersion = 0;
 
   int? get _userId => widget.preview.authorId;
   bool get _isOwnProfile =>
@@ -2623,28 +2653,56 @@ class _AuthorBarState extends State<_AuthorBar> {
     _loadStatus();
   }
 
+  @override
+  void didUpdateWidget(_AuthorBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.preview.authorId != widget.preview.authorId ||
+        oldWidget.controller != widget.controller) {
+      _followRelation = null;
+      _checkingStatus = false;
+      _statusError = false;
+      _loadStatus();
+    }
+  }
+
   Future<void> _loadStatus() async {
+    final version = ++_statusRequestVersion;
     final userId = _userId;
     if (userId == null || _isOwnProfile || widget.controller.session == null) {
       return;
     }
+    setState(() {
+      _checkingStatus = true;
+      _statusError = false;
+    });
     try {
-      final following = await widget.controller.followStatus(userId);
-      if (mounted) setState(() => _following = following);
+      final relation = await widget.controller.followRelation(userId);
+      if (mounted && version == _statusRequestVersion) {
+        setState(() {
+          _followRelation = relation;
+          _checkingStatus = false;
+        });
+      }
     } catch (_) {
-      // The action remains available; a follow request will surface its error.
+      if (mounted && version == _statusRequestVersion) {
+        setState(() {
+          _checkingStatus = false;
+          _statusError = true;
+        });
+      }
     }
   }
 
-  void _openProfile() {
+  Future<void> _openProfile() async {
     final userId = _userId;
     if (userId == null) return;
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) =>
             UserProfilePage(controller: widget.controller, userId: userId),
       ),
     );
+    if (mounted) _loadStatus();
   }
 
   Future<void> _toggleFollow() async {
@@ -2656,11 +2714,35 @@ class _AuthorBarState extends State<_AuthorBar> {
       ).showSnackBar(const SnackBar(content: Text('请先在“我的”页面登录后再关注')));
       return;
     }
-    final next = !(_following ?? false);
-    setState(() => _isUpdating = true);
+    final version = ++_statusRequestVersion;
+    setState(() {
+      _isUpdating = true;
+      _checkingStatus = false;
+    });
     try {
+      final relation =
+          _followRelation ?? await widget.controller.followRelation(userId);
+      if (!mounted || version != _statusRequestVersion) return;
+      final next = relation == FollowRelation.none;
       await widget.controller.setFollow(userId: userId, follow: next);
-      if (mounted) setState(() => _following = next);
+      if (!mounted || version != _statusRequestVersion) return;
+      if (!next) {
+        setState(() => _followRelation = FollowRelation.none);
+      } else {
+        setState(() => _followRelation = FollowRelation.following);
+        try {
+          final relation = await widget.controller.followRelation(userId);
+          if (mounted && version == _statusRequestVersion) {
+            setState(
+              () => _followRelation = relation == FollowRelation.none
+                  ? FollowRelation.following
+                  : relation,
+            );
+          }
+        } catch (_) {
+          // Follow succeeded; keep the known following state until a refresh.
+        }
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -2677,7 +2759,9 @@ class _AuthorBarState extends State<_AuthorBar> {
     final preview = widget.preview;
     final userId = _userId;
     final canOpen = userId != null;
-    final following = _following == true;
+    final following =
+        _followRelation == FollowRelation.following ||
+        _followRelation == FollowRelation.mutual;
     return Row(
       children: [
         InkResponse(
@@ -2716,15 +2800,31 @@ class _AuthorBarState extends State<_AuthorBar> {
           const Text('我的投稿')
         else
           OutlinedButton.icon(
-            onPressed: userId == null || _isUpdating ? null : _toggleFollow,
-            icon: _isUpdating
+            onPressed: userId == null || _isUpdating || _checkingStatus
+                ? null
+                : _statusError
+                ? _loadStatus
+                : _toggleFollow,
+            icon: _isUpdating || _checkingStatus
                 ? const SizedBox(
                     width: 16,
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Icon(following ? Icons.check_rounded : Icons.add_rounded),
-            label: Text(following ? '已关注' : '关注'),
+                : Icon(
+                    _statusError
+                        ? Icons.refresh_rounded
+                        : following
+                        ? Icons.check_rounded
+                        : Icons.add_rounded,
+                  ),
+            label: Text(
+              _statusError
+                  ? '重试'
+                  : _checkingStatus
+                  ? '查询中'
+                  : followRelationLabel(_followRelation ?? FollowRelation.none),
+            ),
           ),
       ],
     );
@@ -5573,8 +5673,29 @@ class _CommentSectionState extends State<_CommentSection> {
     _comments = widget.controller.commentPage(widget.areaId);
   }
 
-  void reload() =>
-      setState(() => _comments = widget.controller.commentPage(widget.areaId));
+  void reload() {
+    final comments = widget.controller.commentPage(widget.areaId);
+    setState(() {
+      _comments = comments;
+    });
+  }
+
+  Future<bool> reloadAndWait() async {
+    final comments = widget.controller.commentPage(widget.areaId);
+    setState(() {
+      _comments = comments;
+    });
+    // Ensure FutureBuilder subscribes to the new future before it completes.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return false;
+    try {
+      await comments;
+      return mounted;
+    } catch (_) {
+      // FutureBuilder displays the refresh error in the comment section.
+      return false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -5969,14 +6090,75 @@ class _CommentComposerSurfacePainter extends CustomPainter {
 }
 
 class _CommentSpans extends StatelessWidget {
-  const _CommentSpans({required this.spans, required this.onLinkTap});
+  const _CommentSpans({
+    required this.spans,
+    required this.onLinkTap,
+    required this.onMentionTap,
+  });
 
   final List<CommentSpan> spans;
   final void Function(String url) onLinkTap;
+  final void Function(int userId) onMentionTap;
 
   @override
-  Widget build(BuildContext context) =>
-      ContentSpans(spans: spans, onLinkTap: onLinkTap);
+  Widget build(BuildContext context) => ContentSpans(
+    spans: spans,
+    onLinkTap: onLinkTap,
+    onMentionTap: onMentionTap,
+  );
+}
+
+class _CommentImageStrip extends StatelessWidget {
+  const _CommentImageStrip({required this.comment});
+
+  final CommunityComment comment;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 76,
+    child: ListView.separated(
+      scrollDirection: Axis.horizontal,
+      itemCount: comment.images.length,
+      separatorBuilder: (_, __) => const SizedBox(width: 8),
+      itemBuilder: (context, index) {
+        final uri = Uri.tryParse(comment.images[index]);
+        final heroTag = 'comment-image-${comment.id}-$index-$uri';
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: GestureDetector(
+            onTap: uri == null
+                ? null
+                : () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ImagePreviewPage(
+                        uri: uri,
+                        alt: '评论图片',
+                        heroTag: heroTag,
+                      ),
+                    ),
+                  ),
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: Hero(
+                tag: heroTag,
+                child: Image.network(
+                  comment.images[index],
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => ColoredBox(
+                    color: AppPalette.of(context).placeholder,
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: AppPalette.of(context).muted,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+  );
 }
 
 class _CommentCard extends StatefulWidget {
@@ -6333,10 +6515,10 @@ class _CommentCardState extends State<_CommentCard> {
             if (widget.canPin)
               ListTile(
                 leading: const Icon(Icons.push_pin_outlined),
-                title: const Text('置顶评论'),
+                title: Text(widget.isPinned ? '取消置顶' : '置顶评论'),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
-                  _pinComment();
+                  _pinComment(cancel: widget.isPinned);
                 },
               ),
             if (isMine)
@@ -6362,19 +6544,19 @@ class _CommentCardState extends State<_CommentCard> {
     );
   }
 
-  Future<void> _pinComment() async {
+  Future<void> _pinComment({required bool cancel}) async {
     try {
-      await widget.controller.pinComment(widget.comment.id);
+      await widget.controller.pinComment(widget.comment.id, cancel: cancel);
       if (!mounted) return;
       widget.onPinned?.call();
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('评论已置顶')));
+      ).showSnackBar(SnackBar(content: Text(cancel ? '已取消置顶' : '评论已置顶')));
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('置顶失败：$error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${cancel ? '取消置顶' : '置顶'}失败：$error')),
+        );
       }
     }
   }
@@ -6545,62 +6727,25 @@ class _CommentCardState extends State<_CommentCard> {
               ],
               _buildUserHeader(context),
               const SizedBox(height: 6),
-              comment.spans.isEmpty
-                  ? Text(
-                      comment.content.isEmpty ? '（该评论没有文本内容）' : comment.content,
-                    )
-                  : _CommentSpans(
-                      spans: comment.spans,
-                      onLinkTap: (url) =>
-                          openContentLink(context, widget.controller, url),
-                    ),
+              if (comment.content.isNotEmpty ||
+                  comment.images.isEmpty ||
+                  comment.spans.any((span) => span.isSticker))
+                comment.spans.isEmpty
+                    ? Text(
+                        comment.content.isEmpty
+                            ? '（该评论没有文本内容）'
+                            : comment.content,
+                      )
+                    : _CommentSpans(
+                        spans: comment.spans,
+                        onLinkTap: (url) =>
+                            openContentLink(context, widget.controller, url),
+                        onMentionTap: (userId) =>
+                            openMentionUser(context, widget.controller, userId),
+                      ),
               if (comment.images.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                SizedBox(
-                  height: 76,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: comment.images.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      final uri = Uri.tryParse(comment.images[index]);
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: GestureDetector(
-                          onTap: uri == null
-                              ? null
-                              : () => Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => ImagePreviewPage(
-                                      uri: uri,
-                                      alt: '评论图片',
-                                      heroTag:
-                                          'comment-image-${comment.id}-$index-$uri',
-                                    ),
-                                  ),
-                                ),
-                          child: AspectRatio(
-                            aspectRatio: 1,
-                            child: Hero(
-                              tag: 'comment-image-${comment.id}-$index-$uri',
-                              child: Image.network(
-                                comment.images[index],
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => ColoredBox(
-                                  color: AppPalette.of(context).placeholder,
-                                  child: Icon(
-                                    Icons.broken_image_outlined,
-                                    color: AppPalette.of(context).muted,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
+                _CommentImageStrip(comment: comment),
               ],
               const SizedBox(height: 8),
               Row(
@@ -7027,27 +7172,43 @@ class _CommentReplyTileState extends State<_CommentReplyTile> {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  if (reply.spans.isEmpty)
-                    Text(
-                      reply.content.isEmpty ? '（该回复没有文本内容）' : reply.content,
-                      style: TextStyle(
-                        color: AppPalette.of(context).muted,
-                        fontSize: 13.5,
-                        height: 1.4,
-                      ),
-                    )
-                  else
-                    ContentSpans(
-                      spans: reply.spans,
-                      textStyle: TextStyle(
-                        color: AppPalette.of(context).muted,
-                        fontSize: 13.5,
-                        height: 1.4,
-                      ),
-                      stickerSize: 26,
-                      onLinkTap: (url) =>
-                          openContentLink(context, widget.controller, url),
-                    ),
+                  if (reply.content.isNotEmpty ||
+                      reply.images.isEmpty ||
+                      reply.spans.any((span) => span.isSticker))
+                    reply.spans.isEmpty
+                        ? Text(
+                            reply.content.isEmpty
+                                ? '（该回复没有文本内容）'
+                                : reply.content,
+                            style: TextStyle(
+                              color: AppPalette.of(context).muted,
+                              fontSize: 13.5,
+                              height: 1.4,
+                            ),
+                          )
+                        : ContentSpans(
+                            spans: reply.spans,
+                            textStyle: TextStyle(
+                              color: AppPalette.of(context).muted,
+                              fontSize: 13.5,
+                              height: 1.4,
+                            ),
+                            stickerSize: 26,
+                            onLinkTap: (url) => openContentLink(
+                              context,
+                              widget.controller,
+                              url,
+                            ),
+                            onMentionTap: (userId) => openMentionUser(
+                              context,
+                              widget.controller,
+                              userId,
+                            ),
+                          ),
+                  if (reply.images.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _CommentImageStrip(comment: reply),
+                  ],
                   const SizedBox(height: 4),
                   Row(
                     children: [

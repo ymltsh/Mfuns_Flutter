@@ -89,6 +89,33 @@ void main() {
     expect(comment.content, '@少女乌斯QWQ');
   });
 
+  test('preserves an HTML mention ID in comment spans', () {
+    final comment = CommunityComment.fromJson({
+      'id': 109,
+      'content': '<p>你好 <span class="mention" data-id="38461" '
+          'data-value="少女乌斯">@少女乌斯</span>！</p>',
+    });
+    expect(comment.spans.where((span) => span.isMention).single.mentionId,
+        '38461');
+    expect(comment.content, contains('@少女乌斯'));
+
+    final linked = CommunityComment.fromJson({
+      'id': 111,
+      'content': '<p><a href="/member/38461">@少女乌斯</a></p>',
+    });
+    expect(linked.spans.single.mentionId, '38461');
+  });
+
+  test('keeps image-only comments when the image is embedded in Quill', () {
+    final comment = CommunityComment.fromJson({
+      'id': 110,
+      'content':
+          '{"ops":[{"insert":{"image":"/static/photo.jpg"}},{"insert":"\\n"}]}',
+    });
+    expect(comment.content, isEmpty);
+    expect(comment.images, ['https://cdn2.mfuns.net/static/photo.jpg']);
+  });
+
   test('preserves line breaks across separate quill insert operations', () {
     final comment = CommunityComment.fromJson({
       'id': 107,

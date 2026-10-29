@@ -173,9 +173,8 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _acceleratorBase = normalized);
     await UserPreferences.saveAcceleratorBase(normalized);
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('加速地址已更新，检查更新将使用新的地址')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('加速地址已更新，检查更新将使用新的地址')));
     }
     controller.dispose();
   }
@@ -203,7 +202,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _showUpToDate(latest);
         return;
       }
-      _showUpdateAvailable(latest);
+      final downloadUrl = await _downloadUrl(latest);
+      if (!mounted) return;
+      _showUpdateAvailable(latest, downloadUrl: downloadUrl);
     } catch (error) {
       if (!mounted) return;
       _showUpdateError('检查更新失败：$error');
@@ -232,8 +233,10 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showUpdateAvailable(UpdateRelease latest) {
-    final downloadUrl = _downloadUrl(latest);
+  void _showUpdateAvailable(
+    UpdateRelease latest, {
+    required String? downloadUrl,
+  }) {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -256,6 +259,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 latest.notes.isEmpty ? '暂无更新说明' : latest.notes,
                 style: const TextStyle(height: 1.45, fontSize: 13),
               ),
+              if (Platform.isAndroid && downloadUrl == null) ...[
+                const SizedBox(height: 12),
+                const Text('无法自动匹配此设备的安装包，请查看发布页选择兼容版本。'),
+              ],
             ],
           ),
         ),
@@ -312,9 +319,12 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   /// 按当前平台返回下载地址；未知平台回退到发布页。
-  String? _downloadUrl(UpdateRelease release) {
-    if (Platform.isAndroid && release.androidUrl.isNotEmpty) {
-      return release.androidUrl;
+  Future<String?> _downloadUrl(UpdateRelease release) async {
+    if (Platform.isAndroid) {
+      final abis = release.androidAbiUrls.isEmpty
+          ? const <String>[]
+          : await UpdateChecker.androidSupportedAbis();
+      return release.androidDownloadUrl(abis);
     }
     if (Platform.isWindows && release.windowsUrl.isNotEmpty) {
       return release.windowsUrl;
@@ -343,9 +353,8 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     if (confirmed != true || !context.mounted) return;
     EmojiPackStore.instance.clear();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('缓存已清除')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('缓存已清除')));
   }
 
   /// 打开反馈帖（站内文章），提示用户在评论区留言。
@@ -471,9 +480,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         secondary: CircleAvatar(
-                          backgroundColor: AppPalette.of(
-                            context,
-                          ).primary.withOpacity(.11),
+                          backgroundColor: AppPalette.of(context).primary
+                              .withOpacity(.11),
                           foregroundColor: AppPalette.of(context).primary,
                           child: const Icon(
                             Icons.event_repeat_rounded,
@@ -500,9 +508,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                         secondary: CircleAvatar(
-                          backgroundColor: AppPalette.of(
-                            context,
-                          ).primary.withOpacity(.11),
+                          backgroundColor: AppPalette.of(context).primary
+                              .withOpacity(.11),
                           foregroundColor: AppPalette.of(context).primary,
                           child: const Icon(
                             Icons.notifications_active_outlined,
@@ -817,9 +824,8 @@ class _PlayerSettingsPageState extends State<PlayerSettingsPage> {
           children: [
             ListTile(
               leading: CircleAvatar(
-                backgroundColor: AppPalette.of(
-                  context,
-                ).primary.withOpacity(.11),
+                backgroundColor: AppPalette.of(context).primary
+                    .withOpacity(.11),
                 foregroundColor: AppPalette.of(context).primary,
                 child: const Icon(Icons.vertical_split_rounded, size: 20),
               ),
@@ -1008,6 +1014,7 @@ class ArticleReaderSettingsPage extends StatefulWidget {
 
 class _ArticleReaderSettingsPageState extends State<ArticleReaderSettingsPage> {
   var _articleToolsEnabled = false;
+  var _scrollbarEnabled = false;
   var _fullCommentInput = false;
   var _showDislike = false;
   var _loaded = false;
@@ -1021,14 +1028,16 @@ class _ArticleReaderSettingsPageState extends State<ArticleReaderSettingsPage> {
   Future<void> _load() async {
     final values = await Future.wait<bool>([
       UserPreferences.loadArticleToolsFab(),
+      UserPreferences.loadArticleScrollbar(),
       UserPreferences.loadFullCommentInput(),
       UserPreferences.loadShowDislike(),
     ]);
     if (!mounted) return;
     setState(() {
       _articleToolsEnabled = values[0];
-      _fullCommentInput = values[1];
-      _showDislike = values[2];
+      _scrollbarEnabled = values[1];
+      _fullCommentInput = values[2];
+      _showDislike = values[3];
       _loaded = true;
     });
   }
@@ -1058,9 +1067,8 @@ class _ArticleReaderSettingsPageState extends State<ArticleReaderSettingsPage> {
                 ),
               ),
               secondary: CircleAvatar(
-                backgroundColor: AppPalette.of(
-                  context,
-                ).primary.withOpacity(.11),
+                backgroundColor: AppPalette.of(context).primary
+                    .withOpacity(.11),
                 foregroundColor: AppPalette.of(context).primary,
                 child: const Icon(Icons.article_outlined, size: 20),
               ),
@@ -1068,6 +1076,35 @@ class _ArticleReaderSettingsPageState extends State<ArticleReaderSettingsPage> {
                   ? (value) {
                       setState(() => _articleToolsEnabled = value);
                       UserPreferences.saveArticleToolsFab(value);
+                    }
+                  : null,
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              value: _scrollbarEnabled,
+              title: Text(
+                '阅读进度滑块',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                '文章右侧显示可拖拽的阅读进度条，滚动时出现，无操作后自动隐藏',
+                style: TextStyle(
+                  color: AppPalette.of(context).muted,
+                  fontSize: 12,
+                ),
+              ),
+              secondary: CircleAvatar(
+                backgroundColor: AppPalette.of(context).primary.withAlpha(28),
+                foregroundColor: AppPalette.of(context).primary,
+                child: const Icon(Icons.linear_scale_rounded, size: 20),
+              ),
+              onChanged: _loaded
+                  ? (value) {
+                      setState(() => _scrollbarEnabled = value);
+                      UserPreferences.saveArticleScrollbar(value);
                     }
                   : null,
             ),
@@ -1089,9 +1126,8 @@ class _ArticleReaderSettingsPageState extends State<ArticleReaderSettingsPage> {
                 ),
               ),
               secondary: CircleAvatar(
-                backgroundColor: AppPalette.of(
-                  context,
-                ).primary.withOpacity(.11),
+                backgroundColor: AppPalette.of(context).primary
+                    .withOpacity(.11),
                 foregroundColor: AppPalette.of(context).primary,
                 child: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
               ),
@@ -1120,9 +1156,8 @@ class _ArticleReaderSettingsPageState extends State<ArticleReaderSettingsPage> {
                 ),
               ),
               secondary: CircleAvatar(
-                backgroundColor: AppPalette.of(
-                  context,
-                ).primary.withOpacity(.11),
+                backgroundColor: AppPalette.of(context).primary
+                    .withOpacity(.11),
                 foregroundColor: AppPalette.of(context).primary,
                 child: const Icon(Icons.thumb_down_alt_outlined, size: 20),
               ),
@@ -1355,9 +1390,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       await widget.controller.updateUserAvatar(path);
       await widget.controller.refreshSession();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('头像已更新')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('头像已更新')));
     } catch (error) {
       if (mounted) {
         _toast('头像上传失败：$error');
@@ -1425,9 +1459,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         _initialBio = bio;
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('资料已更新')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('资料已更新')));
       Navigator.of(context).pop();
     } catch (error) {
       if (mounted) {
@@ -1438,9 +1471,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override

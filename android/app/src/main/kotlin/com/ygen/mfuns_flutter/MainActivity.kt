@@ -63,6 +63,13 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mfuns/device")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "supportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
+                    else -> result.notImplemented()
+                }
+            }
         pipChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "mfuns/picture_in_picture",

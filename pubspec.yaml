@@ -16,12 +16,11 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.6.3+59
+version: 1.6.8+64
 environment:
-  # dlna_dart 0.1.x requires Dart 3.8; Flutter 3.32 is the smallest stable
-  # Flutter line that ships that Dart baseline.
-  sdk: ^3.8.0
-  flutter: ">=3.32.0"
+  # Includes the eMudhra TLS certificate security fix (GHSA-frr6-h895-5pxp).
+  sdk: ^3.13.7
+  flutter: ">=3.47.8"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -59,7 +58,7 @@ dependencies:
   just_audio: ^0.9.46
   audio_session: ^0.1.25
   sqflite: 2.4.1
-  # Flutter 3.32 的 flutter_test 固定使用 1.9.1。
+  # 与 Flutter SDK 的 flutter_test 固定版本保持一致。
   path: 1.9.1
   path_provider: 2.1.4
   connectivity_plus: 6.1.0
@@ -94,6 +93,7 @@ flutter:
     - assets/app_icon.png
     - assets/logo.png
     - assets/constellation_starfield.png
+    - assets/network_retry.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

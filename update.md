@@ -2,7 +2,7 @@
 
 本文档说明 Mfuns Flutter 的版本发布流程与「检查更新」接口的维护方式。
 Environment：path
-默认情况只推送version.json和GitHub 发布页 | `https://github.com/ymltsh/Mfuns_Flutter/releases/latest`，代码提交全仓库提交耗时过长，所以默认不这么做。
+默认流程构建三种 ABI 的 Android APK、Windows 安装程序和便携包，上传至 GitHub Release 草稿，全部上传后公开发布，再只推送 `version.json`。源码提交按项目约定单独处理。
 
 ## 一、检查更新接口
 
@@ -32,7 +32,8 @@ App 启动后不主动拉取；用户在「设置 → 检查更新」时通过**
     "notes": "更新内容说明（\n 可换行）",
     "urls": {
       "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.3.1/mfuns-flutter-1.3.1.apk",
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.3.1/mfuns-flutter-windows-1.3.1.zip"
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.3.1/mfuns-flutter-setup-1.3.1.exe",
+      "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.3.1/mfuns-flutter-windows-1.3.1.zip"
     },
     "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.3.1"
   },
@@ -58,7 +59,8 @@ App 启动后不主动拉取；用户在「设置 → 检查更新」时通过**
 | `latest.date` | 可选 | 发布日期 |
 | `latest.notes` | 可选 | 更新内容，`\n` 换行 |
 | `latest.urls.android` | 可选 | Android APK 下载直链（无则不显示下载按钮） |
-| `latest.urls.windows` | 可选 | Windows zip 下载直链 |
+| `latest.urls.windows` | 可选 | Windows 安装程序 `.exe` 下载直链 |
+| `latest.urls.windows_portable` | 可选 | Windows 便携版 `.zip` 下载直链 |
 | `latest.page` | 可选 | 发布页链接，缺省回退到 releases/latest |
 | `history[]` | 推荐 | 历史版本列表（结构同 latest，不含 urls 也可），按新旧倒序 |
 
@@ -71,8 +73,13 @@ App 启动后不主动拉取；用户在「设置 → 检查更新」时通过**
 ### 0. 推荐：一键发布工具（release.py）
 
 仓库根目录的 `release.py`（单文件、仅标准库）自动完成以下全部流程：
-更新版本号 → analyze/test → 构建 APK → 构建 Windows → 打包 zip → 创建 GitHub
-Release 并上传资产 → 更新 version.json → 提交并推送。
+更新版本号 → analyze/test → 构建 APK → 构建 Windows → 打包便携 ZIP 与安装程序
+→ 创建 GitHub Release 并上传资产 → 更新 version.json → 提交并推送。
+
+Windows 安装程序使用 Inno Setup 6 编译。发布机需预先安装 Inno Setup 6，确保
+`ISCC.exe` 在 PATH 中，或设置 `INNO_SETUP_COMPILER` 指向该文件。安装程序按当前用户安装到
+`%LOCALAPPDATA%\Programs\Mfuns Flutter`，创建开始菜单快捷方式，可选创建桌面快捷方式，
+并注册卸载项；不需要管理员权限。Release 仍同时提供便携 ZIP。
 
 **引导模式**（无参数运行，交互式问答）：
 
@@ -87,7 +94,8 @@ python release.py
 **CLI 模式**（非交互）：
 
 ```powershell
-set FLUTTER_BIN=C:\path\to\flutter\bin\flutter.bat   # flutter 不在 PATH 时必须设置
+$env:FLUTTER_BIN = 'C:\path\to\flutter\bin\flutter.bat'  # flutter 不在 PATH 时设置
+$env:INNO_SETUP_COMPILER = 'C:\path\to\Inno Setup 6\ISCC.exe'  # ISCC 不在 PATH 时设置
 
 python release.py --version 1.3.1 --notes "更新说明"             # 正式版
 python release.py --version 1.3.1 --beta --notes "测试"          # Beta
@@ -106,7 +114,7 @@ python release.py --version 1.3.1 --skip-build --no-push          # 复用产物
 | `--name` / `--notes` | 发布标题 / 发布说明（多行用 `\n`） |
 | `--repo` / `--token` | 仓库（默认读 git remote）/ Token（默认读 git 凭据） |
 | `--dry-run` | 仅打印发布计划，不执行 |
-| `--skip-build` | 跳过构建与打包，复用现有产物（需已存在） |
+| `--skip-build` | 跳过构建与打包，复用现有 APK、对应版本的便携 ZIP 和安装程序 |
 | `--skip-checks` | 跳过 analyze / test |
 | `--no-push` | 不提交/推送 version.json |
 
@@ -197,20 +205,68 @@ flutter test test/widget_test.dart
 ### 2. 构建产物
 
 ```powershell
-flutter build apk --release          # Android → build/app/outputs/flutter-apk/app-release.apk
+flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64          # Android → build/app/outputs/flutter-apk/app-<ABI>-release.apk
 flutter build windows                # Windows → build/windows/x64/runner/Release/
 ```
 
-Windows 发布前先确认没有正在运行的旧实例（否则 exe 被占用无法链接）。
+`release.py` 随后会把 Windows Release 目录打成便携 ZIP，并调用
+`installer/windows/MfunsFlutter.iss` 生成安装程序。Windows 发布前先确认没有正在运行的旧实例
+（否则 exe 被占用无法链接）。
+
+脚本要求 Windows Release 目录包含 `mfuns_flutter.exe`。安装 Inno Setup 6 后，
+可用下列命令检查发布计划，再执行完整流程：
+
+```powershell
+python release.py --version 1.6.6 --build 62 --notes '更新说明' --dry-run
+python release.py --version 1.6.6 --build 62 --notes '更新说明'
+```
+
+打包完成后，本地保留以下产物；`--skip-build` 会按本次版本后缀查找这五个文件，
+不会重新打包，复用前需确认它们确实来自当前版本的构建：
+
+| 产物 | 本地路径 |
+| ---- | -------- |
+| Android ARM32 | `build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk` |
+| Android ARM64 | `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk` |
+| Android x86_64 | `build/app/outputs/flutter-apk/app-x86_64-release.apk` |
+| Windows 安装程序 | `build/windows/installer/mfuns-flutter-setup-1.6.6.exe` |
+| Windows 便携版 | `mfuns-flutter-windows-1.6.6.zip` |
 
 ### 3. 创建 GitHub Release
 
-使用 `gh` CLI 或 GitHub API 创建 tag 与 release（tag 名建议 `v1.3.1`），并上传两个资产：
+使用 `gh` CLI 或 GitHub API 创建 tag 与 release（tag 名建议 `v1.3.1`），先创建草稿并上传五个资产，确认齐全后公开 Release：
 
-- `mfuns-flutter-1.3.1.apk`（Android）
-- `mfuns-flutter-windows-1.3.1.zip`（Windows Release 目录打包，**不含目录内旧的 Release.zip**）
+- `mfuns-flutter-1.3.1-armeabi-v7a.apk`（Android ARM32）
+- `mfuns-flutter-1.3.1-arm64-v8a.apk`（Android ARM64）
+- `mfuns-flutter-1.3.1-x86_64.apk`（Android x86_64）
+- `mfuns-flutter-setup-1.3.1.exe`（Windows 基础安装程序，按当前用户安装）
+- `mfuns-flutter-windows-1.3.1.zip`（Windows 便携版，Release 目录打包，**不含目录内旧的 Release.zip**）
 
 > 注意：资产上传走 `uploads.github.com`（不是 `api.github.com`），否则返回 404。
+
+### Android 架构选择与旧版迁移
+
+后续发布不再生成通用大 APK，也不把原生 `.so` 库作为独立文件下载。每个 APK 都是可完整安装、只包含单种 ABI 原生库的安装包。
+
+新清单的 `latest.urls` 增加 `android_abis`，三种架构均必须有对应的已上传 APK：
+
+```json
+{
+  "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.8/mfuns-flutter-1.6.8-arm64-v8a.apk",
+  "android_abis": {
+    "armeabi-v7a": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.8/mfuns-flutter-1.6.8-armeabi-v7a.apk",
+    "arm64-v8a": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.8/mfuns-flutter-1.6.8-arm64-v8a.apk",
+    "x86_64": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.8/mfuns-flutter-1.6.8-x86_64.apk"
+  }
+}
+```
+
+- 新客户端按 Android `Build.SUPPORTED_ABIS` 的顺序自动选择已提供的兼容 APK，包括 64 位 CPU 配 32 位系统的设备。
+- 无法读取架构或没有兼容包时，不猜测 ARM64；更新弹窗提示用户打开发布页手动选择。
+- 旧清单仍支持 `urls.android` 通用 APK 直链。新版清单的该字段默认指向 ARM64（arm64-v8a）APK，旧客户端直接下载该包；32 位系统与 x86_64 用户可通过发布页选择兼容包，安装新客户端后自动匹配。
+- `--skip-build` 必须具备全部三种分架构 APK，脚本会检查每个包的原生库仅包含目标 ABI，并含 `libapp.so` 和 `libflutter.so`，不会复用旧通用包。
+- Flutter 分 ABI APK 的原生 `versionCode` 带有架构偏移；应用更新比较仍使用 `AppConfig.appBuild` 与清单中的基础构建号。后续应持续分 ABI 发布，勿直接回退到基础构建号更低的旧通用包。
+- 安装包文件名、清单 URL 与上传资产必须一致；先上传全部五项资产并公开 Release，再更新并推送清单。
 
 ### 4. 更新 version.json
 
@@ -247,6 +303,7 @@ Invoke-RestMethod "https://hub.wgen.top/https://raw.githubusercontent.com/ymltsh
 | 版本号一致仍提示更新 | 检查 `AppConfig.appBuild` 是否与 pubspec 的 `+n` 同步 |
 | 下载链接 404 | 确认资产文件名与 `urls` 中的下载直链完全一致（含文件名与 tag） |
 | release.py 找不到 flutter | 设置 `FLUTTER_BIN` 环境变量指向 `flutter.bat`，或将其加入 PATH |
+| release.py 找不到 ISCC.exe | 安装 Inno Setup 6，或设置 `INNO_SETUP_COMPILER` 指向 `ISCC.exe` |
 | release.py 提示无 GitHub Token | 先 `git push` 一次保存凭据，或使用 `--token` 显式传入 |
 | 发布后构建号与产物不一致 | 避免重复运行 release.py；用 `--build N` 显式指定构建号 |
 | Windows 构建失败（exe 被占用） | 关闭运行中的 mfuns_flutter 后重试（工具引导模式会自动询问） |

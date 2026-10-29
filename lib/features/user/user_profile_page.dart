@@ -344,6 +344,9 @@ class _ProfileHeader extends StatefulWidget {
 class _ProfileHeaderState extends State<_ProfileHeader> {
   FollowRelation? _followRelation;
   var _isUpdating = false;
+  var _checkingStatus = false;
+  var _statusError = false;
+  var _statusRequestVersion = 0;
 
   bool get _isOwnProfile =>
       widget.profile.id != 0 &&
@@ -355,15 +358,42 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
     _loadFollowStatus();
   }
 
+  @override
+  void didUpdateWidget(_ProfileHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profile.id != widget.profile.id ||
+        oldWidget.controller != widget.controller) {
+      _followRelation = null;
+      _checkingStatus = false;
+      _statusError = false;
+      _loadFollowStatus();
+    }
+  }
+
   Future<void> _loadFollowStatus() async {
+    final version = ++_statusRequestVersion;
     if (_isOwnProfile || widget.controller.session == null) return;
+    setState(() {
+      _checkingStatus = true;
+      _statusError = false;
+    });
     try {
       final relation = await widget.controller.followRelation(
         widget.profile.id,
       );
-      if (mounted) setState(() => _followRelation = relation);
+      if (mounted && version == _statusRequestVersion) {
+        setState(() {
+          _followRelation = relation;
+          _checkingStatus = false;
+        });
+      }
     } catch (_) {
-      // Keep the action available. The actual follow request will show its error.
+      if (mounted && version == _statusRequestVersion) {
+        setState(() {
+          _checkingStatus = false;
+          _statusError = true;
+        });
+      }
     }
   }
 
@@ -376,22 +406,35 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
       return;
     }
 
-    final next =
-        _followRelation == null || _followRelation == FollowRelation.none;
-    setState(() => _isUpdating = true);
+    final userId = widget.profile.id;
+    final version = ++_statusRequestVersion;
+    setState(() {
+      _isUpdating = true;
+      _checkingStatus = false;
+    });
     try {
-      await widget.controller.setFollow(
-        userId: widget.profile.id,
-        follow: next,
-      );
-      if (!mounted) return;
+      final relation =
+          _followRelation ?? await widget.controller.followRelation(userId);
+      if (!mounted || version != _statusRequestVersion) return;
+      final next = relation == FollowRelation.none;
+      await widget.controller.setFollow(userId: userId, follow: next);
+      if (!mounted || version != _statusRequestVersion) return;
       if (!next) {
         setState(() => _followRelation = FollowRelation.none);
       } else {
-        final relation = await widget.controller.followRelation(
-          widget.profile.id,
-        );
-        if (mounted) setState(() => _followRelation = relation);
+        setState(() => _followRelation = FollowRelation.following);
+        try {
+          final relation = await widget.controller.followRelation(userId);
+          if (mounted && version == _statusRequestVersion) {
+            setState(
+              () => _followRelation = relation == FollowRelation.none
+                  ? FollowRelation.following
+                  : relation,
+            );
+          }
+        } catch (_) {
+          // Follow succeeded; keep the known following state until a refresh.
+        }
       }
     } catch (error) {
       if (mounted) {
@@ -521,8 +564,6 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                     Text(
                       profile.bio == '暂无简介' ? '这个人很神秘，什么也没写。' : profile.bio,
                       textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: AppPalette.of(context).ink,
                         height: 1.35,
@@ -558,8 +599,12 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           OutlinedButton.icon(
-                            onPressed: _isUpdating ? null : _toggleFollow,
-                            icon: _isUpdating
+                            onPressed: _isUpdating || _checkingStatus
+                                ? null
+                                : _statusError
+                                ? _loadFollowStatus
+                                : _toggleFollow,
+                            icon: _isUpdating || _checkingStatus
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
@@ -568,11 +613,19 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                                     ),
                                   )
                                 : Icon(
-                                    following
+                                    _statusError
+                                        ? Icons.refresh_rounded
+                                        : following
                                         ? Icons.check_rounded
                                         : Icons.person_add_alt_1_outlined,
                                   ),
-                            label: Text(followLabel),
+                            label: Text(
+                              _statusError
+                                  ? '重试'
+                                  : _checkingStatus
+                                  ? '查询中'
+                                  : followLabel,
+                            ),
                           ),
                           const SizedBox(width: 10),
                           FilledButton.tonalIcon(
@@ -831,6 +884,8 @@ class _UserFeedCard extends StatelessWidget {
                       spans: item.spans,
                       onLinkTap: (url) =>
                           openContentLink(context, controller, url),
+                      onMentionTap: (userId) =>
+                          openMentionUser(context, controller, userId),
                       textStyle: TextStyle(
                         color: AppPalette.of(context).ink,
                         height: 1.4,

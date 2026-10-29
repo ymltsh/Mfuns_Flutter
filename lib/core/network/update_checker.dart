@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:flutter/services.dart';
 
 import '../config/app_config.dart';
 
@@ -12,6 +15,7 @@ class UpdateRelease {
     this.date = '',
     this.notes = '',
     this.androidUrl = '',
+    this.androidAbiUrls = const {},
     this.windowsUrl = '',
     this.page = '',
   });
@@ -22,17 +26,39 @@ class UpdateRelease {
   final String date;
   final String notes;
   final String androidUrl;
+  final Map<String, String> androidAbiUrls;
   final String windowsUrl;
   final String page;
 
+  /// 系统按兼容性与优先级返回 ABI；不能仅凭 CPU 是否为 64 位推断系统能力。
+  String? androidDownloadUrl(List<String> supportedAbis) {
+    if (androidAbiUrls.isNotEmpty) {
+      for (final abi in supportedAbis) {
+        final url = androidAbiUrls[abi];
+        if (url != null && url.isNotEmpty) return url;
+      }
+      return null;
+    }
+    return androidUrl.isEmpty ? null : androidUrl;
+  }
+
   factory UpdateRelease.fromJson(Map<String, dynamic> json) {
     final urls = json['urls'];
+    final rawAbis = urls is Map ? urls['android_abis'] : null;
     return UpdateRelease(
       version: '${json['version'] ?? ''}',
       build: _asInt(json['build']),
       name: '${json['name'] ?? ''}',
       date: '${json['date'] ?? ''}',
       notes: '${json['notes'] ?? ''}',
+      androidAbiUrls: Map.unmodifiable({
+        if (rawAbis is Map)
+          for (final entry in rawAbis.entries)
+            if (entry.key is String &&
+                entry.value is String &&
+                (entry.value as String).trim().isNotEmpty)
+              entry.key as String: (entry.value as String).trim(),
+      }),
       androidUrl: urls is Map<String, dynamic>
           ? '${urls['android'] ?? ''}'
           : '',
@@ -63,9 +89,9 @@ class UpdateManifest {
           : null,
       history: rawHistory is List
           ? rawHistory
-              .whereType<Map<String, dynamic>>()
-              .map(UpdateRelease.fromJson)
-              .toList(growable: false)
+                .whereType<Map<String, dynamic>>()
+                .map(UpdateRelease.fromJson)
+                .toList(growable: false)
           : const [],
     );
   }
@@ -73,6 +99,23 @@ class UpdateManifest {
 
 class UpdateChecker {
   const UpdateChecker._();
+
+  static const _deviceChannel = MethodChannel('mfuns/device');
+
+  static Future<List<String>> androidSupportedAbis() async {
+    try {
+      return await _deviceChannel
+              .invokeListMethod<String>('supportedAbis')
+              .timeout(const Duration(seconds: 3)) ??
+          const [];
+    } on MissingPluginException {
+      return const [];
+    } on PlatformException {
+      return const [];
+    } on TimeoutException {
+      return const [];
+    }
+  }
 
   /// 版本号形如 "1.0.5"；候选版本大于当前版本（含 build 号）时为有新版本。
   static bool isNewer(
@@ -117,8 +160,9 @@ class UpdateChecker {
           .getUrl(Uri.parse(url))
           .timeout(const Duration(seconds: 12));
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      final response =
-          await request.close().timeout(const Duration(seconds: 12));
+      final response = await request.close().timeout(
+        const Duration(seconds: 12),
+      );
       final text = await utf8.decoder.bind(response).join();
       if (response.statusCode != 200) {
         throw HttpException('更新服务器返回 ${response.statusCode}');

@@ -16,6 +16,7 @@ class UserPreferences {
   static const _keyAcceleratorBase = 'pref.accelerator_base';
   static const _keyBackgroundPlay = 'pref.background_play';
   static const _keyArticleToolsFab = 'pref.article_tools_fab';
+  static const _keyArticleScrollbar = 'pref.article_scrollbar';
   static const _keyFullCommentInput = 'pref.article_full_comment_input';
   static const _keyShowDislike = 'pref.player_show_dislike';
   static const _keyLandscapeSideRatio = 'pref.landscape_side_ratio';
@@ -213,6 +214,23 @@ class UserPreferences {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_keyArticleToolsFab, enabled);
+    } catch (_) {}
+  }
+
+  /// 文章右侧可拖动的阅读进度滑块，默认关闭。
+  static Future<bool> loadArticleScrollbar() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyArticleScrollbar) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> saveArticleScrollbar(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyArticleScrollbar, enabled);
     } catch (_) {}
   }
 

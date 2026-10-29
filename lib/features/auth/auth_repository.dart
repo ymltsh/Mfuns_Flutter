@@ -92,13 +92,13 @@ class AuthRepository {
 
   Future<UserSession?> restore(String token) async {
     _client.setAccessToken(token);
-    try {
-      final userInfo = await _client.get('/v1/user/info');
-      return _sessionFromUserInfo(token, userInfo.data);
-    } on MfunsApiException {
+    final userInfo = await _client.get('/v1/user/info');
+    // 只有明确的未登录响应才表示凭证失效，断网或服务异常交给调用方处理。
+    if (_asMap(userInfo.data)['login'] == false) {
       _client.clearAccessToken();
       return null;
     }
+    return _sessionFromUserInfo(token, userInfo.data);
   }
 
   UserSession _sessionFromUserInfo(String token, Object? data) {

@@ -1,8 +1,55 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mfuns_flutter/features/content/rich_content_card.dart';
 import 'package:mfuns_flutter/features/home/home_repository.dart';
 
 void main() {
+  test(
+    'opens the original CDN image while preserving other query parameters',
+    () {
+      final thumbnail = Uri.parse(
+        'https://cdn2.mfuns.net/static/photo.jpg?image_process=resize,w_800&v=2',
+      );
+      expect(
+        originalArticleImageUri(thumbnail).toString(),
+        'https://cdn2.mfuns.net/static/photo.jpg?v=2',
+      );
+      expect(
+        originalArticleImageUri(
+          Uri.parse(
+            'https://cdn2.mfuns.net/static/photo.jpg?image_process=resize,w_800',
+          ),
+        ).toString(),
+        'https://cdn2.mfuns.net/static/photo.jpg',
+      );
+      expect(
+        originalArticleImageUri(
+          Uri.parse(
+            'https://example.test/photo.jpg?image_process=resize,w_800',
+          ),
+        ).toString(),
+        'https://example.test/photo.jpg?image_process=resize,w_800',
+      );
+    },
+  );
+
+  test('reads image ratio from HTML and ignores missing dimensions', () {
+    const thumbnail =
+        'https://cdn2.mfuns.net/static/photo.jpg?image_process=resize,w_800';
+    const mfunsThumbnail =
+        'https://cdn2.mfuns.net/static/article.png?image_process=resize,w_800';
+    final ratios = articleImageAspectRatios(
+      '<p><img src="$thumbnail" width="800" height="400"></p>'
+      '<p><img src="$mfunsThumbnail" '
+      'src-origin="https://cdn2.mfuns.net/static/article.png?image_process=resize,w_1500" '
+      'data-width="1448" data-height="2048" class="preview"></p>'
+      '<p><img src="https://example.test/unknown.jpg"></p>',
+    );
+    expect(ratios[Uri.parse(thumbnail)], 2);
+    expect(ratios[Uri.parse(mfunsThumbnail)], 1448 / 2048);
+    expect(ratios, hasLength(2));
+  });
+
   test('keeps relative Mfuns images when normalizing quill content', () {
     final markdown = normalizeRichContent(
       '{"ops":[{"insert":{"image":"/static/article-image.jpg"}},'
@@ -69,6 +116,84 @@ void main() {
     );
     expect(markdown, contains('![sticker:simple-5]('));
     expect(markdown, contains('赞'));
+  });
+
+  test('keeps article mentions as profile links', () {
+    expect(
+      normalizeRichContent(
+        '{"ops":[{"insert":"你好 "},'
+        '{"insert":{"mention":{"id":"38461","value":"少女乌斯"}}},'
+        '{"insert":"\\n"}]}',
+      ),
+      '你好 [@少女乌斯](https://mfuns.net/member/38461)',
+    );
+    expect(
+      normalizeRichContent(
+        '<p>你好 <span class="mention" data-id="38461" '
+        'data-value="少女乌斯">@少女乌斯</span></p>',
+      ),
+      '你好 [@少女乌斯](https://mfuns.net/member/38461)',
+    );
+    expect(
+      normalizeRichContent('<p><a href="/member/38461">@少女乌斯</a></p>'),
+      '[@少女乌斯](https://mfuns.net/member/38461)',
+    );
+  });
+
+  testWidgets('article mention forwards its profile link on tap', (
+    tester,
+  ) async {
+    String? tapped;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RichContentCard(
+            source:
+                '{"ops":[{"insert":{"mention":{"id":"38461","value":"少女乌斯"}}},{"insert":"\\n"}]}',
+            onLinkTap: (url) => tapped = url,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('@少女乌斯'));
+    expect(tapped, 'https://mfuns.net/member/38461');
+  });
+
+  test('keeps quoted article and video links from article HTML', () {
+    final markdown = normalizeRichContent(
+      '<p><a href="/article/108306">MA10830</a> '
+      '<a href="/video/60482">MV60482</a> '
+      '<a href="https://m.mfuns.net/member/83597">乙女椿</a></p>',
+    );
+    expect(markdown, contains('[MA10830](https://mfuns.net/article/108306)'));
+    expect(markdown, contains('[MV60482](https://mfuns.net/video/60482)'));
+    expect(markdown, contains('[乙女椿](https://m.mfuns.net/member/83597)'));
+  });
+
+  testWidgets('quoted MA and MV links are tappable in article content', (
+    tester,
+  ) async {
+    final tapped = <String>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RichContentCard(
+            source:
+                '<p><a href="/article/108306">MA10830</a></p>'
+                '<p><a href="/video/60482">MV60482</a></p>',
+            onLinkTap: tapped.add,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('MA10830'));
+    await tester.tap(find.text('MV60482'));
+    expect(tapped, [
+      'https://mfuns.net/article/108306',
+      'https://mfuns.net/video/60482',
+    ]);
   });
 
   test('keeps quill inline and block formatting when opening an article', () {
