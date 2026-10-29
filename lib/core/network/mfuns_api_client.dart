@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../config/app_config.dart';
+import 'mfuns_tls.dart';
 
 class MfunsApiException implements Exception {
   const MfunsApiException(this.message, {this.code});
@@ -33,8 +34,8 @@ class ApiResponse {
 /// the public API-key system.
 class MfunsApiClient {
   MfunsApiClient({HttpClient? httpClient})
-      : _httpClient = (httpClient ?? HttpClient())
-          ..connectionTimeout = const Duration(seconds: 15);
+    : _httpClient = (httpClient ?? MfunsTls.createHttpClient())
+        ..connectionTimeout = const Duration(seconds: 15);
 
   final HttpClient _httpClient;
   String? _accessToken;
@@ -52,23 +53,20 @@ class MfunsApiClient {
     return _send('GET', path, query: query);
   }
 
-  Future<ApiResponse> postForm(
-    String path,
-    Map<String, String> fields,
-  ) {
+  Future<ApiResponse> postForm(String path, Map<String, String> fields) {
     return _send(
       'POST',
       path,
       body: utf8.encode(Uri(queryParameters: fields).query),
-      contentType:
-          ContentType('application', 'x-www-form-urlencoded', charset: 'utf-8'),
+      contentType: ContentType(
+        'application',
+        'x-www-form-urlencoded',
+        charset: 'utf-8',
+      ),
     );
   }
 
-  Future<ApiResponse> postJson(
-    String path,
-    Map<String, Object?> body,
-  ) {
+  Future<ApiResponse> postJson(String path, Map<String, Object?> body) {
     return _send(
       'POST',
       path,
@@ -91,8 +89,10 @@ class MfunsApiClient {
     void writeText(String text) => body.add(utf8.encode(text));
 
     writeText('--$boundary\r\n');
-    writeText('Content-Disposition: form-data; name="$field"; '
-        'filename="$filename"\r\n');
+    writeText(
+      'Content-Disposition: form-data; name="$field"; '
+      'filename="$filename"\r\n',
+    );
     if (fileContentType != null) {
       writeText('Content-Type: $fileContentType\r\n');
     }

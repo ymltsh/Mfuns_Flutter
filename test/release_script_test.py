@@ -49,6 +49,11 @@ class ReleaseScriptTest(unittest.TestCase):
             release.create_release("test-credential", "owner/repo", "v2", "title", "notes", False)
             self.assertTrue(api.call_args.kwargs["body"]["draft"])
 
+    def test_hotfix_release_targets_pushed_source_branch(self):
+        with patch.dict(release._ARGS, release_ref="codex/hotfix-test"), patch.object(release, "api_request", return_value={"html_url": "https://example.test"}) as api:
+            release.create_release("test-credential", "owner/repo", "v2", "title", "notes", False)
+            self.assertEqual(api.call_args.kwargs["body"]["target_commitish"], "codex/hotfix-test")
+
     def test_publish_only_after_five_uploads_and_manifest_after_publish(self):
         events = []
         with contextlib.ExitStack() as stack:

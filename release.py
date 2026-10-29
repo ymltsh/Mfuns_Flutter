@@ -235,6 +235,8 @@ def create_release(token, repo, tag, name, body, prerelease):
         "prerelease": prerelease,
         "draft": True,
     }
+    if _ARGS.get("release_ref"):
+        payload["target_commitish"] = _ARGS["release_ref"]
     release = api_request(f"{GH_API}/repos/{repo}/releases", token,
                           method="POST", body=payload)
     log(f"已创建 Release 草稿：{release['html_url']}")
@@ -421,6 +423,7 @@ def main():
                         "覆盖 beta/beta2；版本号仍保持 x.y.z 以便更新比较")
     parser.add_argument("--name", help="发布标题（默认 Mfuns Flutter vX）")
     parser.add_argument("--notes", help="发布说明（多行用 \\n）")
+    parser.add_argument("--release-ref", help="Release 标签的源码分支或提交（热修复分支应先推送）")
     parser.add_argument("--repo", help="GitHub 仓库 owner/repo（默认读取 git remote）")
     parser.add_argument("--token", help="GitHub Token（默认读取 git 凭据）")
     parser.add_argument("--dry-run", action="store_true", help="仅预览，不执行")
@@ -478,6 +481,7 @@ def main():
         asset = f"{version}{suffix}"
 
     repo = args.repo or repo_from_remote()
+    _ARGS["release_ref"] = args.release_ref
     _ARGS["repo"] = repo
     _ARGS["asset"] = asset
 

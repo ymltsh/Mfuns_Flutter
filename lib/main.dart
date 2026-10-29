@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
@@ -14,12 +14,19 @@ import 'core/download/download_manager.dart';
 import 'core/download/download_task.dart';
 import 'core/media/media_notification.dart';
 import 'core/network/link_router.dart';
+import 'core/network/mfuns_tls.dart';
 import 'core/notify/local_message_notifier.dart';
 
 final _navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await MfunsTls.initialize();
+  } catch (error) {
+    // 证书资源校验失败时退回系统信任库，不放宽 HTTPS 验证。
+    debugPrint('Mfuns E46 trust compatibility could not initialize: $error');
+  }
   // 桌面端初始化窗口管理插件（全屏切换等能力）。
   if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
     try {
@@ -62,21 +69,23 @@ void main() async {
     ];
   };
   // 仅注册通知点击跳转。通知能力和权限会在用户开启“后台通知服务”后初始化。
-  LocalMessageNotifier.instance.configure(onTap: (payload) {
-    _navigatorKey.currentState?.popUntil((route) => route.isFirst);
-    switch (payload) {
-      case LocalMessageNotifier.payloadLike:
-        controller.openMessagesTab(subTab: 1, notifyTab: 0);
-      case LocalMessageNotifier.payloadComment:
-        controller.openMessagesTab(subTab: 1, notifyTab: 1);
-      case LocalMessageNotifier.payloadMention:
-        controller.openMessagesTab(subTab: 1, notifyTab: 2);
-      case LocalMessageNotifier.payloadSystem:
-        controller.openMessagesTab(subTab: 1, notifyTab: 3);
-      default:
-        controller.openMessagesTab();
-    }
-  });
+  LocalMessageNotifier.instance.configure(
+    onTap: (payload) {
+      _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+      switch (payload) {
+        case LocalMessageNotifier.payloadLike:
+          controller.openMessagesTab(subTab: 1, notifyTab: 0);
+        case LocalMessageNotifier.payloadComment:
+          controller.openMessagesTab(subTab: 1, notifyTab: 1);
+        case LocalMessageNotifier.payloadMention:
+          controller.openMessagesTab(subTab: 1, notifyTab: 2);
+        case LocalMessageNotifier.payloadSystem:
+          controller.openMessagesTab(subTab: 1, notifyTab: 3);
+        default:
+          controller.openMessagesTab();
+      }
+    },
+  );
   runApp(MfunsApp(controller: controller, navigatorKey: _navigatorKey));
   // 链接唤醒：mfuns:// 协议与 mfuns.net / mfuns.wgen.top 深链打开对应页面。
   LinkRouter(controller: controller, navigatorKey: _navigatorKey).start();

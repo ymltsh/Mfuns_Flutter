@@ -3,6 +3,7 @@ import 'dart:io';
 
 import '../config/app_config.dart';
 import 'mfuns_api_client.dart';
+import 'mfuns_tls.dart';
 
 /// 单个诊断检查项的结果。
 class DiagCheckResult {
@@ -35,26 +36,29 @@ NetType classifyNetType(Iterable<String> names) {
     return null;
   }
 
-  if (find((n) =>
-          n.contains('wlan') ||
-          n.contains('wifi') ||
-          n.contains('wi-fi')) !=
+  if (find(
+        (n) => n.contains('wlan') || n.contains('wifi') || n.contains('wi-fi'),
+      ) !=
       null) {
     return NetType.wifi;
   }
-  if (find((n) =>
-          n.contains('rmnet') ||
-          n.contains('cellular') ||
-          n.contains('ccmni') ||
-          n.contains('cdma') ||
-          n.contains('pdp')) !=
+  if (find(
+        (n) =>
+            n.contains('rmnet') ||
+            n.contains('cellular') ||
+            n.contains('ccmni') ||
+            n.contains('cdma') ||
+            n.contains('pdp'),
+      ) !=
       null) {
     return NetType.cellular;
   }
   if (find((n) => n.contains('eth') || n.contains('ethernet')) != null) {
     return NetType.ethernet;
   }
-  if (find((n) => n.contains('tun') || n.contains('tap') || n.contains('ppp')) !=
+  if (find(
+        (n) => n.contains('tun') || n.contains('tap') || n.contains('ppp'),
+      ) !=
       null) {
     return NetType.vpn;
   }
@@ -76,10 +80,13 @@ String formatDuration(Duration duration) {
 ///   P1 IPv4·IPv6 / 多域名探测。
 class NetworkDiagnostics {
   NetworkDiagnostics({HttpClient? httpClient})
-      : _http = (httpClient ?? HttpClient())
-          ..connectionTimeout = const Duration(seconds: 8);
+    : _http = (httpClient ?? HttpClient())
+        ..connectionTimeout = const Duration(seconds: 8),
+      _mfunsHttp = (httpClient ?? MfunsTls.createHttpClient())
+        ..connectionTimeout = const Duration(seconds: 8);
 
   final HttpClient _http;
+  final HttpClient _mfunsHttp;
 
   /// 单次网络操作的超时上限。
   static const timeout = Duration(seconds: 10);
@@ -89,14 +96,14 @@ class NetworkDiagnostics {
     final os = Platform.isAndroid
         ? 'Android'
         : Platform.isIOS
-            ? 'iOS'
-            : Platform.isWindows
-                ? 'Windows'
-                : Platform.isMacOS
-                    ? 'macOS'
-                    : Platform.isLinux
-                        ? 'Linux'
-                        : '未知平台';
+        ? 'iOS'
+        : Platform.isWindows
+        ? 'Windows'
+        : Platform.isMacOS
+        ? 'macOS'
+        : Platform.isLinux
+        ? 'Linux'
+        : '未知平台';
     return '系统：$os · ${Platform.operatingSystemVersion}';
   }
 
@@ -120,8 +127,9 @@ class NetworkDiagnostics {
         NetType.none => '无网络',
       };
       final names = interfaces
-          .map((i) =>
-              '${i.name}（${i.addresses.map((a) => a.address).join('/')}）')
+          .map(
+            (i) => '${i.name}（${i.addresses.map((a) => a.address).join('/')}）',
+          )
           .join('、');
       return DiagCheckResult(
         ok: type != NetType.none,
@@ -199,7 +207,9 @@ class NetworkDiagnostics {
   Future<DiagCheckResult> httpsProbe(String url) async {
     final watch = Stopwatch()..start();
     try {
-      final request = await _http.getUrl(Uri.parse(url)).timeout(timeout);
+      final uri = Uri.parse(url);
+      final http = uri.host == AppConfig.apiHost ? _mfunsHttp : _http;
+      final request = await http.getUrl(uri).timeout(timeout);
       final response = await request.close().timeout(timeout);
       watch.stop();
       await response.drain<void>();
@@ -285,11 +295,16 @@ class NetworkDiagnostics {
 
   Future<String?> _probeStack(String host, InternetAddressType type) async {
     try {
-      final addresses =
-          await InternetAddress.lookup(host, type: type).timeout(timeout);
+      final addresses = await InternetAddress.lookup(
+        host,
+        type: type,
+      ).timeout(timeout);
       if (addresses.isEmpty) return null;
-      final socket =
-          await Socket.connect(addresses.first.address, 443, timeout: timeout);
+      final socket = await Socket.connect(
+        addresses.first.address,
+        443,
+        timeout: timeout,
+      );
       await socket.close();
       return addresses.first.address;
     } on Exception {
@@ -310,8 +325,9 @@ class NetworkDiagnostics {
     for (final url in urls) {
       final result = await httpsProbe(url);
       allOk = allOk && result.ok;
-      final latency =
-          result.latency == null ? '' : ' · ${formatDuration(result.latency!)}';
+      final latency = result.latency == null
+          ? ''
+          : ' · ${formatDuration(result.latency!)}';
       lines.add('${result.ok ? '✓' : '✗'} $url${result.ok ? latency : ''}');
     }
     return DiagCheckResult(ok: allOk, message: lines.join('\n'));
