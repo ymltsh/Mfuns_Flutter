@@ -1,23 +1,41 @@
 {
   "latest": {
-    "version": "1.6.9.1",
-    "build": 66,
-    "name": "Mfuns Flutter v1.6.9.1 天鹅座",
+    "version": "1.6.9.2",
+    "build": 67,
+    "name": "Mfuns Flutter v1.6.9.2 天鹅座",
     "date": "2026-10-30",
-    "notes": "修复\n- 修复部分设备的封面、头像和正文图片因证书信任兼容性导致的加载失败\n- 将 E46 证书兼容配置扩展至 Flutter 网络图片请求，保留正常 HTTPS 证书验证\n\n优化\n- 网络诊断增加图片资源域名探测\n- 保留 Android 分架构安装包与自动匹配更新，旧版客户端默认下载 ARM64 包",
+    "notes": "修复\n- 修复部分 Android 设备因证书信任兼容性导致的视频加载失败\n- 为 Mfuns 视频域名补充原生播放器证书信任配置，保留系统可信证书及正常 HTTPS 校验\n\n优化\n- 保留 API、图片加载的证书兼容修复\n- 保留 Android 分架构安装包与自动匹配更新，旧版客户端默认下载 ARM64 包",
     "urls": {
-      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-1.6.9.1-arm64-v8a.apk",
+      "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.2/mfuns-flutter-1.6.9.2-arm64-v8a.apk",
       "android_abis": {
-        "armeabi-v7a": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-1.6.9.1-armeabi-v7a.apk",
-        "arm64-v8a": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-1.6.9.1-arm64-v8a.apk",
-        "x86_64": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-1.6.9.1-x86_64.apk"
+        "armeabi-v7a": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.2/mfuns-flutter-1.6.9.2-armeabi-v7a.apk",
+        "arm64-v8a": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.2/mfuns-flutter-1.6.9.2-arm64-v8a.apk",
+        "x86_64": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.2/mfuns-flutter-1.6.9.2-x86_64.apk"
       },
-      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-setup-1.6.9.1.exe",
-      "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-windows-1.6.9.1.zip"
+      "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.2/mfuns-flutter-setup-1.6.9.2.exe",
+      "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.2/mfuns-flutter-windows-1.6.9.2.zip"
     },
-    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.9.1"
+    "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.9.2"
   },
   "history": [
+    {
+      "version": "1.6.9.1",
+      "build": 66,
+      "name": "Mfuns Flutter v1.6.9.1 天鹅座",
+      "date": "2026-10-30",
+      "notes": "修复\n- 修复部分设备的封面、头像和正文图片因证书信任兼容性导致的加载失败\n- 将 E46 证书兼容配置扩展至 Flutter 网络图片请求，保留正常 HTTPS 证书验证\n\n优化\n- 网络诊断增加图片资源域名探测\n- 保留 Android 分架构安装包与自动匹配更新，旧版客户端默认下载 ARM64 包",
+      "urls": {
+        "android": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-1.6.9.1-arm64-v8a.apk",
+        "android_abis": {
+          "armeabi-v7a": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-1.6.9.1-armeabi-v7a.apk",
+          "arm64-v8a": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-1.6.9.1-arm64-v8a.apk",
+          "x86_64": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-1.6.9.1-x86_64.apk"
+        },
+        "windows": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-setup-1.6.9.1.exe",
+        "windows_portable": "https://github.com/ymltsh/Mfuns_Flutter/releases/download/v1.6.9.1/mfuns-flutter-windows-1.6.9.1.zip"
+      },
+      "page": "https://github.com/ymltsh/Mfuns_Flutter/releases/tag/v1.6.9.1"
+    },
     {
       "version": "1.6.9",
       "build": 65,
