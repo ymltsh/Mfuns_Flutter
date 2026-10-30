@@ -17,6 +17,7 @@
     <application
         android:label="Mfuns Flutter"
         android:name="${applicationName}"
+        android:networkSecurityConfig="@xml/mfuns_network_security_config"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

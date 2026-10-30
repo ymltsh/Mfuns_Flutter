@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Transitional Android TLS trust configuration for native media (ExoPlayer).
+  Applies only to mfuns.net and its subdomains, including vod.mfuns.net.
+  Standard system roots and normal TLS hostname/expiry/chain checks remain.
+  Remove once the upstream certificate chain supports affected Android clients.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">mfuns.net</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/mfuns_sectigo_e46" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
